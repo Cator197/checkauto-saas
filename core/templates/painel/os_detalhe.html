@@ -1,0 +1,401 @@
+{% extends "painel/base.html" %}
+
+{% block title %}CheckAuto - Detalhes da OS{% endblock %}
+
+{% block page_title %}
+Detalhes da OS
+{% endblock %}
+
+{% block page_subtitle %}
+Timeline do veículo e fotos por etapa.
+{% endblock %}
+
+{% block content %}
+
+<div id="os-erro" class="hidden mb-4 bg-rose-900/40 border border-rose-700/70 text-rose-100 text-xs rounded-xl px-3 py-2">
+    Ocorreu um erro ao carregar os dados desta OS. Verifique o console ou tente novamente.
+</div>
+
+<!-- Cabeçalho da OS -->
+<div id="os-header" class="mb-4 bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div>
+            <p id="os-codigo" class="text-xs text-slate-400 uppercase tracking-wide mb-1">
+                OS —
+            </p>
+            <h2 id="os-placa-modelo" class="text-sm md:text-base font-semibold text-slate-50">
+                <!-- preenchido via JS -->
+            </h2>
+            <p id="os-cliente" class="text-xs text-slate-400">
+                <!-- preenchido via JS -->
+            </p>
+        </div>
+
+        <div class="flex flex-wrap gap-2 text-[11px]">
+            <div class="px-3 py-1 rounded-full border border-slate-700/70 bg-slate-900/70 flex items-center gap-2">
+                <span class="text-slate-400">Etapa atual:</span>
+                <span id="os-etapa" class="font-medium text-slate-100">—</span>
+            </div>
+            <div class="px-3 py-1 rounded-full border border-slate-700/70 bg-slate-900/70 flex items-center gap-2">
+                <span class="text-slate-400">Status:</span>
+                <span id="os-status" class="font-medium">—</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px] text-slate-300 mt-2">
+        <div>
+            <p class="text-slate-500 mb-1 uppercase tracking-wide text-[10px]">Entrada</p>
+            <p id="os-data-entrada">—</p>
+        </div>
+        <div>
+            <p class="text-slate-500 mb-1 uppercase tracking-wide text-[10px]">Prevista entrega</p>
+            <p id="os-data-prevista">—</p>
+        </div>
+        <div>
+            <p class="text-slate-500 mb-1 uppercase tracking-wide text-[10px]">Saída</p>
+            <p id="os-data-saida">—</p>
+        </div>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <!-- Timeline -->
+    <section class="lg:col-span-1 bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
+        <h3 class="text-xs font-semibold text-slate-200 uppercase tracking-wide mb-2">
+            Timeline
+        </h3>
+        <p class="text-[11px] text-slate-400 mb-3">
+            Evolução da OS com base nas datas de entrada, saída e fotos registradas.
+        </p>
+        <ol id="os-timeline" class="relative border-l border-slate-700/60 pl-4 text-[11px] text-slate-200">
+            <!-- itens preenchidos via JS -->
+        </ol>
+        <p id="os-timeline-vazio" class="hidden text-[11px] text-slate-500">
+            Nenhum evento registrado nesta OS.
+        </p>
+    </section>
+
+    <!-- Galeria de fotos -->
+    <section class="lg:col-span-2 bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="text-xs font-semibold text-slate-200 uppercase tracking-wide">
+                Fotos por etapa
+            </h3>
+            <p id="os-fotos-count" class="text-[11px] text-slate-500">
+                —
+            </p>
+        </div>
+
+        <div id="os-fotos-vazio" class="hidden text-[11px] text-slate-500 mb-2">
+            Nenhuma foto registrada para esta OS até o momento.
+        </div>
+
+        <div id="os-fotos-container" class="space-y-4">
+            <!-- grupos de fotos por etapa preenchidos via JS -->
+        </div>
+    </section>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const TOKEN_KEY = "checkauto_token";
+    const token = window.localStorage.getItem(TOKEN_KEY);
+
+    const erroBox = document.getElementById("os-erro");
+
+    if (!token) {
+        erroBox.classList.remove("hidden");
+        erroBox.textContent = "⚠ Não foi encontrado token de acesso (checkauto_token). Faça login para visualizar os detalhes da OS.";
+        return;
+    }
+
+    // Extrai o ID da OS a partir da URL: /painel/os/<id>/
+    const parts = window.location.pathname.split("/").filter(Boolean);
+    const osId = parts[parts.length - 1];
+
+    // Elementos de cabeçalho
+    const elCodigo = document.getElementById("os-codigo");
+    const elPlacaModelo = document.getElementById("os-placa-modelo");
+    const elCliente = document.getElementById("os-cliente");
+    const elEtapa = document.getElementById("os-etapa");
+    const elStatus = document.getElementById("os-status");
+    const elDataEntrada = document.getElementById("os-data-entrada");
+    const elDataPrevista = document.getElementById("os-data-prevista");
+    const elDataSaida = document.getElementById("os-data-saida");
+
+    // Timeline
+    const elTimeline = document.getElementById("os-timeline");
+    const elTimelineVazio = document.getElementById("os-timeline-vazio");
+
+    // Fotos
+    const elFotosCount = document.getElementById("os-fotos-count");
+    const elFotosVazio = document.getElementById("os-fotos-vazio");
+    const elFotosContainer = document.getElementById("os-fotos-container");
+
+    function formatarData(dataStr) {
+        if (!dataStr) return "-";
+        const apenasData = dataStr.split("T")[0];
+        const partes = apenasData.split("-");
+        if (partes.length === 3) {
+            return partes[2] + "/" + partes[1] + "/" + partes[0];
+        }
+        return apenasData;
+    }
+
+    function formatarDataHora(dataStr) {
+        if (!dataStr) return "-";
+        try {
+            const d = new Date(dataStr);
+            const dia = String(d.getDate()).padStart(2, "0");
+            const mes = String(d.getMonth() + 1).padStart(2, "0");
+            const ano = d.getFullYear();
+            const hora = String(d.getHours()).padStart(2, "0");
+            const min = String(d.getMinutes()).padStart(2, "0");
+            return `${dia}/${mes}/${ano} ${hora}:${min}`;
+        } catch (e) {
+            return dataStr;
+        }
+    }
+
+    function carregarDados() {
+        const osUrl = `/api/os/${osId}/`;
+        const fotosUrl = `/api/fotos-os/?os=${osId}`;
+
+        Promise.all([
+            fetch(osUrl, {
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`,
+                },
+            }),
+            fetch(fotosUrl, {
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`,
+                },
+            }),
+        ])
+        .then(async ([osResp, fotosResp]) => {
+            if (!osResp.ok) {
+                const t = await osResp.text();
+                console.error("Erro ao buscar detalhes da OS:", osResp.status, t);
+                throw new Error("Erro ao buscar OS");
+            }
+            if (!fotosResp.ok) {
+                const t = await fotosResp.text();
+                console.error("Erro ao buscar fotos da OS:", fotosResp.status, t);
+                // não quebra tudo: apenas segue sem fotos
+            }
+
+            const osData = await osResp.json();
+            let fotosData = [];
+            try {
+                const raw = await fotosResp.json();
+                if (Array.isArray(raw.results)) {
+                    fotosData = raw.results;
+                } else if (Array.isArray(raw)) {
+                    fotosData = raw;
+                } else {
+                    fotosData = [];
+                }
+            } catch (e) {
+                fotosData = [];
+            }
+
+            preencherCabecalho(osData);
+            preencherTimeline(osData, fotosData);
+            preencherGaleria(fotosData);
+        })
+        .catch((err) => {
+            console.error("Erro inesperado ao carregar detalhes da OS:", err);
+            erroBox.classList.remove("hidden");
+        });
+    }
+
+    function preencherCabecalho(os) {
+        elCodigo.textContent = `OS ${os.codigo || os.id || ""}`.trim();
+        elPlacaModelo.textContent = `${os.placa || "-"} • ${os.modelo_veiculo || ""}`.trim();
+        elCliente.textContent = `${os.nome_cliente || "-"}  •  ${os.telefone_cliente || ""}`.trim();
+
+        elEtapa.textContent = os.etapa_atual_nome || "-";
+
+        const statusTexto = os.aberta ? "Aberta" : "Fechada";
+        elStatus.textContent = statusTexto;
+        elStatus.className = "";
+        elStatus.classList.add("font-medium", "text-xs", "px-2", "py-0.5", "rounded-full", "border");
+        if (os.aberta) {
+            elStatus.classList.add("bg-emerald-600/20", "text-emerald-300", "border-emerald-500/40");
+        } else {
+            elStatus.classList.add("bg-slate-700/40", "text-slate-200", "border-slate-600/50");
+        }
+
+        elDataEntrada.textContent = formatarData(os.data_entrada);
+        elDataPrevista.textContent = formatarData(os.data_prevista_entrega);
+        elDataSaida.textContent = formatarData(os.data_saida);
+    }
+
+    function preencherTimeline(os, fotos) {
+        elTimeline.innerHTML = "";
+
+        const eventos = [];
+
+        if (os.data_entrada) {
+            eventos.push({
+                tipo: "marco",
+                ordem: os.data_entrada,
+                titulo: "Entrada do veículo",
+                descricao: `OS criada em ${formatarData(os.data_entrada)}.`,
+            });
+        }
+        if (os.data_prevista_entrega) {
+            eventos.push({
+                tipo: "marco",
+                ordem: os.data_prevista_entrega,
+                titulo: "Previsão de entrega",
+                descricao: `Previsão para ${formatarData(os.data_prevista_entrega)}.`,
+            });
+        }
+        if (os.data_saida) {
+            eventos.push({
+                tipo: "marco",
+                ordem: os.data_saida,
+                titulo: "Veículo entregue",
+                descricao: `Saída registrada em ${formatarData(os.data_saida)}.`,
+            });
+        }
+
+        fotos.forEach((f) => {
+            if (!f.tirada_em) return;
+
+            eventos.push({
+                tipo: "foto",
+                ordem: f.tirada_em,
+                titulo: f.etapa_nome || "Foto registrada",
+                descricao: f.titulo || f.observacao || "Foto da etapa.",
+                detalhe: f,
+            });
+        });
+
+        // Ordena por data
+        eventos.sort((a, b) => {
+            if (!a.ordem) return 1;
+            if (!b.ordem) return -1;
+            return a.ordem.localeCompare(b.ordem);
+        });
+
+        if (!eventos.length) {
+            elTimelineVazio.classList.remove("hidden");
+            return;
+        } else {
+            elTimelineVazio.classList.add("hidden");
+        }
+
+        eventos.forEach((ev, idx) => {
+            const li = document.createElement("li");
+            li.className = "mb-3 ml-1";
+
+            const dotBase = "absolute -left-2.5 w-2 h-2 rounded-full border border-slate-900";
+            const dotColor = ev.tipo === "foto" ? "bg-indigo-400" : "bg-emerald-400";
+
+            li.innerHTML = `
+                <div class="relative">
+                    <span class="${dotBase} ${dotColor}"></span>
+                    <div class="ml-3">
+                        <p class="text-[11px] font-semibold text-slate-100">
+                            ${ev.titulo}
+                        </p>
+                        <p class="text-[11px] text-slate-400">
+                            ${ev.descricao}
+                        </p>
+                        <p class="text-[10px] text-slate-500 mt-0.5">
+                            ${ev.ordem ? formatarDataHora(ev.ordem) : ""}
+                        </p>
+                    </div>
+                </div>
+            `;
+
+            elTimeline.appendChild(li);
+        });
+    }
+
+    function preencherGaleria(fotos) {
+        elFotosContainer.innerHTML = "";
+
+        if (!fotos || !fotos.length) {
+            elFotosVazio.classList.remove("hidden");
+            elFotosCount.textContent = "0 fotos";
+            return;
+        }
+
+        elFotosVazio.classList.add("hidden");
+        elFotosCount.textContent = `${fotos.length} foto${fotos.length > 1 ? "s" : ""}`;
+
+        // Agrupa por etapa
+        const grupos = {};
+        fotos.forEach((f) => {
+            const etapa = f.etapa_nome || "Outras fotos";
+            if (!grupos[etapa]) {
+                grupos[etapa] = [];
+            }
+            grupos[etapa].push(f);
+        });
+
+        Object.keys(grupos).forEach((etapa) => {
+            const bloco = document.createElement("div");
+            bloco.className = "border border-slate-800 rounded-2xl p-3";
+
+            const titulo = document.createElement("h4");
+            titulo.className = "text-[11px] font-semibold text-slate-200 uppercase tracking-wide mb-2";
+            titulo.textContent = etapa;
+
+            const grid = document.createElement("div");
+            grid.className = "grid grid-cols-2 md:grid-cols-3 gap-2";
+
+            grupos[etapa].forEach((f) => {
+                const card = document.createElement("div");
+                card.className = "bg-slate-950/80 border border-slate-800 rounded-xl overflow-hidden flex flex-col";
+
+                const img = document.createElement("img");
+                img.src = f.arquivo;
+                img.alt = f.titulo || f.observacao || "";
+                img.className = "w-full aspect-[4/3] object-cover";
+
+                const info = document.createElement("div");
+                info.className = "p-2 flex flex-col gap-1";
+
+                const linha1 = document.createElement("p");
+                linha1.className = "text-[11px] text-slate-100 truncate";
+                linha1.textContent = f.titulo || f.os_codigo || "Foto";
+
+                const linha2 = document.createElement("p");
+                linha2.className = "text-[10px] text-slate-400";
+                const quem = f.tirada_por_nome || "Usuário não identificado";
+                linha2.textContent = `${quem} • ${formatarDataHora(f.tirada_em)}`;
+
+                if (f.observacao) {
+                    const linha3 = document.createElement("p");
+                    linha3.className = "text-[10px] text-slate-500 line-clamp-2";
+                    linha3.textContent = f.observacao;
+                    info.appendChild(linha3);
+                }
+
+                info.appendChild(linha1);
+                info.appendChild(linha2);
+
+                card.appendChild(img);
+                card.appendChild(info);
+                grid.appendChild(card);
+            });
+
+            bloco.appendChild(titulo);
+            bloco.appendChild(grid);
+            elFotosContainer.appendChild(bloco);
+        });
+    }
+
+    carregarDados();
+});
+</script>
+
+{% endblock %}

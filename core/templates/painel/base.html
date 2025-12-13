@@ -1,0 +1,185 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}CheckAuto - Painel{% endblock %}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Tailwind via CDN (rápido para MVP) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Fonte opcional (Google Fonts) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+
+        /* Scrollbar mais discreta */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background-color: rgba(148, 163, 184, 0.7);
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100">
+
+<div class="min-h-screen flex">
+    <!-- Sidebar -->
+    <aside
+        id="sidebar"
+        class="hidden md:flex md:flex-col w-64 bg-slate-900 border-r border-slate-800/80 transition-all duration-200"
+    >
+        <!-- Logo -->
+        <div class="h-16 flex items-center px-6 border-b border-slate-800/70">
+            <div class="flex items-center gap-2">
+                <!-- Pode trocar por um SVG seu em static/painel/img/logo.svg -->
+                <div class="w-8 h-8 rounded-xl bg-indigo-500 flex items-center justify-center text-sm font-bold">
+                    CA
+                </div>
+                <div class="flex flex-col leading-tight">
+                    <span class="font-semibold text-sm tracking-wide">CheckAuto</span>
+                    <span class="text-[11px] text-slate-400 uppercase tracking-widest">Painel da Oficina</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Menu -->
+        <nav class="flex-1 overflow-y-auto py-3">
+            <ul class="px-3 space-y-1 text-sm">
+                <li>
+                    <a href="{% url 'painel_dashboard' %}"
+                       data-menu="dashboard"
+                       class="menu-link flex items-center gap-3 px-3 py-2 rounded-lg transition hover:bg-slate-800/80 hover:text-white">
+                        <span class="text-lg">📊</span>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li class="pt-1">
+                    <p class="px-3 text-[11px] font-medium uppercase tracking-widest text-slate-500">
+                        Operação
+                    </p>
+                </li>
+                <li>
+                    <a href="{% url 'painel_os_lista' %}"
+                       data-menu="os"
+                       class="menu-link flex items-center gap-3 px-3 py-2 rounded-lg transition hover:bg-slate-800/80 hover:text-white">
+                        <span class="text-lg">📁</span>
+                        <span>Ordens de Serviço</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#"
+                       data-menu="checkins"
+                       class="menu-link flex items-center gap-3 px-3 py-2 rounded-lg transition hover:bg-slate-800/80 hover:text-white">
+                        <span class="text-lg">📷</span>
+                        <span>Check-ins</span>
+                    </a>
+                </li>
+
+                <li class="pt-3">
+                    <p class="px-3 text-[11px] font-medium uppercase tracking-widest text-slate-500">
+                        Configurações
+                    </p>
+                </li>
+                <li>
+                    <a href="{% url 'painel_etapas' %}"
+                       data-menu="etapas"
+                       class="menu-link flex items-center gap-3 px-3 py-2 rounded-lg transition hover:bg-slate-800/80 hover:text-white">
+                        <span class="text-lg">🛠️</span>
+                        <span>Configurar Etapas</span>
+                    </a>
+
+                </li>
+                <li>
+                    <a href="{% url 'painel_config_fotos' %}"
+                       data-menu="fotos"
+                       class="menu-link flex items-center gap-3 px-3 py-2 rounded-lg transition hover:bg-slate-800/80 hover:text-white">
+                        <span class="text-lg">📷</span>
+                        <span>Configurar Fotos</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'painel_usuarios' %}"
+                       data-menu="usuarios"
+                       class="menu-link flex items-center gap-3 px-3 py-2 rounded-lg transition hover:bg-slate-800/80 hover:text-white">
+                        <span class="text-lg">👥</span>
+                        <span>Usuários do sistema</span>
+                    </a>
+
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Rodapé sidebar -->
+        <div class="h-14 border-t border-slate-800/70 px-4 flex items-center justify-between text-xs text-slate-400">
+            <span>v1.0 • MVP</span>
+            <span class="text-slate-500">Melo Reparos</span>
+        </div>
+    </aside>
+
+    <!-- Conteúdo principal -->
+    <div class="flex-1 flex flex-col min-w-0">
+        <!-- Topbar -->
+        <header
+            class="h-16 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur flex items-center justify-between px-3 md:px-6 sticky top-0 z-20">
+            <div class="flex items-center gap-3">
+                <!-- Botão mobile para abrir sidebar -->
+                <button id="btnToggleSidebar"
+                        class="inline-flex md:hidden items-center justify-center w-9 h-9 rounded-lg border border-slate-700/70 text-slate-300 hover:bg-slate-800/80 hover:text-white transition">
+                    ☰
+                </button>
+                <div class="flex flex-col">
+                    <h1 class="text-sm md:text-base font-semibold tracking-tight">
+                        {% block page_title %}Dashboard{% endblock %}
+                    </h1>
+                    <p class="text-[11px] md:text-xs text-slate-400">
+                        {% block page_subtitle %}Visão geral da oficina e dos processos.{% endblock %}
+                    </p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <!-- Status online/offline futuro (para sync) -->
+                <div class="hidden sm:flex items-center gap-2 text-xs text-slate-400">
+                    <span class="inline-flex h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)]"></span>
+                    <span>Online</span>
+                </div>
+
+                <!-- Usuário logado (futuro pegar da sessão) -->
+                <div class="flex items-center gap-2">
+                    <div class="text-right hidden sm:block">
+                        <p class="text-xs font-medium text-slate-100">Usuário da Oficina</p>
+                        <p class="text-[11px] text-slate-400">perfil: administrador</p>
+                    </div>
+                    <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xs">
+                        <span>U</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Conteúdo -->
+        <main class="flex-1 overflow-y-auto">
+            <div class="max-w-6xl mx-auto w-full px-3 md:px-6 py-4 md:py-6">
+                {% block content %}
+                <!-- Conteúdo específico de cada página entra aqui -->
+                {% endblock %}
+            </div>
+        </main>
+    </div>
+</div>
+
+<script src="{% static 'painel/js/painel.js' %}"></script>
+</body>
+</html>

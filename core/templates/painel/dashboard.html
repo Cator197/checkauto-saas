@@ -1,0 +1,183 @@
+{% extends "painel/base.html" %}
+
+{% block title %}CheckAuto - Dashboard{% endblock %}
+
+{% block page_title %}
+Dashboard
+{% endblock %}
+
+{% block page_subtitle %}
+Resumo das ordens de serviço e etapas do dia.
+{% endblock %}
+
+{% block content %}
+    <!-- Cards principais -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <!-- OS Abertas -->
+        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col gap-2">
+            <span class="text-xs font-medium text-slate-400 uppercase tracking-wide">OS Abertas</span>
+            <p id="card-os-abertas" class="text-2xl font-semibold">--</p>
+            <p class="text-[11px] text-slate-500">
+                Total de veículos atualmente em processo na oficina.
+            </p>
+        </div>
+
+        <!-- Check-ins Hoje -->
+        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col gap-2">
+            <span class="text-xs font-medium text-slate-400 uppercase tracking-wide">Check-ins Hoje</span>
+            <p id="card-checkins-hoje" class="text-2xl font-semibold">--</p>
+            <p class="text-[11px] text-slate-500">
+                Novos veículos recebidos na data de hoje.
+            </p>
+        </div>
+
+        <!-- Card reserva para futuro (pendências de sync, por exemplo) -->
+        <div class="bg-slate-900/40 border border-dashed border-slate-700 rounded-2xl p-4 flex flex-col gap-2">
+            <span class="text-xs font-medium text-slate-500 uppercase tracking-wide">Pendências</span>
+            <p class="text-sm font-medium text-slate-400">
+                Em breve: pendências de sincronização, alertas ou avisos.
+            </p>
+        </div>
+
+        <!-- Card reserva para futuro (indicadores avançados) -->
+        <div class="bg-slate-900/40 border border-dashed border-slate-700 rounded-2xl p-4 flex flex-col gap-2">
+            <span class="text-xs font-medium text-slate-500 uppercase tracking-wide">Indicadores</span>
+            <p class="text-sm font-medium text-slate-400">
+                Em breve: tempo médio de ciclo, lead time, etc.
+            </p>
+        </div>
+    </div>
+
+    <!-- Cards extras por etapa (dinâmicos) -->
+    <div class="mb-6">
+        <h2 class="text-xs font-semibold text-slate-300 uppercase tracking-wide mb-2">
+            Etapas em destaque
+        </h2>
+        <p class="text-[11px] text-slate-400 mb-3">
+            São exibidas aqui as etapas marcadas como
+            <span class="font-medium text-slate-200">"mostrar no dashboard"</span>
+            na configuração de etapas.
+        </p>
+
+        <div id="etapas-cards-container"
+             class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Os cards de etapas serão inseridos via JavaScript -->
+        </div>
+
+        <!-- Mensagem quando não tiver nenhuma etapa configurada -->
+        <div id="etapas-vazio"
+             class="hidden bg-slate-900/80 border border-slate-800 rounded-2xl p-4 text-xs text-slate-400">
+            Nenhuma etapa configurada para aparecer no dashboard.
+            Vá em <span class="font-medium text-slate-200">Configurar Etapas</span> e marque
+            as etapas que deseja acompanhar aqui.
+        </div>
+    </div>
+
+    <!-- Bloco informativo -->
+    <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5">
+        <h2 class="text-sm font-semibold mb-1">Bem-vindo ao painel CheckAuto</h2>
+        <p class="text-xs text-slate-400 mb-3">
+            Aqui você tem uma visão geral das ordens de serviço, check-ins do dia e etapas em andamento,
+            sempre filtrados pela sua oficina.
+        </p>
+        <p class="text-xs text-slate-500 mb-2">
+            Os dados deste dashboard vêm diretamente da API (DRF) usando JWT. Conforme você cria e atualiza
+            OS pelo PWA ou pelo painel, os números são atualizados automaticamente.
+        </p>
+        <p id="dashboard-alerta-token" class="hidden text-[11px] text-amber-400 mt-2">
+            ⚠ Não foi encontrado um token de acesso para a API. Certifique-se de que o login via PWA/painel
+            já foi feito e que o token JWT está salvo no <code>localStorage</code>.
+        </p>
+    </div>
+
+    <!-- Script específico do dashboard -->
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            // 🔑 Ajuste o nome da chave abaixo para o mesmo usado pelo seu PWA
+            // Ex: "accessToken", "jwt_token", "checkauto_token", etc.
+            const TOKEN_KEY = "checkauto_token";
+
+            const token = window.localStorage.getItem(TOKEN_KEY);
+
+            const spanOsAbertas = document.getElementById("card-os-abertas");
+            const spanCheckinsHoje = document.getElementById("card-checkins-hoje");
+            const containerEtapas = document.getElementById("etapas-cards-container");
+            const mensagemVazio = document.getElementById("etapas-vazio");
+            const alertaToken = document.getElementById("dashboard-alerta-token");
+
+            if (!token) {
+                alertaToken.classList.remove("hidden");
+                spanOsAbertas.textContent = "--";
+                spanCheckinsHoje.textContent = "--";
+                return;
+            }
+
+            fetch("/api/dashboard-resumo/", {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${token}`
+                }
+            })
+                .then(async (response) => {
+                    if (!response.ok) {
+                        const text = await response.text();
+                        console.error("Erro ao buscar dashboard-resumo:", response.status, text);
+                        alertaToken.classList.remove("hidden");
+                        alertaToken.textContent = "⚠ Erro ao consultar a API do dashboard. Verifique se o token ainda é válido.";
+                        return null;
+                    }
+                    return response.json();
+                })
+                .then((data) => {
+                    if (!data) return;
+
+                    // Atualiza cards principais
+                    if (typeof data.os_abertas === "number") {
+                        spanOsAbertas.textContent = data.os_abertas;
+                    }
+                    if (typeof data.checkins_hoje === "number") {
+                        spanCheckinsHoje.textContent = data.checkins_hoje;
+                    }
+
+                    // Limpa container de etapas
+                    containerEtapas.innerHTML = "";
+
+                    if (!data.etapas || data.etapas.length === 0) {
+                        mensagemVazio.classList.remove("hidden");
+                        return;
+                    }
+
+                    mensagemVazio.classList.add("hidden");
+
+                    data.etapas.forEach((etapa) => {
+                        const card = document.createElement("div");
+                        card.className = "bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col gap-2";
+
+                        const titulo = document.createElement("span");
+                        titulo.className = "text-xs font-medium text-slate-400 uppercase tracking-wide";
+                        titulo.textContent = etapa.nome;
+
+                        const valor = document.createElement("p");
+                        valor.className = "text-2xl font-semibold";
+                        valor.textContent = etapa.total_os ?? "--";
+
+                        const detalhe = document.createElement("p");
+                        detalhe.className = "text-[11px] text-slate-500";
+                        detalhe.textContent = "Total de OS abertas nesta etapa.";
+
+                        card.appendChild(titulo);
+                        card.appendChild(valor);
+                        card.appendChild(detalhe);
+
+                        containerEtapas.appendChild(card);
+                    });
+                })
+                .catch((error) => {
+                    console.error("Erro inesperado ao carregar dashboard-resumo:", error);
+                    alertaToken.classList.remove("hidden");
+                    alertaToken.textContent = "⚠ Erro inesperado ao carregar os dados do dashboard. Veja o console para mais detalhes.";
+                });
+        });
+    </script>
+{% endblock %}

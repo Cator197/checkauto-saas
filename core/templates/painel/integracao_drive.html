@@ -1,0 +1,129 @@
+{% extends "painel/base.html" %} {# se você tiver um base; senão remova essa linha #}
+
+{% block content %}
+<div class="max-w-3xl mx-auto mt-8">
+  <h1 class="text-2xl font-bold mb-4">Integração com Google Drive</h1>
+
+  <div id="status-card" class="border rounded-lg p-4 mb-4">
+    <p id="status-text" class="text-gray-700">
+      Carregando status da integração...
+    </p>
+    <p id="root-folder" class="text-sm text-gray-500 mt-2 hidden"></p>
+  </div>
+
+  <button
+    id="btn-connect"
+    class="px-4 py-2 rounded bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50"
+  >
+    Conectar Google Drive
+  </button>
+
+  <button
+    id="btn-reconnect"
+    class="px-4 py-2 rounded bg-gray-600 text-white font-semibold hover:bg-gray-700 ml-2 hidden"
+  >
+    Reautorizar acesso
+  </button>
+
+  <p id="feedback" class="mt-4 text-sm text-gray-600"></p>
+</div>
+
+<script>
+
+    function buildAuthHeaders(extra = {}) {
+  // pega exatamente o access_token que o painel grava ao logar
+  const token = window.localStorage.getItem("checkauto_token");
+
+  const headers = {
+    "X-Requested-With": "XMLHttpRequest",
+    ...extra,
+  };
+
+  if (token) {
+    headers["Authorization"] = "Bearer " + token;
+  }
+
+  return headers;
+}
+
+
+  async function carregarStatus() {
+    const statusEl = document.getElementById("status-text");
+    const rootEl = document.getElementById("root-folder");
+    const btnConnect = document.getElementById("btn-connect");
+    const btnReconnect = document.getElementById("btn-reconnect");
+    const feedback = document.getElementById("feedback");
+
+    try {
+      const resp = await fetch("/api/drive/status/", {
+          headers: buildAuthHeaders(),
+          credentials: "include", // <--- IMPORTANTE
+        });
+
+      if (!resp.ok) {
+        statusEl.textContent = "Não foi possível carregar o status da integração.";
+        btnConnect.disabled = true;
+        return;
+      }
+
+      const data = await resp.json();
+
+      if (data.has_drive) {
+        statusEl.textContent = data.ativo
+          ? "Google Drive conectado para esta oficina."
+          : "Integração configurada, mas desativada.";
+        btnConnect.classList.add("hidden");
+        btnReconnect.classList.remove("hidden");
+
+        if (data.root_folder_id) {
+          rootEl.textContent = "Pasta raiz no Drive: " + data.root_folder_id;
+          rootEl.classList.remove("hidden");
+        }
+      } else {
+        statusEl.textContent = "Nenhuma integração configurada para esta oficina.";
+        btnConnect.classList.remove("hidden");
+        btnReconnect.classList.add("hidden");
+      }
+
+      // mostra mensagens do callback (?status=...)
+      const params = new URLSearchParams(window.location.search);
+      const statusParam = params.get("status");
+      if (statusParam === "ok") {
+        feedback.textContent = "Conexão com o Google Drive realizada com sucesso.";
+      } else if (statusParam === "error") {
+        feedback.textContent =
+          "Ocorreu um erro na conexão com o Google. Tente novamente.";
+      }
+    } catch (e) {
+      console.error(e);
+      statusEl.textContent =
+        "Erro inesperado ao carregar o status da integração.";
+      btnConnect.disabled = true;
+    }
+  }
+
+  async function iniciarConexao() {
+    const resp = await fetch("/api/drive/auth-url/", {
+      headers: buildAuthHeaders(),
+      credentials: "include", // <--- IMPORTANTE
+    });
+
+    if (!resp.ok) {
+      alert("Não foi possível iniciar a conexão com o Google.");
+      return;
+    }
+
+    const data = await resp.json();
+    if (data.authorization_url) {
+      window.location.href = data.authorization_url;
+    } else {
+      alert("Resposta inesperada do servidor.");
+    }
+  }
+
+  document.getElementById("btn-connect").addEventListener("click", iniciarConexao);
+  document.getElementById("btn-reconnect").addEventListener("click", iniciarConexao);
+
+  carregarStatus();
+</script>
+{% endblock %}

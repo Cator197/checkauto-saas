@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>CheckAuto - Check-in Completo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="manifest" href="/static/pwa/manifest.json">
+  <meta name="theme-color" content="#0f172a">
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 16px;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    a.back {
+      display: inline-block;
+      margin-bottom: 16px;
+      text-decoration: none;
+      color: #0f172a;
+    }
+    h1 {
+      margin-top: 0;
+      margin-bottom: 10px;
+    }
+    h2 {
+      font-size: 18px;
+      margin-top: 20px;
+      margin-bottom: 8px;
+    }
+    .field {
+      margin-bottom: 10px;
+    }
+    .field label {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+    .field input,
+    .field textarea,
+    .field select {
+      width: 100%;
+      padding: 8px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    textarea {
+      min-height: 70px;
+      resize: vertical;
+    }
+    .section {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 8px;
+      background: #f5f5f5;
+    }
+    .lista-fotos {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .foto-thumb {
+      position: relative;
+      width: 90px;
+      height: 90px;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid #ccc;
+    }
+    .foto-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .foto-thumb button {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      border: none;
+      border-radius: 3px;
+      padding: 2px 4px;
+      font-size: 10px;
+      cursor: pointer;
+    }
+
+    button[type="submit"] {
+      width: 100%;
+      padding: 12px;
+      margin-top: 18px;
+      border: none;
+      border-radius: 8px;
+      background: #0f172a;
+      color: #fff;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .msg {
+      margin-top: 10px;
+      font-size: 14px;
+      color: green;
+    }
+  </style>
+</head>
+<body>
+
+  <a href="/pwa/" class="back">← Voltar para Home</a>
+
+  <h1>Check-in Completo</h1>
+  <p>Preencha os dados do cliente, veículo e observações. As fotos serão adicionadas na próxima etapa.</p>
+
+  <form id="formCheckinCompleto">
+    <!-- DADOS DO CLIENTE -->
+    <div class="section">
+      <h2>Dados do Cliente</h2>
+
+      <div class="field">
+        <label for="clienteNome">Nome do cliente</label>
+        <input id="clienteNome" name="clienteNome" type="text" required>
+      </div>
+
+      <div class="field">
+        <label for="clienteTelefone">Telefone (WhatsApp)</label>
+        <input id="clienteTelefone" name="clienteTelefone" type="tel">
+      </div>
+
+      <div class="field">
+        <label for="clienteEmail">E-mail</label>
+        <input id="clienteEmail" name="clienteEmail" type="email">
+      </div>
+    </div>
+
+    <!-- DADOS DO VEÍCULO -->
+    <div class="section">
+      <h2>Dados do Veículo</h2>
+
+      <div class="field">
+        <label for="veiculoPlaca">Placa</label>
+        <input id="veiculoPlaca" name="veiculoPlaca" type="text" required>
+      </div>
+
+      <div class="field">
+        <label for="veiculoModelo">Modelo</label>
+        <input id="veiculoModelo" name="veiculoModelo" type="text" required>
+      </div>
+
+      <div class="field">
+        <label for="veiculoCor">Cor</label>
+        <input id="veiculoCor" name="veiculoCor" type="text">
+      </div>
+
+      <div class="field">
+        <label for="veiculoAno">Ano</label>
+        <input id="veiculoAno" name="veiculoAno" type="number" min="1900" max="2100">
+      </div>
+
+      <div class="field">
+        <label for="veiculoKm">KM na entrada</label>
+        <input id="veiculoKm" name="veiculoKm" type="number" min="0">
+      </div>
+    </div>
+
+    <!-- INFORMAÇÕES DA OS -->
+    <div class="section">
+      <h2>Informações da OS</h2>
+
+      <div class="field">
+        <label for="osNumero">Número interno da OS (opcional)</label>
+        <input id="osNumero" name="osNumero" type="text">
+      </div>
+
+      <div class="field">
+        <label for="etapaInicial">Etapa inicial</label>
+        <!-- Por enquanto estático; depois vamos buscar as etapas via API -->
+        <select id="etapaInicial" name="etapaInicial">
+          <option value="entrada">Entrada</option>
+          <option value="funilaria">Funilaria</option>
+          <option value="pintura">Pintura</option>
+          <option value="acabamento">Acabamento</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="observacoes">Observações gerais</label>
+        <textarea id="observacoes" name="observacoes"></textarea>
+      </div>
+    </div>
+
+
+    <!-- FOTOS -->
+    <div class="section">
+      <h2>Fotos do Check-in</h2>
+
+      <!-- FOTOS PADRÃO -->
+      <div>
+        <strong>Fotos padrão</strong>
+        <p style="font-size:13px; margin-top:4px;">
+          Ex.: frente, traseira, laterais, interior. (Depois vamos ligar com a configuração da oficina.)
+        </p>
+        <button type="button" id="btnAddFotoPadrao">Adicionar foto padrão</button>
+        <input id="inputFotoPadrao" type="file" accept="image/*" capture="environment" style="display:none">
+        <div id="listaFotosPadrao" class="lista-fotos"></div>
+      </div>
+
+      <!-- FOTOS LIVRES -->
+      <div style="margin-top:12px;">
+        <strong>Fotos livres</strong>
+        <p style="font-size:13px; margin-top:4px;">
+          Use para registrar detalhes, avarias específicas, peças soltas etc.
+        </p>
+        <button type="button" id="btnAddFotoLivre">Adicionar foto livre</button>
+        <input id="inputFotoLivre" type="file" accept="image/*" capture="environment" style="display:none">
+        <div id="listaFotosLivres" class="lista-fotos"></div>
+      </div>
+    </div>
+
+
+    <button type="submit">Salvar Check-in (Pendência offline)</button>
+
+    <div id="msgRetorno" class="msg" style="display:none;"></div>
+  </form>
+
+  <script src="/static/pwa/js/db.js"></script>
+  <script src="/static/pwa/js/app.js"></script>
+  <script src="/static/pwa/js/fotos_module.js"></script>
+  <script src="/static/pwa/js/checkin_completo.js"></script>
+</body>
+</html>
+

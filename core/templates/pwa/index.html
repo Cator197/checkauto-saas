@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>CheckAuto - Home</title>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Manifest -->
+  <link rel="manifest" href="/static/pwa/manifest.json">
+
+  <meta name="theme-color" content="#0f172a" />
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    h1 {
+      margin-bottom: 10px;
+    }
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 15px;
+      margin: 10px 0;
+      background-color: #0f172a;
+      color: white;
+      border-radius: 8px;
+      text-align: center;
+      text-decoration: none;
+      font-size: 18px;
+    }
+    .pending {
+      margin-top: 20px;
+      padding: 10px;
+      background: #f0f4ff;
+      border-left: 4px solid #0f172a;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>CheckAuto</h1>
+  <p>Escolha uma ação:</p>
+
+  <a class="btn" href="/pwa/checkin-completo/">Novo Check-in Completo</a>
+  <a class="btn" href="/pwa/checkin-fotos/">Check-in (Somente Fotos)</a>
+  <a class="btn" href="/pwa/sync/">Sincronizar Dados</a>
+
+  <div class="pending">
+    <strong>Pendências:</strong><br>
+    OS pendentes: <span id="osPendentes">0</span><br>
+    Fotos pendentes: <span id="fotosPendentes">0</span>
+  </div>
+
+  <script src="/static/pwa/js/db.js"></script>
+  <script src="/static/pwa/js/app.js"></script>
+
+</body>
+</html>

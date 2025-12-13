@@ -15,8 +15,61 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
+from django.shortcuts import render
+from django.views.generic import TemplateView
+from core.authentication import CustomTokenObtainPairView
+
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
+
+def pwa_home(request):
+    return render(request, "pwa/index.html")
+
+
+def pwa_checkin_completo(request):
+    return render(request, "pwa/checkin_completo.html")
+
+
+def pwa_checkin_fotos(request):
+    return render(request, "pwa/checkin_fotos.html")
+
+
+def pwa_sync(request):
+    return render(request, "pwa/sync.html")
+
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+
+    # PWA - telas do app do funileiro
+    path('pwa/', pwa_home, name='pwa_home'),
+    path('pwa/checkin-completo/', pwa_checkin_completo, name='pwa_checkin_completo'),
+    path('pwa/checkin-fotos/', pwa_checkin_fotos, name='pwa_checkin_fotos'),
+    path('pwa/sync/', pwa_sync, name='pwa_sync'),
+
+    # JWT
+    path('api/login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+
+    # Rotas da API
+    path('api/', include('core.api_urls')),
+
+    #painel
+    path("painel/login/", TemplateView.as_view(template_name="painel/login.html"), name="painel_login"),
+    path("painel/", TemplateView.as_view(template_name="painel/dashboard.html"), name="painel_dashboard"),
+    path("painel/os/", TemplateView.as_view(template_name="painel/os_lista.html"), name="painel_os_lista"),
+    path("painel/os/<int:os_id>/", TemplateView.as_view(template_name="painel/os_detalhe.html"), name="painel_os_detalhe"),
+    path("painel/etapas/",TemplateView.as_view(template_name="painel/etapas.html"),name="painel_etapas"),
+    path("painel/fotos/",TemplateView.as_view(template_name="painel/config_fotos.html"),name="painel_config_fotos"),
+    path("painel/usuarios/",TemplateView.as_view(template_name="painel/usuarios.html"),name="painel_usuarios"),
+    path("painel/integracoes/drive/",TemplateView.as_view(template_name="painel/integracao_drive.html"),name="painel_integracao_drive"),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

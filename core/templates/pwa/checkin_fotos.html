@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>CheckAuto - Check-in (Somente Fotos)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="manifest" href="/static/pwa/manifest.json">
+  <meta name="theme-color" content="#0f172a">
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 16px;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    a.back {
+      display: inline-block;
+      margin-bottom: 16px;
+      text-decoration: none;
+      color: #0f172a;
+    }
+    h1 {
+      margin-top: 0;
+      margin-bottom: 10px;
+    }
+    h2 {
+      font-size: 18px;
+      margin-top: 20px;
+      margin-bottom: 8px;
+    }
+    .section {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 8px;
+      background: #f5f5f5;
+    }
+    .field {
+      margin-bottom: 10px;
+    }
+    .field label {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+    .field input,
+    .field textarea,
+    .field select {
+      width: 100%;
+      padding: 8px;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    textarea {
+      min-height: 60px;
+      resize: vertical;
+    }
+    .lista-fotos {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .foto-thumb {
+      position: relative;
+      width: 90px;
+      height: 90px;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid #ccc;
+    }
+    .foto-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .foto-thumb button {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      border: none;
+      border-radius: 3px;
+      padding: 2px 4px;
+      font-size: 10px;
+      cursor: pointer;
+    }
+
+    button[type="submit"] {
+      width: 100%;
+      padding: 12px;
+      margin-top: 18px;
+      border: none;
+      border-radius: 8px;
+      background: #0f172a;
+      color: #fff;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .msg {
+      margin-top: 10px;
+      font-size: 14px;
+      color: green;
+    }
+  </style>
+</head>
+<body>
+
+  <a href="/pwa/" class="back">← Voltar para Home</a>
+
+  <h1>Check-in (Somente Fotos)</h1>
+  <p>Use esta opção quando quiser fazer um registro rápido focado nas fotos do veículo.</p>
+
+  <form id="formCheckinFotos">
+    <!-- DADOS MÍNIMOS DO VEÍCULO -->
+    <div class="section">
+      <h2>Identificação do Veículo</h2>
+
+      <div class="field">
+        <label for="veiculoPlaca">Placa</label>
+        <input id="veiculoPlaca" name="veiculoPlaca" type="text" required>
+      </div>
+
+      <div class="field">
+        <label for="veiculoModelo">Modelo (opcional)</label>
+        <input id="veiculoModelo" name="veiculoModelo" type="text">
+      </div>
+
+      <div class="field">
+        <label for="osNumero">Número interno da OS (opcional)</label>
+        <input id="osNumero" name="osNumero" type="text">
+      </div>
+    </div>
+
+    <!-- OBSERVAÇÕES RÁPIDAS -->
+    <div class="section">
+      <h2>Observações (opcional)</h2>
+
+      <div class="field">
+        <label for="observacoes">Observações rápidas</label>
+        <textarea id="observacoes" name="observacoes"></textarea>
+      </div>
+    </div>
+
+    <!-- FOTOS -->
+    <div class="section">
+      <h2>Fotos do Veículo</h2>
+
+      <div>
+        <strong>Fotos padrão</strong>
+        <p style="font-size:13px; margin-top:4px;">
+          Ex.: frente, traseira, laterais, interior.
+        </p>
+        <button type="button" id="btnAddFotoPadrao">Adicionar foto padrão</button>
+        <input id="inputFotoPadrao" type="file" accept="image/*" capture="environment" style="display:none">
+        <div id="listaFotosPadrao" class="lista-fotos"></div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <strong>Fotos livres</strong>
+        <p style="font-size:13px; margin-top:4px;">
+          Use para registrar detalhes, avarias específicas, peças soltas etc.
+        </p>
+        <button type="button" id="btnAddFotoLivre">Adicionar foto livre</button>
+        <input id="inputFotoLivre" type="file" accept="image/*" capture="environment" style="display:none">
+        <div id="listaFotosLivres" class="lista-fotos"></div>
+      </div>
+    </div>
+
+
+    <button type="submit">Salvar Check-in Rápido (Pendência offline)</button>
+
+    <div id="msgRetorno" class="msg" style="display:none;"></div>
+  </form>
+
+  <script src="/static/pwa/js/db.js"></script>
+  <script src="/static/pwa/js/app.js"></script>
+  <script src="/static/pwa/js/fotos_module.js"></script>
+  <script src="/static/pwa/js/checkin_fotos.js"></script>
+</body>
+</html>
+

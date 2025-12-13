@@ -11,10 +11,18 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+GOOGLE_DRIVE_CLIENT_SECRETS_FILE = BASE_DIR / "google_client_secret.json"
+GOOGLE_DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+GOOGLE_DRIVE_REDIRECT_URI = "http://localhost:8000/api/google/oauth2/callback/"
+GOOGLE_DRIVE_POST_CONNECT_REDIRECT = "/painel/integracoes/drive/"
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
@@ -28,6 +36,7 @@ DEBUG = True
 ALLOWED_HOSTS = []
 
 
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -37,6 +46,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+
+    'rest_framework',  # DRF
+    'core',  # nosso app
 ]
 
 MIDDLEWARE = [
@@ -115,3 +127,42 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+
+        # continua aceitando JWT para o app/PWA
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        # permite usar o login normal do Django (cookies) no painel
+        #"core.authentication.CsrfExemptSessionAuthentication",
+    ],
+}
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "loggers": {
+        "core.drive_service": {          # logs específicos do Drive
+            "handlers": ["console"],
+            "level": "DEBUG",
+        },
+        "core.views": {                  # opcional: logs das views
+            "handlers": ["console"],
+            "level": "DEBUG",
+        },
+    },
+}

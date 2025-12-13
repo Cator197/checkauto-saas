@@ -1,5 +1,43 @@
-.venv/
+# =========================
+# Python / Django
+# =========================
 __pycache__/
-*.pyc
+*.py[cod]
+*.log
+
+# Ambiente virtual
+.venv/
+venv/
+
+# Banco local
 db.sqlite3
+
+# Media / uploads
+media/
+os_fotos/
+
+# =========================
+# Django static gerado
+# =========================
+staticfiles/
+static_collected/
+
+# =========================
+# Google Drive / Secrets
+# =========================
+google_client_secret.json
+credentials.json
+token.json
+
+# =========================
+# IDEs
+# =========================
 .idea/
+.vscode/
+*.iml
+
+# =========================
+# Sistema operacional
+# =========================
+.DS_Store
+Thumbs.db

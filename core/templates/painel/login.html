@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <title>Login | CheckAuto</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0f172a;
+      color: #e5e7eb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+    .card {
+      background: #020617;
+      padding: 24px;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+      border: 1px solid #1f2937;
+    }
+    h1 {
+      margin-top: 0;
+      margin-bottom: 16px;
+      font-size: 1.4rem;
+      text-align: center;
+    }
+    label {
+      display: block;
+      font-size: 0.85rem;
+      margin-bottom: 4px;
+      color: #9ca3af;
+    }
+    input {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #374151;
+      background: #020617;
+      color: #e5e7eb;
+      margin-bottom: 12px;
+      box-sizing: border-box;
+    }
+    input:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 1px #3b82f6;
+    }
+    button {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: none;
+      background: #3b82f6;
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: wait;
+    }
+    .error {
+      color: #f97373;
+      font-size: 0.85rem;
+      margin-top: 8px;
+      min-height: 1em;
+    }
+    .small {
+      font-size: 0.75rem;
+      color: #6b7280;
+      margin-top: 12px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Login CheckAuto</h1>
+
+    <label for="username">Usuário</label>
+    <input id="username" type="text" autocomplete="username" />
+
+    <label for="password">Senha</label>
+    <input id="password" type="password" autocomplete="current-password" />
+
+    <button id="btnLogin">Entrar</button>
+
+    <div id="error" class="error"></div>
+
+    <div class="small">
+      Use seu usuário do sistema para acessar o painel.
+    </div>
+  </div>
+
+  <script>
+    const btn = document.getElementById("btnLogin");
+    const errorBox = document.getElementById("error");
+
+    async function fazerLogin() {
+      errorBox.textContent = "";
+      btn.disabled = true;
+
+      const username = document.getElementById("username").value.trim();
+      const password = document.getElementById("password").value;
+
+      if (!username || !password) {
+        errorBox.textContent = "Informe usuário e senha.";
+        btn.disabled = false;
+        return;
+      }
+
+      try {
+        const resp = await fetch("/api/login/", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ username, password }),
+        });
+
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          errorBox.textContent =
+            data.detail || "Usuário ou senha inválidos.";
+          btn.disabled = false;
+          return;
+        }
+
+        const data = await resp.json();
+
+        // Salva tokens e dados do usuário para o painel
+        // Salva tokens e dados do usuário para o painel
+        localStorage.setItem("checkauto_access", data.access);
+        localStorage.setItem("checkauto_refresh", data.refresh);
+        localStorage.setItem("checkauto_token", data.access); // <--- COMPATIBILIDADE COM JS ANTIGO
+        localStorage.setItem("checkauto_user", JSON.stringify(data.user));
+
+        // Redireciona para o dashboard do painel
+        window.location.href = "/painel/";
+      } catch (e) {
+        console.error(e);
+        errorBox.textContent = "Erro ao conectar com o servidor.";
+        btn.disabled = false;
+      }
+    }
+
+    btn.addEventListener("click", fazerLogin);
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        fazerLogin();
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>CheckAuto - Sincronização</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="manifest" href="/static/pwa/manifest.json">
+  <meta name="theme-color" content="#0f172a">
+
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    a { color: #0f172a; text-decoration: none; }
+    .back { margin-bottom: 20px; display: inline-block; }
+
+    .pending-box {
+      margin-top: 12px;
+      padding: 10px;
+      background: #eef2ff;
+      border-left: 4px solid #0f172a;
+      border-radius: 6px;
+    }
+
+    #listaPendentes {
+      margin-top: 15px;
+      background: #f8f8f8;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+    }
+
+    .os-item {
+      padding: 8px;
+      border-bottom: 1px solid #ccc;
+    }
+
+    .os-item:last-child {
+      border-bottom: none;
+    }
+
+    .status {
+      margin-top: 20px;
+      padding: 12px;
+      background: #f1f5f9;
+      border-radius: 6px;
+      min-height: 50px;
+    }
+
+    button {
+      margin-top: 15px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      border: none;
+      background: #0f172a;
+      color: white;
+      cursor: pointer;
+      font-size: 16px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <a href="/pwa/" class="back">← Voltar para Home</a>
+
+  <h1>Sincronização</h1>
+  <p>Envie agora os check-ins pendentes armazenados offline.</p>
+
+  <div class="pending-box">
+    <strong>OS pendentes encontradas:</strong>
+    <span id="qtdPendentes">0</span>
+  </div>
+
+  <div id="listaPendentes"></div>
+
+  <button id="btnSync">Tentar sincronizar agora</button>
+
+  <div class="status" id="syncStatus">Aguardando ação do usuário…</div>
+
+  <script src="/static/pwa/js/db.js"></script>
+  <script src="/static/pwa/js/sync.js"></script>
+
+</body>
+</html>
