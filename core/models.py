@@ -272,34 +272,6 @@ class FotoOS(models.Model):
         return base
 
 
-class OficinaDriveConfig(models.Model):
-    """
-    Configuração de integração com o Google Drive para uma oficina.
-    Armazena a pasta raiz e as credenciais OAuth.
-    """
-    oficina = models.OneToOneField(
-        Oficina,
-        on_delete=models.CASCADE,
-        related_name="drive_config"
-    )
-    root_folder_id = models.CharField(
-        max_length=255,
-        help_text="ID da pasta raiz no Google Drive onde as OS desta oficina serão criadas."
-    )
-    credentials_json = models.TextField(
-        help_text="Credenciais OAuth serializadas (JSON) para acessar o Drive desta oficina."
-    )
-    ativo = models.BooleanField(default=True)
-
-    criado_em = models.DateTimeField(auto_now_add=True)
-    atualizado_em = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        verbose_name = "Configuração Google Drive"
-        verbose_name_plural = "Configurações Google Drive"
-
-    def __str__(self):
-        return f"Drive {self.oficina.nome} ({'Ativo' if self.ativo else 'Inativo'})"
 
 
 class OficinaDriveConfig(models.Model):
