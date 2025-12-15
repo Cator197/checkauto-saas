@@ -100,7 +100,8 @@ class OSSerializer(serializers.ModelSerializer):
             'data_prevista_entrega',
             'data_saida',
             'aberta',
-            'drive_folder_id',   # <-- adicionar aqui
+            'drive_folder_id',
+            'fotos',
         ]
 
 

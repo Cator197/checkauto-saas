@@ -249,31 +249,20 @@ class FotoOSViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        """
-        Ao criar uma foto:
-        - força a oficina através da OS (validada pelo backend)
-        - define tirada_por como o UsuarioOficina do usuário logado, se existir
-        - tenta enviar para o Google Drive
-        """
-        from .models import UsuarioOficina  # import local para evitar ciclos
+        from .models import UsuarioOficina
 
         user = self.request.user
-
-        # Descobre o UsuarioOficina (se houver)
         usuario_oficina = None
-        try:
-            oficina = get_oficina_do_usuario(user)
-            if oficina:
-                usuario_oficina = UsuarioOficina.objects.filter(
-                    user=user,
-                    oficina=oficina,
-                    ativo=True
-                ).first()
-        except Exception:
-            usuario_oficina = None
+        oficina = get_oficina_do_usuario(user)
+        if oficina:
+            usuario_oficina = UsuarioOficina.objects.filter(
+                user=user, oficina=oficina, ativo=True
+            ).first()
 
-        foto = serializer.save(usuario=request.user)
+        # salva a foto corretamente
+        foto = serializer.save(tirada_por=usuario_oficina)
 
+        # tenta subir pro drive
         try:
             drive_file_id = upload_foto_os_drive(
                 os_obj=foto.os,
@@ -281,13 +270,10 @@ class FotoOSViewSet(viewsets.ModelViewSet):
                 caminho_arquivo_local=foto.arquivo.path,
                 nome_arquivo=foto.arquivo.name,
             )
-
             foto.drive_file_id = drive_file_id
             foto.save(update_fields=["drive_file_id"])
-
-        except Exception as e:
+        except Exception:
             logger.exception("Erro ao enviar foto id=%s para o Drive", foto.id)
-            # NÃO quebra o fluxo – foto continua salva localmente
 
 
 from django.utils import timezone
