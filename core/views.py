@@ -17,6 +17,9 @@ import json
 from .models import OficinaDriveConfig
 from .models import Oficina, UsuarioOficina, Etapa, ConfigFoto, OS, FotoOS, OficinaDriveConfig
 from .utils import get_oficina_do_usuario
+from core.drive_service import upload_foto_os_drive
+from core.drive_service import upload_foto_os_drive
+
 
 from django.utils import timezone
 from .models import Oficina, UsuarioOficina, Etapa, ConfigFoto, OS, FotoOS
@@ -269,13 +272,22 @@ class FotoOSViewSet(viewsets.ModelViewSet):
         except Exception:
             usuario_oficina = None
 
-        foto = serializer.save(tirada_por=usuario_oficina)
+        foto = serializer.save(usuario=request.user)
 
-        # Tenta enviar a foto para o Drive (não quebra a API se falhar)
         try:
-            upload_foto_para_drive(foto)
-        except Exception:
-            pass
+            drive_file_id = upload_foto_os_drive(
+                os_obj=foto.os,
+                etapa=foto.etapa,
+                caminho_arquivo_local=foto.arquivo.path,
+                nome_arquivo=foto.arquivo.name,
+            )
+
+            foto.drive_file_id = drive_file_id
+            foto.save(update_fields=["drive_file_id"])
+
+        except Exception as e:
+            logger.exception("Erro ao enviar foto id=%s para o Drive", foto.id)
+            # NÃO quebra o fluxo – foto continua salva localmente
 
 
 from django.utils import timezone

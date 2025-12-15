@@ -7,11 +7,17 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials
 
+
+from core.models import Etapa
+
 from django.conf import settings
 
 from .models import OS, Etapa, FotoOS, OficinaDriveConfig
 
 logger = logging.getLogger(__name__)
+
+from googleapiclient.http import MediaFileUpload
+import os
 
 
 class DriveNaoConfigurado(Exception):
@@ -124,7 +130,21 @@ def criar_pasta_os(os_obj: OS) -> Optional[str]:
         )
         os_obj.drive_folder_id = folder_id
         os_obj.save(update_fields=["drive_folder_id"])
+
+        # Cria subpastas das etapas
+        try:
+            criar_subpastas_etapas(os_obj, service)
+            criar_pasta_livres(os_obj, service)
+            logger.info("Subpastas de etapas criadas para OS id=%s", os_obj.id)
+        except Exception:
+            logger.exception(
+                "Erro ao criar subpastas da OS id=%s",
+                os_obj.id,
+            )
+
         return folder_id
+
+
     except Exception:
         logger.exception(
             "Erro ao criar pasta da OS id=%s no Drive.",
@@ -230,3 +250,119 @@ def upload_foto_para_drive(foto: FotoOS) -> Optional[str]:
     except Exception as e:
         logger.exception(f"Erro ao enviar foto {foto.id} para o Drive: {e}")
         return None
+
+def criar_subpastas_etapas(os_obj: OS, service):
+    """
+    Cria as subpastas das etapas da oficina dentro da pasta da OS.
+    """
+    etapas = (
+        Etapa.objects
+        .filter(oficina=os_obj.oficina, ativa=True)
+        .order_by("ordem", "id")
+    )
+
+    for etapa in etapas:
+        ordem = int(etapa.ordem or 0)
+        nome_pasta = f"{ordem:02d} - {etapa.nome}"
+        _get_or_create_subpasta(
+            service=service,
+            parent_id=os_obj.drive_folder_id,
+            nome=nome_pasta,
+        )
+
+def criar_pasta_livres(os_obj: OS, service):
+    _get_or_create_subpasta(
+        service=service,
+        parent_id=os_obj.drive_folder_id,
+        nome="00 - Livres",
+    )
+
+
+def _get_or_create_subpasta(service, parent_id: str, nome: str) -> str:
+    """
+    Busca uma subpasta pelo nome dentro de parent_id.
+    Se não existir, cria.
+    Retorna o folder_id.
+    """
+    query = (
+        f"mimeType='application/vnd.google-apps.folder' "
+        f"and name='{nome}' "
+        f"and '{parent_id}' in parents "
+        f"and trashed=false"
+    )
+
+    response = service.files().list(
+        q=query,
+        fields="files(id, name)",
+        pageSize=1,
+    ).execute()
+
+    files = response.get("files", [])
+    if files:
+        return files[0]["id"]
+
+    folder_metadata = {
+        "name": nome,
+        "mimeType": "application/vnd.google-apps.folder",
+        "parents": [parent_id],
+    }
+
+    folder = service.files().create(
+        body=folder_metadata,
+        fields="id",
+    ).execute()
+
+    return folder["id"]
+
+def obter_pasta_etapa(os_obj: OS, etapa, service) -> str:
+    """
+    Retorna o folder_id da subpasta da etapa dentro da OS.
+    Cria se não existir.
+    """
+    ordem = int(etapa.ordem or 0)
+    nome_pasta = f"{ordem:02d} - {etapa.nome}"
+
+    return _get_or_create_subpasta(
+        service=service,
+        parent_id=os_obj.drive_folder_id,
+        nome=nome_pasta,
+    )
+
+def upload_foto_os_drive(
+    *,
+    os_obj: OS,
+    etapa,
+    caminho_arquivo_local: str,
+    nome_arquivo: str,
+) -> str:
+    """
+    Faz upload de uma foto da OS para a pasta correta da etapa.
+    Retorna o file_id do Drive.
+    """
+    # Garante pasta da OS
+    pasta_os_id = criar_pasta_os(os_obj)
+    if not pasta_os_id:
+        raise Exception("Pasta da OS não disponível no Drive")
+
+    service = get_drive_service(os_obj.oficina)
+
+    # Garante pasta da etapa
+    pasta_etapa_id = obter_pasta_etapa(os_obj, etapa, service)
+
+    file_metadata = {
+        "name": nome_arquivo,
+        "parents": [pasta_etapa_id],
+    }
+
+    media = MediaFileUpload(
+        caminho_arquivo_local,
+        resumable=False,
+    )
+
+    file = service.files().create(
+        body=file_metadata,
+        media_body=media,
+        fields="id",
+    ).execute()
+
+    return file["id"]
