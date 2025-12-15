@@ -9,6 +9,7 @@ import base64
 from django.core.files.base import ContentFile
 from datetime import date
 from django.db.models import Q
+from django.db import transaction
 from .drive_service import criar_pasta_os, upload_foto_para_drive  # <-- novo
 from django.conf import settings
 from django.shortcuts import redirect
@@ -204,9 +205,18 @@ class OSViewSet(viewsets.ModelViewSet):
         user = self.request.user
         oficina = get_oficina_do_usuario(user)
 
-        if oficina is None and not user.is_superuser:
-            # Se por algum motivo o usuário não tiver oficina associada
-            raise serializers.ValidationError({"oficina": "Oficina não encontrada para o usuário."})
+        if oficina is None:
+            if user.is_superuser:
+                oficina_id = self.request.data.get("oficina")
+                if not oficina_id:
+                    raise serializers.ValidationError({"oficina": "Superusuário precisa informar a oficina."})
+                try:
+                    oficina = Oficina.objects.get(id=oficina_id)
+                except Oficina.DoesNotExist:
+                    raise serializers.ValidationError({"oficina": "Oficina informada não existe."})
+            else:
+                # Se por algum motivo o usuário não tiver oficina associada
+                raise serializers.ValidationError({"oficina": "Oficina não encontrada para o usuário."})
 
         os_obj = serializer.save(oficina=oficina)
 
@@ -327,17 +337,18 @@ class SyncView(APIView):
             )
 
             if serializer.is_valid():
-                os_obj = serializer.save()
+                with transaction.atomic():
+                    os_obj = serializer.save(oficina=oficina)
 
-                # 1) Garante a pasta da OS no Drive durante o sync
-                try:
-                    criar_pasta_os(os_obj)
-                except Exception as e:
-                    # não quebra o sync se o Drive falhar
-                    print(f"[SYNC] Erro ao criar pasta da OS {os_obj.id} no Drive: {e}")
+                    # 1) Garante a pasta da OS no Drive durante o sync
+                    try:
+                        criar_pasta_os(os_obj)
+                    except Exception as e:
+                        # não quebra o sync se o Drive falhar
+                        logger.warning("[SYNC] Erro ao criar pasta da OS %s no Drive: %s", os_obj.id, e)
 
-                # 2) Salva fotos (padrão + livres) como FotoOS tipo LIVRE
-                self.salvar_fotos(os_obj, item, user)
+                    # 2) Salva fotos (padrão + livres) como FotoOS tipo LIVRE
+                    self.salvar_fotos(os_obj, item, user)
 
                 # re-serializa com o objeto salvo (só pra garantir consistência)
                 resultados.append(OSSerializer(os_obj, context={"request": request}).data)

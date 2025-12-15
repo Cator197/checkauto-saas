@@ -104,6 +104,13 @@ class OSSerializer(serializers.ModelSerializer):
             'fotos',
         ]
 
+        extra_kwargs = {
+            # A oficina sempre vem do usuário logado (painel, PWA e sync)
+            'oficina': {'read_only': True},
+            # Relação reversa; leitura somente evita exigir o campo no payload
+            'fotos': {'read_only': True},
+        }
+
 
 
 class FotoOSSerializer(serializers.ModelSerializer):
@@ -136,8 +143,35 @@ class FotoOSSerializer(serializers.ModelSerializer):
             'tirada_por',
             'tirada_por_nome',
             'tirada_em',
-            'fotos',
         ]
 
     def get_oficina(self, obj):
         return obj.os.oficina_id
+
+    def validate(self, attrs):
+        tipo = attrs.get('tipo')
+        config_foto = attrs.get('config_foto')
+        etapa = attrs.get('etapa')
+        os_obj = attrs.get('os')
+
+        # Regras de negócio espelhadas do model.clean para validar antes de salvar
+        if not os_obj:
+            raise serializers.ValidationError({'os': 'OS é obrigatória.'})
+
+        if not etapa:
+            raise serializers.ValidationError({'etapa': 'Etapa é obrigatória.'})
+
+        if tipo == 'PADRAO':
+            if not config_foto:
+                raise serializers.ValidationError({'config_foto': 'Fotos PADRÃO precisam de config_foto.'})
+            if config_foto.oficina_id != os_obj.oficina_id:
+                raise serializers.ValidationError({'config_foto': 'ConfigFoto deve ser da mesma oficina da OS.'})
+            if config_foto.etapa_id != etapa.id:
+                raise serializers.ValidationError({'etapa': 'Etapa da foto deve ser a mesma da ConfigFoto.'})
+        elif tipo == 'LIVRE':
+            if config_foto is not None:
+                raise serializers.ValidationError({'config_foto': 'Fotos LIVRES não podem ter config_foto.'})
+        else:
+            raise serializers.ValidationError({'tipo': 'Tipo de foto inválido.'})
+
+        return attrs
