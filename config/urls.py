@@ -21,6 +21,7 @@ from django.conf.urls.static import static
 from django.shortcuts import render
 from django.views.generic import TemplateView
 from core.authentication import CustomTokenObtainPairView
+from core.views import integracao_drive_view
 
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -69,6 +70,7 @@ urlpatterns = [
     path("painel/fotos/",TemplateView.as_view(template_name="painel/config_fotos.html"),name="painel_config_fotos"),
     path("painel/usuarios/",TemplateView.as_view(template_name="painel/usuarios.html"),name="painel_usuarios"),
     path("painel/integracoes/drive/",TemplateView.as_view(template_name="painel/integracao_drive.html"),name="painel_integracao_drive"),
+    path("integracao-drive/", integracao_drive_view, name="integracao-drive"),
 ]
 
 if settings.DEBUG:

@@ -765,3 +765,11 @@ class GoogleDriveOAuth2CallbackView(APIView):
         )
 
         return redirect(f"{redirect_url}?status=ok")
+
+# core/views.py
+from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
+
+@login_required
+def integracao_drive_view(request):
+    return render(request, "integracao_drive.html")
