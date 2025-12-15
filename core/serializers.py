@@ -136,6 +136,7 @@ class FotoOSSerializer(serializers.ModelSerializer):
             'tirada_por',
             'tirada_por_nome',
             'tirada_em',
+            'fotos',
         ]
 
     def get_oficina(self, obj):
