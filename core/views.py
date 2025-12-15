@@ -418,12 +418,18 @@ class SyncView(APIView):
             usuario_oficina = None
 
         for foto in todas_fotos:
-            conteudo_base64 = foto.get("arquivo")
+            # ✅ aceita tanto "arquivo" quanto "dataUrl" (como no teu IndexedDB)
+            conteudo_base64 = foto.get("arquivo") or foto.get("dataUrl")
             if not conteudo_base64:
                 continue
 
-            # Remove prefixo "data:image/jpeg;base64,..." se vier
-            if "," in conteudo_base64:
+            # Se vier no formato data:image/png;base64,AAAA...
+            header = None
+            if conteudo_base64.startswith("data:"):
+                header, conteudo_base64 = conteudo_base64.split(",", 1)
+
+            # fallback: se tiver vírgula, remove prefixo
+            elif "," in conteudo_base64:
                 conteudo_base64 = conteudo_base64.split(",", 1)[1]
 
             try:
@@ -431,7 +437,18 @@ class SyncView(APIView):
             except Exception:
                 continue
 
-            extensao = foto.get("extensao") or "jpg"
+            # ✅ tenta pegar extensão do payload / header
+            extensao = (foto.get("extensao") or "").lower().strip().lstrip(".")
+            if not extensao and header:
+                # exemplo header: data:image/png;base64
+                if "image/png" in header:
+                    extensao = "png"
+                elif "image/webp" in header:
+                    extensao = "webp"
+                elif "image/jpeg" in header or "image/jpg" in header:
+                    extensao = "jpg"
+            if not extensao:
+                extensao = "jpg"
 
             arquivo = ContentFile(
                 conteudo,
