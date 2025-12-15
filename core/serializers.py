@@ -121,6 +121,7 @@ class FotoOSSerializer(serializers.ModelSerializer):
     os_codigo = serializers.CharField(source='os.codigo', read_only=True)
     oficina = serializers.SerializerMethodField()
     etapa_nome = serializers.CharField(source='etapa.nome', read_only=True)
+
     config_foto_nome = serializers.CharField(source='config_foto.nome', read_only=True, default=None)
     tirada_por_nome = serializers.CharField(
         source='tirada_por.user.get_full_name',
