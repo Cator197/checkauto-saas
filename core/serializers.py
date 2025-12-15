@@ -148,6 +148,12 @@ class FotoOSSerializer(serializers.ModelSerializer):
             'tirada_por_nome',
             'tirada_em',
         ]
+        # FotoOS não possui campo "fotos"; manter apenas campos reais do model.
+        extra_kwargs = {
+            # Permitem que o viewset injete defaults quando o frontend não envia
+            'etapa': {'required': False},
+            'tipo': {'required': False},
+        }
 
     def get_oficina(self, obj):
         return obj.os.oficina_id
@@ -190,10 +196,17 @@ class FotoOSSerializer(serializers.ModelSerializer):
         return ContentFile(conteudo, name=nome_arquivo)
 
     def validate(self, attrs):
-        tipo = attrs.get('tipo')
+        tipo = attrs.get('tipo') or 'LIVRE'
         config_foto = attrs.get('config_foto')
         etapa = attrs.get('etapa')
         os_obj = attrs.get('os')
+
+        # Garante defaults quando o payload não envia estes campos
+        if etapa is None and os_obj:
+            etapa = Etapa.objects.filter(oficina=os_obj.oficina, is_checkin=True).first()
+            if etapa:
+                attrs['etapa'] = etapa
+        attrs['tipo'] = tipo
 
         # Regras de negócio espelhadas do model.clean para validar antes de salvar
         if not os_obj:
