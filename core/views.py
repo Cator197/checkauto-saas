@@ -397,6 +397,14 @@ class SyncView(APIView):
         - etapa = etapa de check-in da oficina (ou etapa_atual da OS)
         - sem config_foto (regra de negócio das fotos LIVRES).
         """
+        print("[SYNC] fotos keys:",
+              (item.get("fotos") or {}).keys() if isinstance(item.get("fotos"), dict) else type(item.get("fotos")))
+        print("[SYNC] qtd padrao:",
+              len((item.get("fotos") or {}).get("padrao", []) if isinstance(item.get("fotos"), dict) else []))
+        print("[SYNC] qtd livres:",
+              len((item.get("fotos") or {}).get("livres", []) if isinstance(item.get("fotos"), dict) else []))
+
+
         fotos = item.get("fotos", {}) or {}
         todas_fotos = []
         todas_fotos.extend(fotos.get("padrao", []) or [])
@@ -407,14 +415,16 @@ class SyncView(APIView):
 
         # Descobre etapa para associar as fotos
         etapa = os_obj.etapa_atual
-        if etapa is None:
-            etapa = Etapa.objects.filter(
-                oficina=os_obj.oficina,
-                is_checkin=True
-            ).first()
 
         if etapa is None:
-            # sem etapa válida, melhor não criar fotos
+            etapa = Etapa.objects.filter(oficina=os_obj.oficina, is_checkin=True).first()
+
+        # NOVO fallback: se ainda não tiver, pega a primeira etapa da oficina
+        if etapa is None:
+            etapa = Etapa.objects.filter(oficina=os_obj.oficina).order_by("ordem", "id").first()
+
+        if etapa is None:
+            print(f"[SYNC] Sem etapas cadastradas para oficina_id={os_obj.oficina_id}. Fotos ignoradas.")
             return
 
         # Descobre o UsuarioOficina (se existir) para preencher tirada_por
@@ -466,15 +476,19 @@ class SyncView(APIView):
                 name=f"pwa_os{os_obj.id}_{foto.get('id') or '0'}.{extensao}"
             )
 
-            foto_obj = FotoOS.objects.create(
-                os=os_obj,
-                etapa=etapa,
-                tipo="LIVRE",
-                config_foto=None,
-                arquivo=arquivo,
-                titulo=foto.get("nome") or None,
-                tirada_por=usuario_oficina,
-            )
+            try:
+                foto_obj = FotoOS.objects.create(
+                    os=os_obj,
+                    etapa=etapa,
+                    tipo="LIVRE",
+                    config_foto=None,
+                    arquivo=arquivo,
+                    titulo=foto.get("nome") or None,
+                    tirada_por=usuario_oficina,
+                )
+            except Exception as e:
+                print(f"[SYNC] Falha ao criar FotoOS para os_id={os_obj.id}: {e}")
+                continue
 
             # Envia essa foto para o Drive (na pasta da OS + subpasta da etapa)
             try:
