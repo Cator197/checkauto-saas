@@ -1,3 +1,7 @@
+import base64
+import uuid
+import imghdr
+from django.core.files.base import ContentFile
 from rest_framework import serializers
 from .models import Oficina, UsuarioOficina, Etapa, ConfigFoto, OS, FotoOS
 
@@ -147,6 +151,43 @@ class FotoOSSerializer(serializers.ModelSerializer):
 
     def get_oficina(self, obj):
         return obj.os.oficina_id
+
+    def validate_arquivo(self, value):
+        """
+        Aceita upload multipart (UploadedFile) e também strings base64 (data URL)
+        enviadas pelo PWA. Converte a string em ContentFile para que o FileField
+        possa salvar normalmente.
+        """
+        if not isinstance(value, str):
+            return value
+
+        conteudo_base64 = value
+        header = None
+
+        if value.startswith("data:") and "," in value:
+            header, conteudo_base64 = value.split(",", 1)
+        elif "," in value:
+            conteudo_base64 = value.split(",", 1)[1]
+
+        try:
+            conteudo = base64.b64decode(conteudo_base64)
+        except Exception:
+            raise serializers.ValidationError("Arquivo base64 inválido.")
+
+        extensao = None
+        if header:
+            if "image/png" in header:
+                extensao = "png"
+            elif "image/webp" in header:
+                extensao = "webp"
+            elif "image/jpeg" in header or "image/jpg" in header:
+                extensao = "jpg"
+
+        if not extensao:
+            extensao = imghdr.what(None, h=conteudo) or "jpg"
+
+        nome_arquivo = f"foto_{uuid.uuid4().hex}.{extensao}"
+        return ContentFile(conteudo, name=nome_arquivo)
 
     def validate(self, attrs):
         tipo = attrs.get('tipo')
