@@ -2,33 +2,241 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>Produção da OS</title>
+  <title>Produção do Veículo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="manifest" href="/static/pwa/manifest.json">
   <meta name="theme-color" content="#0f172a" />
   <style>
+    :root {
+      color-scheme: light;
+    }
     body {
-      font-family: Arial, sans-serif;
+      font-family: "Inter", Arial, sans-serif;
       padding: 16px;
-      background: #f6f7fb;
+      margin: 0;
+      background: #f8fafc;
+      color: #0f172a;
     }
-    h1 {
-      margin-bottom: 10px;
+    .top-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
     }
-    p {
+    .top-bar a {
+      text-decoration: none;
+      color: #2563eb;
+      font-weight: 600;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+      padding: 16px;
+      margin-bottom: 14px;
+      border: 1px solid #e2e8f0;
+    }
+    .header {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .header .codigo {
+      font-size: 14px;
+      font-weight: 600;
       color: #475569;
     }
-    .back {
-      display: inline-block;
-      margin-top: 12px;
-      color: #2563eb;
-      text-decoration: none;
+    .header .titulo {
+      font-size: 20px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .header .placa {
+      font-size: 16px;
+      color: #334155;
+    }
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      background: #eef2ff;
+      color: #3730a3;
+    }
+    .status-box {
+      font-size: 13px;
+      color: #475569;
+    }
+    .section-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin: 0 0 10px;
+      color: #0f172a;
+    }
+    .lista-checklist {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .check-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: #f8fafc;
+    }
+    .check-item .nome {
+      font-weight: 600;
+      color: #0f172a;
+    }
+    .tag {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .tag.ok {
+      background: #ecfdf3;
+      color: #166534;
+    }
+    .tag.pendente {
+      background: #fef2f2;
+      color: #b91c1c;
+    }
+    .grid-fotos {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 10px;
+    }
+    .foto-card {
+      position: relative;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #e2e8f0;
+      border: 1px solid #cbd5e1;
+      min-height: 110px;
+    }
+    .foto-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .foto-badge {
+      position: absolute;
+      bottom: 6px;
+      left: 6px;
+      padding: 4px 8px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(15, 23, 42, 0.8);
+      color: #fff;
+    }
+    textarea {
+      width: 100%;
+      min-height: 90px;
+      border-radius: 10px;
+      border: 1px solid #cbd5e1;
+      padding: 10px;
+      font-size: 14px;
+      box-sizing: border-box;
+      resize: vertical;
+    }
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .btn {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: none;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-primary {
+      background: #0f172a;
+      color: #fff;
+    }
+    .btn-secondary {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+    .btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    .muted {
+      color: #94a3b8;
+      font-size: 14px;
+    }
+    .info-line {
+      font-size: 13px;
+      color: #334155;
+      margin-top: 6px;
     }
   </style>
 </head>
-<body>
-  <h1>Produção da OS {{ os_id }}</h1>
-  <p>Esta tela será usada para acompanhar a produção do veículo.</p>
-  <a href="/pwa/veiculos-em-producao/" class="back">← Voltar para veículos</a>
+<body data-os-id="{{ os_id }}">
+  <div class="top-bar">
+    <a href="/pwa/veiculos-em-producao/">← Voltar</a>
+    <span class="muted">Produção do veículo</span>
+  </div>
+
+  <div class="card" id="blocoHeader">
+    <div class="header">
+      <span class="codigo" id="osCodigo">OS {{ os_id }}</span>
+      <div class="titulo" id="osModelo">Carregando…</div>
+      <div class="placa" id="osPlaca"></div>
+      <span class="chip" id="osEtapa">Etapa atual: -</span>
+    </div>
+    <div class="status-box" id="osStatus">Buscando dados locais…</div>
+  </div>
+
+  <div class="card">
+    <h2 class="section-title">Checklist de fotos obrigatórias</h2>
+    <ul class="lista-checklist" id="listaChecklist">
+      <li class="muted">Carregando checklist…</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2 class="section-title">Fotos livres da etapa</h2>
+    <div class="grid-fotos" id="gridFotosLivres">
+      <p class="muted">Nenhuma foto livre encontrada para esta etapa.</p>
+    </div>
+    <div class="info-line" id="infoOffline"></div>
+  </div>
+
+  <div class="card">
+    <h2 class="section-title">Observação da etapa</h2>
+    <textarea id="observacaoEtapa" placeholder="Anote detalhes e pendências da etapa"></textarea>
+    <div class="info-line" id="observacaoStatus">Edição salva localmente.</div>
+  </div>
+
+  <div class="card actions">
+    <button class="btn btn-secondary" id="btnTirarFotos">📷 Tirar fotos da etapa</button>
+    <button class="btn btn-primary" id="btnAvancarEtapa" disabled>Enviar para próxima etapa</button>
+    <input id="inputFotosEtapa" type="file" accept="image/*" capture="environment" multiple style="display:none">
+  </div>
+
+  <script src="/static/pwa/js/db.js"></script>
+  <script src="/static/pwa/js/app.js"></script>
+  <script src="/static/pwa/js/os_producao.js"></script>
 </body>
 </html>

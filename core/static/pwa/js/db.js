@@ -2,9 +2,10 @@
 // Módulo central de IndexedDB para o PWA CheckAuto
 
 const CHECKAUTO_DB_NAME = "checkauto_pwa";
-const CHECKAUTO_DB_VERSION = 2;
+const CHECKAUTO_DB_VERSION = 3;
 const OS_STORE_NAME = "osPendentes";
 const VEICULOS_PRODUCAO_STORE = "veiculosEmProducao";
+const OS_PRODUCAO_STORE = "osProducao";
 
 // Abre (ou cria) o banco de dados
 function checkautoOpenDB() {
@@ -29,6 +30,12 @@ function checkautoOpenDB() {
 
       if (!db.objectStoreNames.contains(VEICULOS_PRODUCAO_STORE)) {
         db.createObjectStore(VEICULOS_PRODUCAO_STORE, {
+          keyPath: "os_id",
+        });
+      }
+
+      if (!db.objectStoreNames.contains(OS_PRODUCAO_STORE)) {
+        db.createObjectStore(OS_PRODUCAO_STORE, {
           keyPath: "os_id",
         });
       }
@@ -138,5 +145,102 @@ window.checkautoBuscarVeiculosEmProducao = async function () {
   } catch (e) {
     console.error("Falha em checkautoBuscarVeiculosEmProducao:", e);
     return [];
+  }
+};
+
+// Salva/atualiza dados da tela de produção da OS
+window.checkautoSalvarOSProducao = async function (dados) {
+  try {
+    const db = await checkautoOpenDB();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(OS_PRODUCAO_STORE, "readwrite");
+      const store = tx.objectStore(OS_PRODUCAO_STORE);
+      store.put(dados);
+
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => {
+        console.error("Erro ao salvar produção da OS:", tx.error);
+        reject(tx.error);
+      };
+    });
+  } catch (e) {
+    console.error("Falha em checkautoSalvarOSProducao:", e);
+    return false;
+  }
+};
+
+// Busca dados salvos da produção da OS
+window.checkautoBuscarOSProducao = async function (osId) {
+  try {
+    const db = await checkautoOpenDB();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(OS_PRODUCAO_STORE, "readonly");
+      const store = tx.objectStore(OS_PRODUCAO_STORE);
+      const request = store.get(osId);
+
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => {
+        console.error("Erro ao buscar produção da OS:", request.error);
+        reject(request.error);
+      };
+    });
+  } catch (e) {
+    console.error("Falha em checkautoBuscarOSProducao:", e);
+    return null;
+  }
+};
+
+// Lista OS com pendências de produção (observação, fotos, avanço de etapa)
+window.checkautoListarOSProducaoPendentes = async function () {
+  try {
+    const db = await checkautoOpenDB();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(OS_PRODUCAO_STORE, "readonly");
+      const store = tx.objectStore(OS_PRODUCAO_STORE);
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        const todos = request.result || [];
+        const pendentes = todos.filter(
+          (item) => item?.pendente_sync || item?.avancar_solicitado
+        );
+        resolve(pendentes);
+      };
+
+      request.onerror = () => {
+        console.error("Erro ao listar produção pendente:", request.error);
+        reject(request.error);
+      };
+    });
+  } catch (e) {
+    console.error("Falha em checkautoListarOSProducaoPendentes:", e);
+    return [];
+  }
+};
+
+// Marca uma OS de produção como sincronizada (mantém dados locais)
+window.checkautoMarcarOSProducaoSincronizada = async function (osId) {
+  try {
+    const atual = await window.checkautoBuscarOSProducao(osId);
+    if (!atual) return false;
+
+    atual.pendente_sync = false;
+    atual.ultima_sincronizacao = new Date().toISOString();
+
+    const db = await checkautoOpenDB();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(OS_PRODUCAO_STORE, "readwrite");
+      const store = tx.objectStore(OS_PRODUCAO_STORE);
+      store.put(atual);
+
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => {
+        console.error("Erro ao marcar produção sincronizada:", tx.error);
+        reject(tx.error);
+      };
+    });
+  } catch (e) {
+    console.error("Falha em checkautoMarcarOSProducaoSincronizada:", e);
+    return false;
   }
 };
