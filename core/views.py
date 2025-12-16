@@ -455,7 +455,12 @@ class SyncView(APIView):
 
         for idx, foto in enumerate(todas_fotos):
             # ✅ aceita tanto "arquivo" quanto "dataUrl" (como no teu IndexedDB)
-            conteudo_base64 = foto.get("arquivo") or foto.get("dataUrl")
+            conteudo_base64 = foto.get("arquivo")
+            if isinstance(conteudo_base64, dict):
+                conteudo_base64 = conteudo_base64.get("dataUrl") or conteudo_base64.get("arquivo")
+
+            if not conteudo_base64:
+                conteudo_base64 = foto.get("dataUrl")
             if not conteudo_base64:
                 message = "[SYNC] Foto ignorada: sem conteúdo base64."
                 logger.warning(
