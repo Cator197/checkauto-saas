@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Veículos em Produção</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="manifest" href="/static/pwa/manifest.json">
+  <meta name="theme-color" content="#0f172a" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 16px;
+      background: #f6f7fb;
+    }
+    h1 {
+      margin-bottom: 8px;
+    }
+    .status {
+      margin: 8px 0 16px;
+      color: #475569;
+      font-size: 14px;
+    }
+    .card-veiculo {
+      background: #fff;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+      cursor: pointer;
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+    .card-veiculo:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+    .codigo {
+      color: #0f172a;
+    }
+    .etapa {
+      color: #2563eb;
+    }
+    .card-body {
+      margin-bottom: 8px;
+    }
+    .modelo {
+      font-size: 16px;
+      color: #0f172a;
+    }
+    .placa {
+      font-size: 14px;
+      color: #475569;
+    }
+    .card-footer {
+      font-size: 14px;
+      color: #eab308;
+    }
+    .muted {
+      color: #94a3b8;
+    }
+    .back {
+      display: inline-block;
+      margin-top: 10px;
+      color: #2563eb;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>Veículos em Produção</h1>
+  <div id="statusVeiculos" class="status">Carregando…</div>
+  <div id="listaVeiculos"></div>
+
+  <a href="/pwa/" class="back">← Voltar para Home</a>
+
+  <script src="/static/pwa/js/db.js"></script>
+  <script src="/static/pwa/js/veiculos_em_producao.js"></script>
+</body>
+</html>

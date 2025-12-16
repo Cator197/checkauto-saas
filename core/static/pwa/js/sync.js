@@ -7,6 +7,38 @@ document.addEventListener("DOMContentLoaded", async () => {
   const listaDiv = document.getElementById("listaPendentes");
   const spanQtd = document.getElementById("qtdPendentes");
 
+  async function atualizarVeiculosEmProducao() {
+    const token = window.checkautoRecuperarToken
+      ? window.checkautoRecuperarToken()
+      : null;
+    if (!token) {
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/pwa/veiculos-em-producao/", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const data = await response.json();
+      if (window.checkautoSalvarVeiculosEmProducao) {
+        await window.checkautoSalvarVeiculosEmProducao(data);
+      }
+
+      if (window.checkautoSincronizarVeiculosEmProducao) {
+        window.checkautoSincronizarVeiculosEmProducao();
+      }
+    } catch (err) {
+      console.error("Erro ao atualizar veículos em produção após sync:", err);
+    }
+  }
+
   async function carregarPendencias() {
     const pendentes = await window.checkautoBuscarOSPendentes();
     spanQtd.textContent = pendentes.length.toString();
@@ -53,7 +85,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       statusBox.innerHTML = "📤 Enviando dados para o servidor…";
 
       // 🔴 IMPORTANTE: pegar o token salvo e mandar no header
-      const token = localStorage.getItem("checkauto_token");
+      const token = window.checkautoRecuperarToken
+        ? window.checkautoRecuperarToken()
+        : null;
       console.log("Token usado na sincronização:", token); // debug
 
       if (!token) {
@@ -98,6 +132,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (window.checkautoAtualizarContadoresHome) {
         window.checkautoAtualizarContadoresHome();
       }
+
+      await atualizarVeiculosEmProducao();
 
     } catch (err) {
       console.error("Erro na sincronização:", err);
