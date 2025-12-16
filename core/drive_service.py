@@ -49,9 +49,16 @@ def get_drive_service(oficina):
     """
     Retorna o client do Google Drive autenticado para a oficina.
     """
-    creds = _get_credentials(oficina)
-    service = build('drive', 'v3', credentials=creds)
-    return service
+    try:
+        creds = _get_credentials(oficina)
+        service = build('drive', 'v3', credentials=creds)
+        return service
+    except Exception:
+        logger.exception(
+            "Erro ao criar serviço do Drive",
+            extra={"oficina_id": getattr(oficina, "id", None)},
+        )
+        return None
 
 
 def criar_pasta_os(os_obj: OS) -> Optional[str]:
@@ -96,12 +103,10 @@ def criar_pasta_os(os_obj: OS) -> Optional[str]:
         return None
 
     # Cria serviço do Drive
-    try:
-        service = get_drive_service(oficina)
-        logger.debug("Serviço do Drive inicializado para oficina_id=%s", oficina.id)
-    except Exception:
-        logger.exception(
-            "Erro ao inicializar serviço do Drive para oficina_id=%s",
+    service = get_drive_service(oficina)
+    if not service:
+        logger.warning(
+            "Serviço do Drive indisponível para oficina_id=%s",
             oficina.id,
         )
         return None
@@ -166,10 +171,11 @@ def _get_or_create_subpasta_etapa(os_obj: OS, etapa: Etapa) -> Optional[str]:
     if not pasta_os_id:
         return None
 
-    try:
-        service = get_drive_service(oficina)
-    except Exception as e:
-        logger.exception(f"Erro ao obter serviço do Drive para oficina {oficina.id}: {e}")
+    service = get_drive_service(oficina)
+    if not service:
+        logger.warning(
+            "Serviço do Drive indisponível para oficina_id=%s", oficina.id,
+        )
         return None
 
     # 1) Tenta localizar uma pasta com esse nome dentro da pasta da OS
@@ -209,6 +215,11 @@ def upload_foto_para_drive(foto: FotoOS) -> Optional[str]:
     os_obj = foto.os
     etapa = foto.etapa
     oficina = os_obj.oficina
+    extra_log = {
+        "oficina_id": os_obj.oficina_id,
+        "os_id": os_obj.id,
+        "foto_id": foto.id,
+    }
 
     # Se já foi enviada, não faz de novo
     if foto.drive_file_id:
@@ -216,7 +227,10 @@ def upload_foto_para_drive(foto: FotoOS) -> Optional[str]:
 
     # Caminho local do arquivo
     if not foto.arquivo:
-        logger.warning(f"Foto {foto.id} não possui arquivo associado.")
+        logger.warning(
+            f"Foto {foto.id} não possui arquivo associado.",
+            extra=extra_log,
+        )
         return None
 
     local_path = foto.arquivo.path
@@ -225,10 +239,9 @@ def upload_foto_para_drive(foto: FotoOS) -> Optional[str]:
     if not subpasta_id:
         return None
 
-    try:
-        service = get_drive_service(oficina)
-    except Exception as e:
-        logger.exception(f"Erro ao obter serviço do Drive para oficina {oficina.id}: {e}")
+    service = get_drive_service(oficina)
+    if not service:
+        logger.warning("Serviço do Drive indisponível", extra=extra_log)
         return None
 
     file_metadata = {
@@ -248,7 +261,10 @@ def upload_foto_para_drive(foto: FotoOS) -> Optional[str]:
         foto.save(update_fields=['drive_file_id'])
         return file_id
     except Exception as e:
-        logger.exception(f"Erro ao enviar foto {foto.id} para o Drive: {e}")
+        logger.exception(
+            f"Erro ao enviar foto {foto.id} para o Drive: {e}",
+            extra=extra_log,
+        )
         return None
 
 def criar_subpastas_etapas(os_obj: OS, service):
@@ -334,20 +350,37 @@ def upload_foto_os_drive(
     etapa,
     caminho_arquivo_local: str,
     nome_arquivo: str,
-) -> str:
+) -> Optional[str]:
     """
     Faz upload de uma foto da OS para a pasta correta da etapa.
-    Retorna o file_id do Drive.
+    Retorna o file_id do Drive ou None em caso de falha.
     """
-    # Garante pasta da OS
-    pasta_os_id = criar_pasta_os(os_obj)
+    extra_log = {
+        "oficina_id": os_obj.oficina_id,
+        "os_id": os_obj.id,
+        "etapa_id": getattr(etapa, "id", None),
+    }
+
+    try:
+        pasta_os_id = criar_pasta_os(os_obj)
+    except Exception:
+        logger.exception("Erro ao garantir pasta da OS no Drive", extra=extra_log)
+        return None
+
     if not pasta_os_id:
-        raise Exception("Pasta da OS não disponível no Drive")
+        logger.warning("Pasta da OS indisponível no Drive", extra=extra_log)
+        return None
 
     service = get_drive_service(os_obj.oficina)
+    if not service:
+        logger.warning("Serviço do Drive indisponível", extra=extra_log)
+        return None
 
-    # Garante pasta da etapa
-    pasta_etapa_id = obter_pasta_etapa(os_obj, etapa, service)
+    try:
+        pasta_etapa_id = obter_pasta_etapa(os_obj, etapa, service)
+    except Exception:
+        logger.exception("Erro ao obter pasta da etapa no Drive", extra=extra_log)
+        return None
 
     file_metadata = {
         "name": nome_arquivo,
@@ -359,10 +392,16 @@ def upload_foto_os_drive(
         resumable=False,
     )
 
-    file = service.files().create(
-        body=file_metadata,
-        media_body=media,
-        fields="id",
-    ).execute()
-
-    return file["id"]
+    try:
+        file = service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields="id",
+        ).execute()
+        return file.get("id")
+    except Exception:
+        logger.exception(
+            "Erro ao enviar foto para o Drive",
+            extra={**extra_log, "arquivo": nome_arquivo},
+        )
+        return None

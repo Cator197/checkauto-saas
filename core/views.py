@@ -223,7 +223,10 @@ class OSViewSet(viewsets.ModelViewSet):
             logger.info("Chamando criar_pasta_os para OS id=%s codigo=%s", os_obj.id, os_obj.codigo)
             criar_pasta_os(os_obj)
         except Exception:
-            logger.exception("Erro ao criar pasta no Drive para OS id=%s", os_obj.id)
+            logger.exception(
+                "Erro ao criar pasta no Drive para OS",
+                extra={"oficina_id": oficina.id, "os_id": os_obj.id},
+            )
 
 
 
@@ -278,10 +281,27 @@ class FotoOSViewSet(viewsets.ModelViewSet):
                 caminho_arquivo_local=foto.arquivo.path,
                 nome_arquivo=foto.arquivo.name,
             )
-            foto.drive_file_id = drive_file_id
-            foto.save(update_fields=["drive_file_id"])
+            if drive_file_id:
+                foto.drive_file_id = drive_file_id
+                foto.save(update_fields=["drive_file_id"])
+            else:
+                logger.warning(
+                    "Upload do Drive indisponível para foto",
+                    extra={
+                        "oficina_id": foto.os.oficina_id,
+                        "os_id": foto.os_id,
+                        "foto_id": foto.id,
+                    },
+                )
         except Exception:
-            logger.exception("Erro ao enviar foto id=%s para o Drive", foto.id)
+            logger.exception(
+                "Erro ao enviar foto para o Drive",
+                extra={
+                    "oficina_id": foto.os.oficina_id,
+                    "os_id": foto.os_id,
+                    "foto_id": foto.id,
+                },
+            )
 
 
 from django.utils import timezone
