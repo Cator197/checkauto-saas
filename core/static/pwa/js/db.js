@@ -2,8 +2,23 @@
 // Módulo central de IndexedDB para o PWA CheckAuto
 
 const CHECKAUTO_DB_NAME = "checkauto_pwa";
-const CHECKAUTO_DB_VERSION = 1;
+const CHECKAUTO_DB_VERSION = 2;
 const OS_STORE_NAME = "osPendentes";
+const VEICULOS_PRODUCAO_STORE = "veiculosEmProducao";
+
+// Token usado nas requisições autenticadas do PWA (compatível com o painel)
+const CHECKAUTO_TOKEN_KEYS = ["checkauto_access", "checkauto_token"];
+
+window.checkautoRecuperarToken = function () {
+  for (const key of CHECKAUTO_TOKEN_KEYS) {
+    const token = localStorage.getItem(key);
+    if (token) {
+      return token;
+    }
+  }
+
+  return null;
+};
 
 // Abre (ou cria) o banco de dados
 function checkautoOpenDB() {
@@ -18,11 +33,17 @@ function checkautoOpenDB() {
 
     request.onupgradeneeded = (event) => {
       const db = event.target.result;
-      // Cria o store se ainda não existir
+
       if (!db.objectStoreNames.contains(OS_STORE_NAME)) {
         db.createObjectStore(OS_STORE_NAME, {
           keyPath: "id",
           autoIncrement: true,
+        });
+      }
+
+      if (!db.objectStoreNames.contains(VEICULOS_PRODUCAO_STORE)) {
+        db.createObjectStore(VEICULOS_PRODUCAO_STORE, {
+          keyPath: "os_id",
         });
       }
     };
@@ -83,6 +104,53 @@ window.checkautoBuscarOSPendentes = async function () {
     });
   } catch (e) {
     console.error("Falha em checkautoBuscarOSPendentes:", e);
+    return [];
+  }
+};
+
+// Salva a lista de veículos em produção (sobrescreve o store)
+window.checkautoSalvarVeiculosEmProducao = async function (lista) {
+  try {
+    const db = await checkautoOpenDB();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(VEICULOS_PRODUCAO_STORE, "readwrite");
+      const store = tx.objectStore(VEICULOS_PRODUCAO_STORE);
+
+      store.clear();
+      (lista || []).forEach((item) => store.put(item));
+
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => {
+        console.error("Erro ao salvar veículos em produção:", tx.error);
+        reject(tx.error);
+      };
+    });
+  } catch (e) {
+    console.error("Falha em checkautoSalvarVeiculosEmProducao:", e);
+    return false;
+  }
+};
+
+// Busca a lista de veículos em produção
+window.checkautoBuscarVeiculosEmProducao = async function () {
+  try {
+    const db = await checkautoOpenDB();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(VEICULOS_PRODUCAO_STORE, "readonly");
+      const store = tx.objectStore(VEICULOS_PRODUCAO_STORE);
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        resolve(request.result || []);
+      };
+
+      request.onerror = () => {
+        console.error("Erro ao buscar veículos em produção:", request.error);
+        reject(request.error);
+      };
+    });
+  } catch (e) {
+    console.error("Falha em checkautoBuscarVeiculosEmProducao:", e);
     return [];
   }
 };
