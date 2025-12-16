@@ -345,17 +345,29 @@ class SyncView(APIView):
                         criar_pasta_os(os_obj)
                     except Exception as e:
                         # não quebra o sync se o Drive falhar
-                        logger.warning("[SYNC] Erro ao criar pasta da OS %s no Drive: %s", os_obj.id, e)
+                        logger.warning(
+                            "[SYNC] Erro ao criar pasta da OS %s no Drive: %s",
+                            os_obj.id,
+                            e,
+                        )
 
                     # 2) Salva fotos (padrão + livres) como FotoOS tipo LIVRE
-                    self.salvar_fotos(os_obj, item, user)
+                    photo_errors = self.salvar_fotos(os_obj, item, user)
 
-                # re-serializa com o objeto salvo (só pra garantir consistência)
-                resultados.append(OSSerializer(os_obj, context={"request": request}).data)
+                resultados.append({
+                    "saved": True,
+                    "os_id": os_obj.id,
+                    "os_codigo": os_obj.codigo,
+                    "errors": [],
+                    "photo_errors": photo_errors,
+                })
             else:
                 resultados.append({
-                    "input": item,
+                    "saved": False,
+                    "os_id": None,
+                    "os_codigo": item.get("codigo"),
                     "errors": serializer.errors,
+                    "photo_errors": [],
                 })
 
         return Response({"os": resultados}, status=status.HTTP_200_OK)
@@ -397,13 +409,7 @@ class SyncView(APIView):
         - etapa = etapa de check-in da oficina (ou etapa_atual da OS)
         - sem config_foto (regra de negócio das fotos LIVRES).
         """
-        print("[SYNC] fotos keys:",
-              (item.get("fotos") or {}).keys() if isinstance(item.get("fotos"), dict) else type(item.get("fotos")))
-        print("[SYNC] qtd padrao:",
-              len((item.get("fotos") or {}).get("padrao", []) if isinstance(item.get("fotos"), dict) else []))
-        print("[SYNC] qtd livres:",
-              len((item.get("fotos") or {}).get("livres", []) if isinstance(item.get("fotos"), dict) else []))
-
+        photo_errors = []
 
         fotos = item.get("fotos", {}) or {}
         todas_fotos = []
@@ -411,7 +417,7 @@ class SyncView(APIView):
         todas_fotos.extend(fotos.get("livres", []) or [])
 
         if not todas_fotos:
-            return
+            return photo_errors
 
         # Descobre etapa para associar as fotos
         etapa = os_obj.etapa_atual
@@ -424,8 +430,17 @@ class SyncView(APIView):
             etapa = Etapa.objects.filter(oficina=os_obj.oficina).order_by("ordem", "id").first()
 
         if etapa is None:
-            print(f"[SYNC] Sem etapas cadastradas para oficina_id={os_obj.oficina_id}. Fotos ignoradas.")
-            return
+            message = "[SYNC] Sem etapas cadastradas para oficina. Fotos ignoradas."
+            logger.warning(
+                message,
+                extra={
+                    "user_id": user.id,
+                    "oficina_id": os_obj.oficina_id,
+                    "os_codigo": os_obj.codigo,
+                },
+            )
+            photo_errors.append(message)
+            return photo_errors
 
         # Descobre o UsuarioOficina (se existir) para preencher tirada_por
         usuario_oficina = None
@@ -438,10 +453,21 @@ class SyncView(APIView):
         except UsuarioOficina.DoesNotExist:
             usuario_oficina = None
 
-        for foto in todas_fotos:
+        for idx, foto in enumerate(todas_fotos):
             # ✅ aceita tanto "arquivo" quanto "dataUrl" (como no teu IndexedDB)
             conteudo_base64 = foto.get("arquivo") or foto.get("dataUrl")
             if not conteudo_base64:
+                message = "[SYNC] Foto ignorada: sem conteúdo base64."
+                logger.warning(
+                    message,
+                    extra={
+                        "user_id": user.id,
+                        "oficina_id": os_obj.oficina_id,
+                        "os_codigo": os_obj.codigo,
+                        "foto_idx": idx,
+                    },
+                )
+                photo_errors.append(message)
                 continue
 
             # Se vier no formato data:image/png;base64,AAAA...
@@ -456,6 +482,17 @@ class SyncView(APIView):
             try:
                 conteudo = base64.b64decode(conteudo_base64)
             except Exception:
+                message = "[SYNC] Foto ignorada: base64 inválido."
+                logger.warning(
+                    message,
+                    extra={
+                        "user_id": user.id,
+                        "oficina_id": os_obj.oficina_id,
+                        "os_codigo": os_obj.codigo,
+                        "foto_idx": idx,
+                    },
+                )
+                photo_errors.append(message)
                 continue
 
             # ✅ tenta pegar extensão do payload / header
@@ -487,14 +524,36 @@ class SyncView(APIView):
                     tirada_por=usuario_oficina,
                 )
             except Exception as e:
-                print(f"[SYNC] Falha ao criar FotoOS para os_id={os_obj.id}: {e}")
+                message = f"[SYNC] Falha ao criar FotoOS: {e}"
+                logger.exception(
+                    message,
+                    extra={
+                        "user_id": user.id,
+                        "oficina_id": os_obj.oficina_id,
+                        "os_codigo": os_obj.codigo,
+                        "foto_idx": idx,
+                    },
+                )
+                photo_errors.append(message)
                 continue
 
             # Envia essa foto para o Drive (na pasta da OS + subpasta da etapa)
             try:
                 upload_foto_para_drive(foto_obj)
             except Exception as e:
-                print(f"[SYNC] Erro ao enviar foto {foto_obj.id} para o Drive: {e}")
+                message = f"[SYNC] Erro ao enviar foto {foto_obj.id} para o Drive: {e}"
+                logger.warning(
+                    message,
+                    extra={
+                        "user_id": user.id,
+                        "oficina_id": os_obj.oficina_id,
+                        "os_codigo": os_obj.codigo,
+                        "foto_idx": idx,
+                    },
+                )
+                photo_errors.append(message)
+
+        return photo_errors
 
 
 class DashboardResumoView(APIView):
