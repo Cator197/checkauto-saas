@@ -8,7 +8,7 @@ from django.test import override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase, APIClient
 
-from core.models import Oficina, UsuarioOficina, Etapa, FotoOS, OS
+from core.models import ConfigFoto, Oficina, UsuarioOficina, Etapa, FotoOS, OS
 
 
 class SyncViewTests(APITestCase):
@@ -110,5 +110,58 @@ class SyncViewTests(APITestCase):
         self.assertEqual(OS.objects.filter(codigo="300").count(), 1)
         self.assertEqual(FotoOS.objects.count(), 0)
 
+        photo_errors = response.data["os"][0]["photo_errors"]
+        self.assertTrue(photo_errors)
+
+    def test_sync_cria_foto_padrao_quando_config_foto_presente(self):
+        config = ConfigFoto.objects.create(
+            oficina=self.oficina,
+            etapa=self.etapa,
+            nome="Frente do carro",
+        )
+        conteudo = base64.b64encode(b"foto-conteudo").decode()
+        fotos = {
+            "padrao": [
+                {
+                    "arquivo": f"data:image/png;base64,{conteudo}",
+                    "extensao": "png",
+                    "config_foto_id": config.id,
+                }
+            ]
+        }
+        payload = self._build_payload(numero_interno="400", fotos=fotos)
+
+        with mock.patch("core.views.criar_pasta_os"), mock.patch(
+            "core.views.upload_foto_para_drive"
+        ):
+            response = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(FotoOS.objects.count(), 1)
+        foto = FotoOS.objects.first()
+        self.assertEqual(foto.tipo, "PADRAO")
+        self.assertEqual(foto.config_foto, config)
+        self.assertEqual(response.data["os"][0]["photo_errors"], [])
+
+    def test_sync_foto_padrao_sem_config_foto_gera_erro(self):
+        conteudo = base64.b64encode(b"foto-conteudo").decode()
+        fotos = {
+            "padrao": [
+                {
+                    "arquivo": f"data:image/png;base64,{conteudo}",
+                    "extensao": "png",
+                    "config_foto_id": 9999,
+                }
+            ]
+        }
+        payload = self._build_payload(numero_interno="500", fotos=fotos)
+
+        with mock.patch("core.views.criar_pasta_os"), mock.patch(
+            "core.views.upload_foto_para_drive"
+        ):
+            response = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(FotoOS.objects.count(), 0)
         photo_errors = response.data["os"][0]["photo_errors"]
         self.assertTrue(photo_errors)
