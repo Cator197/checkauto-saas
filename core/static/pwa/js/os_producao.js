@@ -18,6 +18,12 @@ document.addEventListener("DOMContentLoaded", () => {
     btnCamera: document.getElementById("btnTirarFotos"),
     btnAvancar: document.getElementById("btnAvancarEtapa"),
     inputCamera: document.getElementById("inputFotosEtapa"),
+    overlay: document.getElementById("cameraOverlay"),
+    overlayMode: document.getElementById("cameraOverlayMode"),
+    overlayTitle: document.getElementById("cameraOverlayTitle"),
+    overlaySubtitle: document.getElementById("cameraOverlaySubtitle"),
+    overlayCapture: document.getElementById("btnCapturarFoto"),
+    overlayClose: document.getElementById("btnFecharOverlay"),
   };
 
   let state = {
@@ -38,6 +44,22 @@ document.addEventListener("DOMContentLoaded", () => {
     atualizado_em: null,
   };
 
+  const cameraSession = {
+    ativo: false,
+    modo: "obrigatorias",
+    atualObrigatoria: null,
+  };
+
+  const ordenarObrigatoriasLista = (lista = []) => {
+    return [...lista].sort((a, b) => {
+      const ordemA = Number.isFinite(Number(a?.ordem)) ? Number(a.ordem) : 0;
+      const ordemB = Number.isFinite(Number(b?.ordem)) ? Number(b.ordem) : 0;
+
+      if (ordemA !== ordemB) return ordemA - ordemB;
+      return (a?.nome || "").localeCompare(b?.nome || "");
+    });
+  };
+
   const debounce = (fn, wait = 300) => {
     let t = null;
     return (...args) => {
@@ -53,9 +75,17 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function salvarCache(extra = {}) {
+    const extraProcessado = { ...extra };
+
+    if (Array.isArray(extraProcessado.obrigatorias)) {
+      extraProcessado.obrigatorias = ordenarObrigatoriasLista(
+        extraProcessado.obrigatorias
+      );
+    }
+
     state = {
       ...state,
-      ...extra,
+      ...extraProcessado,
       atualizado_em: new Date().toISOString(),
     };
 
@@ -82,7 +112,83 @@ document.addEventListener("DOMContentLoaded", () => {
       ...(state.configs_atendidas_servidor || []),
       ...(state.configs_atendidas_offline || []),
     ]);
-    return state.obrigatorias.find((c) => !feitas.has(c.id));
+    return ordenarObrigatoriasLista(state.obrigatorias).find((c) => !feitas.has(c.id));
+  }
+
+  function atualizarOverlayCamera() {
+    if (!refs.overlay) return;
+
+    const isModoObrigatorio = cameraSession.modo === "obrigatorias";
+    const titulo = isModoObrigatorio
+      ? cameraSession.atualObrigatoria?.nome || "Foto obrigatória"
+      : "LIVRE";
+
+    if (refs.overlayTitle) refs.overlayTitle.textContent = titulo;
+    if (refs.overlayMode)
+      refs.overlayMode.textContent = isModoObrigatorio ? "Obrigatórias" : "Livre";
+
+    if (refs.overlaySubtitle) {
+      refs.overlaySubtitle.textContent = isModoObrigatorio
+        ? "Capture esta foto obrigatória. A próxima será carregada automaticamente."
+        : "Modo livre ativo. Tire quantas fotos precisar desta etapa.";
+    }
+  }
+
+  function entrarModoLivreCamera() {
+    cameraSession.modo = "livre";
+    cameraSession.atualObrigatoria = null;
+    atualizarOverlayCamera();
+  }
+
+  function prepararFluxoObrigatorio() {
+    const pendente = proximaObrigatoriaPendente();
+    if (!pendente) {
+      entrarModoLivreCamera();
+      return;
+    }
+
+    cameraSession.modo = "obrigatorias";
+    cameraSession.atualObrigatoria = pendente;
+    atualizarOverlayCamera();
+  }
+
+  function avancarFluxoObrigatorio(haviaObrigatoria) {
+    if (!haviaObrigatoria) {
+      if (cameraSession.modo !== "livre" && !proximaObrigatoriaPendente()) {
+        entrarModoLivreCamera();
+      } else {
+        atualizarOverlayCamera();
+      }
+      return;
+    }
+
+    const proxima = proximaObrigatoriaPendente();
+    if (proxima) {
+      cameraSession.modo = "obrigatorias";
+      cameraSession.atualObrigatoria = proxima;
+    } else {
+      entrarModoLivreCamera();
+    }
+
+    atualizarOverlayCamera();
+  }
+
+  function abrirOverlayCamera() {
+    cameraSession.ativo = true;
+    cameraSession.modo = "obrigatorias";
+    cameraSession.atualObrigatoria = null;
+    prepararFluxoObrigatorio();
+
+    if (refs.overlay) {
+      refs.overlay.classList.add("show");
+    }
+  }
+
+  function fecharOverlayCamera() {
+    cameraSession.ativo = false;
+    if (refs.overlay) {
+      refs.overlay.classList.remove("show");
+    }
   }
 
   function renderChecklist() {
@@ -161,7 +267,11 @@ document.addEventListener("DOMContentLoaded", () => {
   async function carregarDoCache() {
     const salvo = await window.checkautoBuscarOSProducao(osId);
     if (salvo) {
-      state = { ...state, ...salvo };
+      state = {
+        ...state,
+        ...salvo,
+        obrigatorias: ordenarObrigatoriasLista(salvo.obrigatorias || []),
+      };
       preencherHeader();
       renderChecklist();
       renderFotosLivres();
@@ -244,6 +354,8 @@ document.addEventListener("DOMContentLoaded", () => {
         fotosNaEtapa = await buscarFotosDaEtapa(osId, etapaId, token);
       }
 
+      configsObrigatorias = ordenarObrigatoriasLista(configsObrigatorias);
+
       const configsAtendidasServidor = fotosNaEtapa
         .map((f) => f.config_foto)
         .filter(Boolean);
@@ -313,8 +425,20 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   refs.btnCamera.addEventListener("click", () => {
-    refs.inputCamera?.click();
+    abrirOverlayCamera();
   });
+
+  if (refs.overlayCapture) {
+    refs.overlayCapture.addEventListener("click", () => {
+      refs.inputCamera?.click();
+    });
+  }
+
+  if (refs.overlayClose) {
+    refs.overlayClose.addEventListener("click", () => {
+      fecharOverlayCamera();
+    });
+  }
 
   refs.inputCamera.addEventListener("change", (e) => {
     const files = Array.from(e.target.files || []);
@@ -324,7 +448,12 @@ document.addEventListener("DOMContentLoaded", () => {
       const reader = new FileReader();
       reader.onload = function (ev) {
         const dataUrl = ev.target.result;
-        const pendente = proximaObrigatoriaPendente();
+        const pendente =
+          cameraSession.modo === "obrigatorias"
+            ? cameraSession.atualObrigatoria || proximaObrigatoriaPendente()
+            : proximaObrigatoriaPendente();
+
+        const isObrigatoria = Boolean(pendente);
 
         if (pendente) {
           state.configs_atendidas_offline = [
@@ -339,6 +468,8 @@ document.addEventListener("DOMContentLoaded", () => {
           dataUrl,
           etapa_id: state.etapa_atual?.id,
           config_foto: pendente?.id || null,
+          config_foto_id: pendente?.id || null,
+          tipo: isObrigatoria ? "PADRAO" : "LIVRE",
         };
 
         if (!pendente) {
@@ -361,6 +492,12 @@ document.addEventListener("DOMContentLoaded", () => {
         renderFotosLivres();
         atualizarBotoes();
         refs.infoOffline.textContent = "Novas fotos salvas localmente. Serão enviadas no próximo sync.";
+
+        if (cameraSession.ativo) {
+          avancarFluxoObrigatorio(isObrigatoria);
+        } else if (!proximaObrigatoriaPendente()) {
+          cameraSession.modo = "livre";
+        }
       };
       reader.readAsDataURL(file);
     });

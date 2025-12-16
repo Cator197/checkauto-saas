@@ -181,6 +181,58 @@
       opacity: 0.55;
       cursor: not-allowed;
     }
+    .camera-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.8);
+      color: #fff;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 999;
+      backdrop-filter: blur(2px);
+    }
+    .camera-overlay.show {
+      display: flex;
+    }
+    .camera-overlay__content {
+      max-width: 560px;
+      width: 100%;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+    }
+    .camera-overlay__mode {
+      display: inline-flex;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .camera-overlay__title {
+      font-size: 26px;
+      font-weight: 800;
+      margin: 0 0 6px;
+      line-height: 1.2;
+    }
+    .camera-overlay__subtitle {
+      margin: 0 0 18px;
+      color: #cbd5e1;
+      line-height: 1.5;
+    }
+    .camera-overlay__actions {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
     .muted {
       color: #94a3b8;
       font-size: 14px;
@@ -233,6 +285,20 @@
     <button class="btn btn-secondary" id="btnTirarFotos">📷 Tirar fotos da etapa</button>
     <button class="btn btn-primary" id="btnAvancarEtapa" disabled>Enviar para próxima etapa</button>
     <input id="inputFotosEtapa" type="file" accept="image/*" capture="environment" multiple style="display:none">
+  </div>
+
+  <div class="camera-overlay" id="cameraOverlay">
+    <div class="camera-overlay__content">
+      <div class="camera-overlay__mode" id="cameraOverlayMode">Obrigatórias</div>
+      <h3 class="camera-overlay__title" id="cameraOverlayTitle">Foto obrigatória</h3>
+      <p class="camera-overlay__subtitle" id="cameraOverlaySubtitle">
+        Tire as fotos obrigatórias na ordem configurada. Após finalizar, o modo livre será ativado automaticamente.
+      </p>
+      <div class="camera-overlay__actions">
+        <button class="btn btn-primary" id="btnCapturarFoto">Capturar foto</button>
+        <button class="btn btn-secondary" id="btnFecharOverlay">Fechar</button>
+      </div>
+    </div>
   </div>
 
   <script src="/static/pwa/js/db.js"></script>
