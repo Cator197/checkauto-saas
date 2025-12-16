@@ -4,6 +4,7 @@ import tempfile
 from unittest import mock
 
 from django.contrib.auth.models import User
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase, APIClient
@@ -165,3 +166,94 @@ class SyncViewTests(APITestCase):
         self.assertEqual(FotoOS.objects.count(), 0)
         photo_errors = response.data["os"][0]["photo_errors"]
         self.assertTrue(photo_errors)
+
+
+class AvancarEtapaTests(APITestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._media_root = tempfile.mkdtemp()
+        cls._override_media = override_settings(MEDIA_ROOT=cls._media_root)
+        cls._override_media.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._override_media.disable()
+        shutil.rmtree(cls._media_root, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="user2", password="pass")
+        self.oficina = Oficina.objects.create(nome="Oficina Avanço")
+        self.usuario_oficina = UsuarioOficina.objects.create(
+            user=self.user,
+            oficina=self.oficina,
+            ativo=True,
+        )
+
+        self.etapa_atual = Etapa.objects.create(
+            oficina=self.oficina,
+            nome="Check-in",
+            ordem=1,
+            is_checkin=True,
+            ativa=True,
+        )
+        self.proxima_etapa = Etapa.objects.create(
+            oficina=self.oficina,
+            nome="Funilaria",
+            ordem=2,
+            ativa=True,
+        )
+        self.config = ConfigFoto.objects.create(
+            oficina=self.oficina,
+            etapa=self.etapa_atual,
+            nome="Frente",
+            obrigatoria=True,
+        )
+
+        self.os = OS.objects.create(
+            oficina=self.oficina,
+            codigo="OS-1",
+            etapa_atual=self.etapa_atual,
+        )
+
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        self.url = reverse("os-avancar-etapa", args=[self.os.id])
+
+    def _criar_foto_obrigatoria(self):
+        return FotoOS.objects.create(
+            os=self.os,
+            etapa=self.etapa_atual,
+            tipo="PADRAO",
+            config_foto=self.config,
+            arquivo=SimpleUploadedFile("foto.jpg", b"dados", content_type="image/jpeg"),
+        )
+
+    def test_nao_avanca_sem_fotos_obrigatorias(self):
+        response = self.client.post(self.url, {})
+
+        self.assertEqual(response.status_code, 400)
+        self.os.refresh_from_db()
+        self.assertEqual(self.os.etapa_atual, self.etapa_atual)
+        self.assertIn(self.config.id, response.data.get("configs_pendentes", []))
+
+    def test_avanca_para_proxima_etapa_quando_tudo_ok(self):
+        self._criar_foto_obrigatoria()
+
+        response = self.client.post(self.url, {"observacao": "Tudo certo"})
+
+        self.assertEqual(response.status_code, 200)
+        self.os.refresh_from_db()
+        self.assertEqual(self.os.etapa_atual, self.proxima_etapa)
+        self.assertIn("Tudo certo", self.os.observacoes)
+
+    def test_multi_tenant_bloqueia_os_de_outra_oficina(self):
+        outra_oficina = Oficina.objects.create(nome="Outra")
+        outra_etapa = Etapa.objects.create(oficina=outra_oficina, nome="E1", ordem=1, ativa=True)
+        outra_os = OS.objects.create(oficina=outra_oficina, codigo="OS-2", etapa_atual=outra_etapa)
+
+        url = reverse("os-avancar-etapa", args=[outra_os.id])
+        response = self.client.post(url, {})
+
+        self.assertEqual(response.status_code, 404)
