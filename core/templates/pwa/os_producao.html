@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Produção da OS</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="manifest" href="/static/pwa/manifest.json">
+  <meta name="theme-color" content="#0f172a" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 16px;
+      background: #f6f7fb;
+    }
+    h1 {
+      margin-bottom: 10px;
+    }
+    p {
+      color: #475569;
+    }
+    .back {
+      display: inline-block;
+      margin-top: 12px;
+      color: #2563eb;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>Produção da OS {{ os_id }}</h1>
+  <p>Esta tela será usada para acompanhar a produção do veículo.</p>
+  <a href="/pwa/veiculos-em-producao/" class="back">← Voltar para veículos</a>
+</body>
+</html>

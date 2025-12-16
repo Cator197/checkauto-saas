@@ -44,6 +44,14 @@ def pwa_sync(request):
     return render(request, "pwa/sync.html")
 
 
+def pwa_veiculos_em_producao(request):
+    return render(request, "pwa/veiculos_em_producao.html")
+
+
+def pwa_os_producao(request, os_id):
+    return render(request, "pwa/os_producao.html", {"os_id": os_id})
+
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -53,6 +61,8 @@ urlpatterns = [
     path('pwa/checkin-completo/', pwa_checkin_completo, name='pwa_checkin_completo'),
     path('pwa/checkin-fotos/', pwa_checkin_fotos, name='pwa_checkin_fotos'),
     path('pwa/sync/', pwa_sync, name='pwa_sync'),
+    path('pwa/veiculos-em-producao/', pwa_veiculos_em_producao, name='pwa_veiculos_em_producao'),
+    path('pwa/os/<int:os_id>/', pwa_os_producao, name='pwa_os_producao'),
 
     # JWT
     path('api/login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
