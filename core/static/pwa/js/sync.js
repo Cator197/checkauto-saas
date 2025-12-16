@@ -7,6 +7,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   const listaDiv = document.getElementById("listaPendentes");
   const spanQtd = document.getElementById("qtdPendentes");
 
+  async function carregarProducoesPendentes() {
+    if (!window.checkautoListarOSProducaoPendentes) return [];
+    return await window.checkautoListarOSProducaoPendentes();
+  }
+
   async function atualizarVeiculosEmProducao() {
     const token = localStorage.getItem("checkauto_token");
     if (!token) {
@@ -65,6 +70,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Renderiza as pendências ao entrar na tela
   let pendenciasAtuais = await carregarPendencias();
+  let producoesPendentes = await carregarProducoesPendentes();
 
   btnSync.addEventListener("click", async () => {
     statusBox.innerHTML = "⏳ Preparando sincronização…";
@@ -74,8 +80,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
-    if (pendenciasAtuais.length === 0) {
-      statusBox.innerHTML = "Nenhuma OS pendente para sincronizar.";
+    if (pendenciasAtuais.length === 0 && producoesPendentes.length === 0) {
+      statusBox.innerHTML = "Nenhuma pendência para sincronizar.";
       return;
     }
 
@@ -99,6 +105,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         },
         body: JSON.stringify({
           osPendentes: pendenciasAtuais,
+          producaoPendencias: producoesPendentes,
         }),
       });
 
@@ -124,12 +131,22 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       statusBox.innerHTML = "✅ Sincronização concluída com sucesso!";
       pendenciasAtuais = await carregarPendencias();
+      producoesPendentes = await carregarProducoesPendentes();
 
       if (window.checkautoAtualizarContadoresHome) {
         window.checkautoAtualizarContadoresHome();
       }
 
       await atualizarVeiculosEmProducao();
+
+      // Limpa flags de pendência local das telas de produção
+      if (Array.isArray(producoesPendentes)) {
+        for (const prod of producoesPendentes) {
+          if (window.checkautoMarcarOSProducaoSincronizada) {
+            await window.checkautoMarcarOSProducaoSincronizada(prod.os_id);
+          }
+        }
+      }
 
     } catch (err) {
       console.error("Erro na sincronização:", err);
