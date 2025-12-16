@@ -75,6 +75,19 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     try {
+      if (window.checkautoBuscarVeiculosEmProducao) {
+        const listaLocal = await window.checkautoBuscarVeiculosEmProducao();
+
+        const algumSemModelo = (listaLocal || []).some(
+          (item) => !item?.modelo_veiculo || item.modelo_veiculo.trim() === ""
+        );
+
+        if (algumSemModelo) {
+          mostrarMensagem("Modelo do veículo não pode ser vazio!");
+          return;
+        }
+      }
+
       mostrarMensagem("Buscando veículos em produção…");
       const response = await fetch("/api/pwa/veiculos-em-producao/", {
         headers: {
