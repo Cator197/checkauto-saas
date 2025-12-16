@@ -1,4 +1,5 @@
 from rest_framework import viewsets
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.views import APIView
@@ -230,6 +231,83 @@ class OSViewSet(viewsets.ModelViewSet):
                 extra={"oficina_id": oficina.id, "os_id": os_obj.id},
             )
 
+
+    @action(detail=True, methods=["post"], url_path="avancar-etapa")
+    def avancar_etapa(self, request, pk=None):
+        """
+        Avança a OS para a próxima etapa ativa, validando fotos obrigatórias.
+        """
+
+        os_obj = self.get_object()
+
+        etapa_atual = os_obj.etapa_atual
+        if etapa_atual is None:
+            return Response(
+                {"detail": "A OS não possui etapa atual definida."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        configs_obrigatorias = list(
+            ConfigFoto.objects.filter(
+                oficina=os_obj.oficina,
+                etapa=etapa_atual,
+                obrigatoria=True,
+                ativa=True,
+            )
+        )
+
+        pendentes = [
+            cfg
+            for cfg in configs_obrigatorias
+            if not FotoOS.objects.filter(
+                os=os_obj, config_foto=cfg, tipo="PADRAO"
+            ).exists()
+        ]
+
+        if pendentes:
+            return Response(
+                {
+                    "detail": "Fotos obrigatórias pendentes na etapa atual.",
+                    "configs_pendentes": [cfg.id for cfg in pendentes],
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        proxima_etapa = (
+            Etapa.objects.filter(
+                oficina=os_obj.oficina,
+                ativa=True,
+                ordem__gt=etapa_atual.ordem,
+            )
+            .order_by("ordem")
+            .first()
+        )
+
+        if proxima_etapa is None:
+            return Response(
+                {"detail": "A OS já está na última etapa ativa."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        observacao = request.data.get("observacao")
+
+        with transaction.atomic():
+            os_obj.etapa_atual = proxima_etapa
+
+            fields_to_update = ["etapa_atual", "atualizado_em"]
+
+            if observacao:
+                os_obj.observacoes = (
+                    f"{os_obj.observacoes}\n\n{observacao}"
+                    if os_obj.observacoes
+                    else observacao
+                )
+                fields_to_update.append("observacoes")
+
+            os_obj.save(update_fields=fields_to_update)
+
+        serializer = OSSerializer(os_obj, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 
