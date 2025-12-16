@@ -350,6 +350,12 @@ class SyncView(APIView):
             # converte para o formato do serializer de OS
             item_convertido = self.converter_payload_pwa(item)
 
+            if not item_convertido.get("modelo_veiculo"):
+                return Response(
+                    {"detail": "Modelo do veículo não pode ser vazio."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
             serializer = OSSerializer(
                 data=item_convertido,
                 context={"request": request},
@@ -399,6 +405,10 @@ class SyncView(APIView):
         os_data = item.get("os", {}) or {}
         cliente = item.get("cliente", {}) or {}
 
+        modelo_veiculo = veiculo.get("modelo")
+        if modelo_veiculo:
+            modelo_veiculo = modelo_veiculo.strip()
+
         # Código da OS:
         numero_interno = os_data.get("numeroInterno") or veiculo.get("placa")
         if not numero_interno:
@@ -408,7 +418,7 @@ class SyncView(APIView):
             "oficina": item.get("oficina"),
             "codigo": numero_interno,
             "placa": veiculo.get("placa"),
-            "modelo_veiculo": veiculo.get("modelo"),
+            "modelo_veiculo": modelo_veiculo,
             "cor_veiculo": veiculo.get("cor"),
             "nome_cliente": cliente.get("nome"),
             "telefone_cliente": cliente.get("telefone"),

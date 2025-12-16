@@ -113,6 +113,14 @@ class OSSerializer(serializers.ModelSerializer):
             'oficina': {'read_only': True},
             # Relação reversa; leitura somente evita exigir o campo no payload
             'fotos': {'read_only': True},
+            'modelo_veiculo': {
+                'required': True,
+                'allow_blank': False,
+                'error_messages': {
+                    'required': 'Modelo do veículo não pode ser vazio',
+                    'blank': 'Modelo do veículo não pode ser vazio',
+                },
+            },
         }
 
 
