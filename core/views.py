@@ -28,6 +28,7 @@ from .serializers import (
     EtapaSerializer,
     ConfigFotoSerializer,
     OSSerializer,
+    PwaVeiculoEmProducaoSerializer,
     FotoOSSerializer,
 )
 from .utils import get_oficina_do_usuario
@@ -507,6 +508,114 @@ class SyncView(APIView):
                 photo_errors.append(message)
 
         return photo_errors
+
+
+class PwaVeiculosEmProducaoView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        if user.is_superuser:
+            queryset = OS.objects.select_related("etapa_atual", "oficina").filter(aberta=True)
+        else:
+            oficina = get_oficina_do_usuario(user)
+            if oficina is None:
+                return Response([], status=status.HTTP_200_OK)
+
+            queryset = OS.objects.select_related("etapa_atual", "oficina").filter(
+                oficina=oficina,
+                aberta=True,
+            )
+
+        ordens = list(queryset.order_by("-atualizado_em"))
+
+        if not ordens:
+            return Response([], status=status.HTTP_200_OK)
+
+        os_ids = [os_obj.id for os_obj in ordens]
+        fotos_por_os = {}
+
+        for foto in FotoOS.objects.filter(os_id__in=os_ids).select_related("etapa"):
+            fotos_por_os.setdefault(foto.os_id, []).append(foto)
+
+        primeira_etapa_cache = {}
+        configs_cache = {}
+
+        def obter_etapa_atual(os_obj):
+            if os_obj.etapa_atual:
+                return os_obj.etapa_atual
+
+            oficina_id = os_obj.oficina_id
+            if oficina_id not in primeira_etapa_cache:
+                primeira_etapa_cache[oficina_id] = (
+                    Etapa.objects.filter(oficina_id=oficina_id, ativa=True)
+                    .order_by("ordem")
+                    .first()
+                )
+            return primeira_etapa_cache[oficina_id]
+
+        def obter_configs(oficina_id, etapa_id):
+            chave = (oficina_id, etapa_id)
+            if chave not in configs_cache:
+                if etapa_id is None:
+                    configs_cache[chave] = []
+                else:
+                    configs_cache[chave] = list(
+                        ConfigFoto.objects.filter(
+                            oficina_id=oficina_id,
+                            etapa_id=etapa_id,
+                            obrigatoria=True,
+                            ativa=True,
+                        ).values_list("id", flat=True)
+                    )
+            return configs_cache[chave]
+
+        def build_drive_thumb(drive_file_id):
+            if not drive_file_id:
+                return None
+            return f"https://drive.google.com/thumbnail?id={drive_file_id}&sz=w800"
+
+        resposta = []
+
+        for os_obj in ordens:
+            etapa = obter_etapa_atual(os_obj)
+            etapa_id = etapa.id if etapa else None
+            config_ids = obter_configs(os_obj.oficina_id, etapa_id)
+            fotos_da_os = fotos_por_os.get(os_obj.id, [])
+
+            configs_atendidos = {
+                foto.config_foto_id
+                for foto in fotos_da_os
+                if foto.config_foto_id in config_ids
+            }
+            faltantes = max(len(config_ids) - len(configs_atendidos), 0)
+
+            thumb_url = None
+            if etapa_id is not None:
+                fotos_na_etapa = [f for f in fotos_da_os if f.etapa_id == etapa_id]
+                if fotos_na_etapa:
+                    ultima_foto = max(fotos_na_etapa, key=lambda f: (f.tirada_em, f.id))
+                    thumb_url = build_drive_thumb(ultima_foto.drive_file_id)
+
+            resposta.append(
+                {
+                    "os_id": os_obj.id,
+                    "codigo": os_obj.codigo,
+                    "placa": os_obj.placa,
+                    "modelo_veiculo": os_obj.modelo_veiculo,
+                    "etapa_atual": {
+                        "id": etapa_id,
+                        "nome": etapa.nome if etapa else None,
+                    },
+                    "faltam_fotos_obrigatorias": faltantes,
+                    "thumb_url": thumb_url,
+                }
+            )
+
+        serializer = PwaVeiculoEmProducaoSerializer(data=resposta, many=True)
+        serializer.is_valid(raise_exception=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class DashboardResumoView(APIView):

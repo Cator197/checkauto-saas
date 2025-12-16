@@ -18,6 +18,7 @@ from .views import (
     OficinaDriveStatusView,
     GoogleDriveAuthURLView,
     GoogleDriveOAuth2CallbackView,
+    PwaVeiculosEmProducaoView,
 )
 
 router = routers.DefaultRouter()
@@ -36,6 +37,7 @@ urlpatterns = [
     path("drive/status/", OficinaDriveStatusView.as_view(), name="drive-status"),
     path("drive/auth-url/", GoogleDriveAuthURLView.as_view(), name="drive-auth-url"),
     path("google/oauth2/callback/", GoogleDriveOAuth2CallbackView.as_view(), name="google-oauth2-callback"),
+    path("pwa/veiculos-em-producao/", PwaVeiculosEmProducaoView.as_view(), name="pwa-veiculos-em-producao"),
 
 ]
 

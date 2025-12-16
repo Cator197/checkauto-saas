@@ -116,6 +116,20 @@ class OSSerializer(serializers.ModelSerializer):
         }
 
 
+class PwaEtapaAtualSerializer(serializers.Serializer):
+    id = serializers.IntegerField(allow_null=True)
+    nome = serializers.CharField(allow_null=True, allow_blank=True)
+
+
+class PwaVeiculoEmProducaoSerializer(serializers.Serializer):
+    os_id = serializers.IntegerField()
+    codigo = serializers.CharField()
+    placa = serializers.CharField(allow_null=True, required=False)
+    modelo_veiculo = serializers.CharField(allow_null=True, required=False)
+    etapa_atual = PwaEtapaAtualSerializer(allow_null=True)
+    faltam_fotos_obrigatorias = serializers.IntegerField()
+    thumb_url = serializers.CharField(allow_null=True, required=False)
+
 
 class FotoOSSerializer(serializers.ModelSerializer):
     os_codigo = serializers.CharField(source='os.codigo', read_only=True)
