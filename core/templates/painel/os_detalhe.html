@@ -356,10 +356,33 @@ document.addEventListener("DOMContentLoaded", () => {
                 const card = document.createElement("div");
                 card.className = "bg-slate-950/80 border border-slate-800 rounded-xl overflow-hidden flex flex-col";
 
-                const img = document.createElement("img");
-                img.src = f.arquivo;
-                img.alt = f.titulo || f.observacao || "";
-                img.className = "w-full aspect-[4/3] object-cover";
+                const thumbUrl = f.drive_thumb_url;
+                const imageWrapper = document.createElement("div");
+                imageWrapper.className = "relative w-full aspect-[4/3] bg-slate-950";
+
+                if (thumbUrl) {
+                    const placeholder = document.createElement("div");
+                    placeholder.className = "absolute inset-0 bg-slate-800 animate-pulse";
+                    imageWrapper.appendChild(placeholder);
+
+                    const img = document.createElement("img");
+                    img.src = thumbUrl;
+                    img.alt = f.titulo || f.observacao || "";
+                    img.loading = "lazy";
+                    img.className = "w-full h-full object-cover absolute inset-0 blur-sm opacity-0 transition duration-300";
+                    img.addEventListener("load", () => {
+                        img.classList.remove("blur-sm", "opacity-0");
+                        img.classList.add("opacity-100");
+                        placeholder.classList.add("hidden");
+                    });
+
+                    imageWrapper.appendChild(img);
+                } else {
+                    const noImage = document.createElement("div");
+                    noImage.className = "absolute inset-0 flex items-center justify-center bg-slate-900 text-[11px] text-slate-400";
+                    noImage.textContent = "Sem imagem";
+                    imageWrapper.appendChild(noImage);
+                }
 
                 const info = document.createElement("div");
                 info.className = "p-2 flex flex-col gap-1";
@@ -383,7 +406,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 info.appendChild(linha1);
                 info.appendChild(linha2);
 
-                card.appendChild(img);
+                card.appendChild(imageWrapper);
                 card.appendChild(info);
                 grid.appendChild(card);
             });

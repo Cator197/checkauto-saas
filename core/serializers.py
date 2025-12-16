@@ -121,6 +121,8 @@ class FotoOSSerializer(serializers.ModelSerializer):
     os_codigo = serializers.CharField(source='os.codigo', read_only=True)
     oficina = serializers.SerializerMethodField()
     etapa_nome = serializers.CharField(source='etapa.nome', read_only=True)
+    drive_thumb_url = serializers.SerializerMethodField()
+    drive_url = serializers.SerializerMethodField()
 
     config_foto_nome = serializers.CharField(source='config_foto.nome', read_only=True, default=None)
     tirada_por_nome = serializers.CharField(
@@ -143,6 +145,8 @@ class FotoOSSerializer(serializers.ModelSerializer):
             'config_foto_nome',
             'arquivo',
             'drive_file_id',  # <-- adicionar aqui
+            'drive_thumb_url',
+            'drive_url',
             'titulo',
             'observacao',
             'tirada_por',
@@ -158,6 +162,16 @@ class FotoOSSerializer(serializers.ModelSerializer):
 
     def get_oficina(self, obj):
         return obj.os.oficina_id
+
+    def get_drive_thumb_url(self, obj):
+        if not obj.drive_file_id:
+            return None
+        return f"https://drive.google.com/thumbnail?id={obj.drive_file_id}&sz=w800"
+
+    def get_drive_url(self, obj):
+        if not obj.drive_file_id:
+            return None
+        return f"https://drive.google.com/uc?id={obj.drive_file_id}"
 
     def validate_arquivo(self, value):
         """
