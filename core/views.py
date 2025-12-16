@@ -5,8 +5,6 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.utils import timezone
-import base64
-from django.core.files.base import ContentFile
 from datetime import date
 from django.db.models import Q
 from django.db import transaction
@@ -287,10 +285,9 @@ class FotoOSViewSet(viewsets.ModelViewSet):
 
 
 from django.utils import timezone
-import base64
-from django.core.files.base import ContentFile
 
 from .models import Etapa, UsuarioOficina, Oficina  # garante esses imports
+from .services.fotos import criar_foto_os
 
 
 class SyncView(APIView):
@@ -454,124 +451,23 @@ class SyncView(APIView):
             usuario_oficina = None
 
         for idx, foto in enumerate(todas_fotos):
-            # ✅ aceita tanto "arquivo" quanto "dataUrl" (como no teu IndexedDB)
-            conteudo_base64 = foto.get("arquivo")
-            if isinstance(conteudo_base64, dict):
-                conteudo_base64 = conteudo_base64.get("dataUrl") or conteudo_base64.get("arquivo")
+            extra_log = {
+                "user_id": user.id,
+                "oficina_id": os_obj.oficina_id,
+                "os_codigo": os_obj.codigo,
+                "foto_idx": idx,
+            }
 
-            if not conteudo_base64:
-                conteudo_base64 = foto.get("dataUrl")
-            if not conteudo_base64:
-                message = "[SYNC] Foto ignorada: sem conteúdo base64."
-                logger.warning(
-                    message,
-                    extra={
-                        "user_id": user.id,
-                        "oficina_id": os_obj.oficina_id,
-                        "os_codigo": os_obj.codigo,
-                        "foto_idx": idx,
-                    },
-                )
-                photo_errors.append(message)
-                continue
-
-            # Se vier no formato data:image/png;base64,AAAA...
-            header = None
-            if conteudo_base64.startswith("data:"):
-                header, conteudo_base64 = conteudo_base64.split(",", 1)
-
-            # fallback: se tiver vírgula, remove prefixo
-            elif "," in conteudo_base64:
-                conteudo_base64 = conteudo_base64.split(",", 1)[1]
-
-            try:
-                conteudo = base64.b64decode(conteudo_base64)
-            except Exception:
-                message = "[SYNC] Foto ignorada: base64 inválido."
-                logger.warning(
-                    message,
-                    extra={
-                        "user_id": user.id,
-                        "oficina_id": os_obj.oficina_id,
-                        "os_codigo": os_obj.codigo,
-                        "foto_idx": idx,
-                    },
-                )
-                photo_errors.append(message)
-                continue
-
-            # ✅ tenta pegar extensão do payload / header
-            extensao = (foto.get("extensao") or "").lower().strip().lstrip(".")
-            if not extensao and header:
-                # exemplo header: data:image/png;base64
-                if "image/png" in header:
-                    extensao = "png"
-                elif "image/webp" in header:
-                    extensao = "webp"
-                elif "image/jpeg" in header or "image/jpg" in header:
-                    extensao = "jpg"
-            if not extensao:
-                extensao = "jpg"
-
-            arquivo = ContentFile(
-                conteudo,
-                name=f"pwa_os{os_obj.id}_{foto.get('id') or '0'}.{extensao}"
+            foto_obj, error_message = criar_foto_os(
+                foto=foto,
+                os_obj=os_obj,
+                etapa=etapa,
+                usuario_oficina=usuario_oficina,
+                extra_log=extra_log,
             )
 
-            config_foto_payload = foto.get("config_foto")
-            config_foto_id = foto.get("config_foto_id") or None
-
-            if config_foto_id is None and isinstance(config_foto_payload, dict):
-                config_foto_id = config_foto_payload.get("id")
-            elif config_foto_id is None:
-                config_foto_id = config_foto_payload
-
-            tipo = "LIVRE"
-            config_foto_obj = None
-
-            if config_foto_id:
-                tipo = "PADRAO"
-                try:
-                    config_foto_obj = ConfigFoto.objects.get(id=config_foto_id)
-                except ConfigFoto.DoesNotExist:
-                    config_foto_obj = None
-
-                if not config_foto_obj:
-                    message = "[SYNC] Foto PADRÃO ignorada: config_foto não encontrada."
-                    logger.warning(
-                        message,
-                        extra={
-                            "user_id": user.id,
-                            "oficina_id": os_obj.oficina_id,
-                            "os_codigo": os_obj.codigo,
-                            "foto_idx": idx,
-                        },
-                    )
-                    photo_errors.append(message)
-                    continue
-
-            try:
-                foto_obj = FotoOS.objects.create(
-                    os=os_obj,
-                    etapa=etapa,
-                    tipo=tipo,
-                    config_foto=config_foto_obj,
-                    arquivo=arquivo,
-                    titulo=foto.get("nome") or None,
-                    tirada_por=usuario_oficina,
-                )
-            except Exception as e:
-                message = f"[SYNC] Falha ao criar FotoOS: {e}"
-                logger.exception(
-                    message,
-                    extra={
-                        "user_id": user.id,
-                        "oficina_id": os_obj.oficina_id,
-                        "os_codigo": os_obj.codigo,
-                        "foto_idx": idx,
-                    },
-                )
-                photo_errors.append(message)
+            if error_message:
+                photo_errors.append(error_message)
                 continue
 
             # Envia essa foto para o Drive (na pasta da OS + subpasta da etapa)
