@@ -2,8 +2,19 @@
 // Tela de veículos em produção: busca online + cache IndexedDB
 
 document.addEventListener("DOMContentLoaded", () => {
+  const TOKEN_KEY = "checkauto_token";
+  const isDev =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1";
+
   const listaEl = document.getElementById("listaVeiculos");
   const statusEl = document.getElementById("statusVeiculos");
+
+  function logDev(...args) {
+    if (isDev) {
+      console.debug("[veiculos_em_producao]", ...args);
+    }
+  }
 
   function mostrarMensagem(msg) {
     if (statusEl) {
@@ -56,9 +67,10 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function buscarOnline() {
-    const token = localStorage.getItem("checkauto_token");
+    const token = window.localStorage.getItem(TOKEN_KEY);
     if (!token) {
       mostrarMensagem("Token não encontrado. Faça login para carregar os veículos.");
+      logDev("Token ausente no storage (localStorage)");
       return;
     }
 
@@ -66,11 +78,18 @@ document.addEventListener("DOMContentLoaded", () => {
       mostrarMensagem("Buscando veículos em produção…");
       const response = await fetch("/api/pwa/veiculos-em-producao/", {
         headers: {
+          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          mostrarMensagem("Sessão expirada. Faça login novamente.");
+          logDev("Resposta 401 ao buscar veículos (token expirado ou inválido)");
+          return;
+        }
+
         mostrarMensagem("Falha ao buscar lista no servidor.");
         return;
       }
