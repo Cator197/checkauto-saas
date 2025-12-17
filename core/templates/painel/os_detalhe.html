@@ -793,6 +793,43 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         }
 
+        function criarBotaoExcluirFoto(fotoId) {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.textContent = "Excluir";
+            btn.dataset.fotoId = fotoId;
+            btn.className = "mt-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-rose-600/80 hover:bg-rose-500 text-white transition disabled:opacity-60";
+
+            btn.addEventListener("click", async () => {
+                if (!confirm("Excluir esta foto?")) return;
+
+                btn.disabled = true;
+                const textoOriginal = btn.textContent;
+                btn.textContent = "Excluindo...";
+
+                try {
+                    const resp = await apiFetch(`/api/fotos-os/${fotoId}/`, { method: "DELETE" });
+
+                    if (resp && resp.ok) {
+                        alert("Foto excluída");
+                        await recarregarFotos();
+                        return;
+                    }
+
+                    const erroTexto = resp ? await resp.text() : "Resposta vazia";
+                    alert(`Erro ${resp ? resp.status : ""}: ${erroTexto}`);
+                } catch (err) {
+                    console.error("Erro ao excluir foto:", err);
+                    alert("Erro ao excluir foto: " + (err?.message || err));
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = textoOriginal;
+                }
+            });
+
+            return btn;
+        }
+
         function preencherGaleria(fotos, fotosErro = false) {
             elFotosContainer.innerHTML = "";
 
@@ -891,8 +928,14 @@ document.addEventListener("DOMContentLoaded", () => {
                     info.appendChild(linha1);
                     info.appendChild(linha2);
 
+                    const actions = document.createElement("div");
+                    actions.className = "flex justify-end";
+                    const btnExcluir = criarBotaoExcluirFoto(f.id);
+                    actions.appendChild(btnExcluir);
+
                     card.appendChild(imageWrapper);
                     card.appendChild(info);
+                    card.appendChild(actions);
                     grid.appendChild(card);
                 });
 

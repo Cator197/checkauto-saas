@@ -675,6 +675,20 @@ class FotoOSViewSet(viewsets.ModelViewSet):
                 },
             )
 
+    def destroy(self, request, *args, **kwargs):
+        if self._is_operador(request):
+            return Response(
+                {"detail": "Operador não tem permissão para excluir fotos."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Futuro: remover também do Drive quando integrado (S7-6 / melhorias futuras)
+        return super().destroy(request, *args, **kwargs)
+
+    def _is_operador(self, request):
+        papel = get_papel_do_usuario(request.user, getattr(request, "auth", None))
+        return (papel or "").upper() == "FUNC"
+
 
 from django.utils import timezone
 
