@@ -111,4 +111,5 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (path === "/painel/" || path === "/painel") {
         await carregarDashboardResumo();
     }
+
 });
