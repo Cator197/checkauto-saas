@@ -77,9 +77,23 @@ async function sincronizarItem(item) {
         body: formData,
       });
     } else if (item.type === "UPSERT_OBSERVACAO") {
+      const payload = { ...(item.payload || {}) };
+
+      if (payload.etapa_id && !payload.etapa) {
+        payload.etapa = payload.etapa_id;
+        delete payload.etapa_id;
+      }
+
+      if (payload.etapa !== undefined) {
+        const etapaNumero = parseInt(payload.etapa, 10);
+        if (!Number.isNaN(etapaNumero)) {
+          payload.etapa = etapaNumero;
+        }
+      }
+
       resp = await apiFetch(`/api/os/${item.os_id}/observacoes/`, {
         method: "POST",
-        body: item.payload,
+        body: payload,
       });
     }
 
