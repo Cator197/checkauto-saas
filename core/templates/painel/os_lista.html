@@ -134,220 +134,213 @@ Visualize e filtre todas as OS da sua oficina.
     </div>
 
     <!-- Script específico da lista de OS -->
+    <script src="{% static 'painel/js/auth.js' %}"></script>
+    <script src="{% static 'painel/js/api.js' %}"></script>
     <script>
         document.addEventListener("DOMContentLoaded", () => {
-            const TOKEN_KEY = "checkauto_token";
+            (async () => {
+                const autenticado = await verificarAutenticacao();
+                if (!autenticado) return;
 
-            const token = window.localStorage.getItem(TOKEN_KEY);
-            const tbody = document.getElementById("os-tbody");
-            const emptyMsg = document.getElementById("os-empty");
-            const countLabel = document.getElementById("os-count");
-            const pageInfo = document.getElementById("os-page-info");
-            const btnPrev = document.getElementById("btn-prev-page");
-            const btnNext = document.getElementById("btn-next-page");
+                const tbody = document.getElementById("os-tbody");
+                const emptyMsg = document.getElementById("os-empty");
+                const countLabel = document.getElementById("os-count");
+                const pageInfo = document.getElementById("os-page-info");
+                const btnPrev = document.getElementById("btn-prev-page");
+                const btnNext = document.getElementById("btn-next-page");
 
-            const inputSearch = document.getElementById("filtro-search");
-            const selectStatus = document.getElementById("filtro-status");
-            const selectEtapa = document.getElementById("filtro-etapa");
-            const btnAplicar = document.getElementById("btn-aplicar-filtros");
+                const inputSearch = document.getElementById("filtro-search");
+                const selectStatus = document.getElementById("filtro-status");
+                const selectEtapa = document.getElementById("filtro-etapa");
+                const btnAplicar = document.getElementById("btn-aplicar-filtros");
 
-            if (!token) {
-                countLabel.textContent = "⚠ Sem token. Faça login para listar as OS.";
-                return;
-            }
+                let currentPageUrl = "/api/os/"; // DRF com PageNumberPagination costuma usar ?page=1
 
-            let currentPageUrl = "/api/os/";  // DRF com PageNumberPagination costuma usar ?page=1
-            let lastResponse = null;
+                function montarUrlComFiltros(baseUrl) {
+                    const url = new URL(baseUrl, window.location.origin);
 
-            function montarUrlComFiltros(baseUrl) {
-                const url = new URL(baseUrl, window.location.origin);
+                    const search = inputSearch.value.trim();
+                    const status = selectStatus.value;
+                    const etapa = selectEtapa.value;
 
-                const search = inputSearch.value.trim();
-                const status = selectStatus.value;
-                const etapa = selectEtapa.value;
+                    if (search) {
+                        url.searchParams.set("search", search);
+                    }
+                    if (status) {
+                        url.searchParams.set("status", status);
+                    }
+                    if (etapa) {
+                        url.searchParams.set("etapa", etapa);
+                    }
 
-                if (search) {
-                    url.searchParams.set("search", search);
-                }
-                if (status) {
-                    url.searchParams.set("status", status);
-                }
-                if (etapa) {
-                    url.searchParams.set("etapa", etapa);
+                    return url.pathname + url.search;
                 }
 
-                return url.pathname + url.search;
-            }
-
-            function formatarDataIso(dataStr) {
-                if (!dataStr) return "-";
-                // Tenta cortar só a parte da data (YYYY-MM-DD)
-                const apenasData = dataStr.split("T")[0];
-                const partes = apenasData.split("-");
-                if (partes.length === 3) {
-                    return partes[2] + "/" + partes[1] + "/" + partes[0];
-                }
-                return apenasData;
-            }
-
-            function renderizarTabela(dados) {
-                tbody.innerHTML = "";
-
-                let lista = dados;
-
-                // Se vier no formato paginado (DRF PageNumberPagination)
-                if (dados && Array.isArray(dados.results)) {
-                    lista = dados.results;
+                function formatarDataIso(dataStr) {
+                    if (!dataStr) return "-";
+                    // Tenta cortar só a parte da data (YYYY-MM-DD)
+                    const apenasData = dataStr.split("T")[0];
+                    const partes = apenasData.split("-");
+                    if (partes.length === 3) {
+                        return partes[2] + "/" + partes[1] + "/" + partes[0];
+                    }
+                    return apenasData;
                 }
 
-                if (!lista || lista.length === 0) {
-                    emptyMsg.classList.remove("hidden");
-                } else {
-                    emptyMsg.classList.add("hidden");
+                function renderizarTabela(dados) {
+                    tbody.innerHTML = "";
+
+                    let lista = dados;
+
+                    // Se vier no formato paginado (DRF PageNumberPagination)
+                    if (dados && Array.isArray(dados.results)) {
+                        lista = dados.results;
+                    }
+
+                    if (!lista || lista.length === 0) {
+                        emptyMsg.classList.remove("hidden");
+                    } else {
+                        emptyMsg.classList.add("hidden");
+                    }
+
+                    lista.forEach((os) => {
+                        const tr = document.createElement("tr");
+                        tr.className = "hover:bg-slate-900";
+
+                        const statusTexto = os.aberta ? "Aberta" : "Fechada";
+                        const statusClasse = os.aberta
+                            ? "bg-emerald-600/20 text-emerald-300 border-emerald-500/40"
+                            : "bg-slate-700/40 text-slate-200 border-slate-600/50";
+
+                        // Montar URL de detalhes (vamos implementar a view depois)
+                        const detalheUrl = `/painel/os/${os.id}/`;
+
+                        tr.innerHTML = `
+                            <td class="px-3 py-2 align-middle whitespace-nowrap">${os.codigo ?? "-"}</td>
+                            <td class="px-3 py-2 align-middle whitespace-nowrap font-mono">${os.placa ?? "-"}</td>
+                            <td class="px-3 py-2 align-middle whitespace-nowrap">${os.modelo_veiculo ?? "-"}</td>
+                            <td class="px-3 py-2 align-middle whitespace-nowrap">${os.nome_cliente ?? "-"}</td>
+                            <td class="px-3 py-2 align-middle whitespace-nowrap">${os.telefone_cliente ?? "-"}</td>
+                            <td class="px-3 py-2 align-middle whitespace-nowrap">
+                                ${os.etapa_nome ?? "-"}
+                            </td>
+                            <td class="px-3 py-2 align-middle whitespace-nowrap">
+                                ${formatarDataIso(os.data_entrada)}
+                            </td>
+                            <td class="px-3 py-2 align-middle whitespace-nowrap">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border ${statusClasse}">
+                                    ${statusTexto}
+                                </span>
+                            </td>
+                            <td class="px-3 py-2 align-middle whitespace-nowrap text-right">
+                                <a href="${detalheUrl}"
+                                   class="inline-flex items-center px-3 py-1 rounded-lg border border-slate-700
+                                          text-[11px] text-slate-100 hover:bg-slate-800/80">
+                                    Ver detalhes
+                                </a>
+                            </td>
+                        `;
+
+                        tbody.appendChild(tr);
+                    });
                 }
 
-                lista.forEach(os => {
-                    const tr = document.createElement("tr");
-                    tr.className = "hover:bg-slate-900";
+                function atualizarPaginacao(dados) {
+                    // Se vier no formato paginado do DRF
+                    if (dados && typeof dados.count === "number") {
+                        countLabel.textContent = `${dados.count} OS encontradas`;
+                    } else if (Array.isArray(dados)) {
+                        countLabel.textContent = `${dados.length} OS encontradas`;
+                    } else {
+                        countLabel.textContent = "—";
+                    }
 
-                    const statusTexto = os.aberta ? "Aberta" : "Fechada";
-                    const statusClasse = os.aberta
-                        ? "bg-emerald-600/20 text-emerald-300 border-emerald-500/40"
-                        : "bg-slate-700/40 text-slate-200 border-slate-600/50";
+                    if (dados && Object.prototype.hasOwnProperty.call(dados, "next")) {
+                        btnNext.disabled = !dados.next;
+                        btnPrev.disabled = !dados.previous;
 
-                    // Montar URL de detalhes (vamos implementar a view depois)
-                    const detalheUrl = `/painel/os/${os.id}/`;
+                        // Guardar as URLs de next/previous
+                        btnNext.dataset.url = dados.next || "";
+                        btnPrev.dataset.url = dados.previous || "";
+                    } else {
+                        // Sem paginação (lista simples)
+                        btnNext.disabled = true;
+                        btnPrev.disabled = true;
+                        btnNext.dataset.url = "";
+                        btnPrev.dataset.url = "";
+                    }
 
-                    tr.innerHTML = `
-                        <td class="px-3 py-2 align-middle whitespace-nowrap">${os.codigo ?? "-"}</td>
-                        <td class="px-3 py-2 align-middle whitespace-nowrap font-mono">${os.placa ?? "-"}</td>
-                        <td class="px-3 py-2 align-middle whitespace-nowrap">${os.modelo_veiculo ?? "-"}</td>
-                        <td class="px-3 py-2 align-middle whitespace-nowrap">${os.nome_cliente ?? "-"}</td>
-                        <td class="px-3 py-2 align-middle whitespace-nowrap">${os.telefone_cliente ?? "-"}</td>
-                        <td class="px-3 py-2 align-middle whitespace-nowrap">
-                            ${os.etapa_nome ?? "-"}
-                        </td>
-                        <td class="px-3 py-2 align-middle whitespace-nowrap">
-                            ${formatarDataIso(os.data_entrada)}
-                        </td>
-                        <td class="px-3 py-2 align-middle whitespace-nowrap">
-                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] border ${statusClasse}">
-                                ${statusTexto}
-                            </span>
-                        </td>
-                        <td class="px-3 py-2 align-middle whitespace-nowrap text-right">
-                            <a href="${detalheUrl}"
-                               class="inline-flex items-center px-3 py-1 rounded-lg border border-slate-700
-                                      text-[11px] text-slate-100 hover:bg-slate-800/80">
-                                Ver detalhes
-                            </a>
-                        </td>
-                    `;
-
-                    tbody.appendChild(tr);
-                });
-            }
-
-            function atualizarPaginacao(dados) {
-                // Se vier no formato paginado do DRF
-                if (dados && typeof dados.count === "number") {
-                    countLabel.textContent = `${dados.count} OS encontradas`;
-                } else if (Array.isArray(dados)) {
-                    countLabel.textContent = `${dados.length} OS encontradas`;
-                } else {
-                    countLabel.textContent = "—";
+                    // Info básica de página (se estiver paginado)
+                    if (dados && typeof dados.count === "number" && dados.results) {
+                        // Tentativa simples: extrair ?page=N da URL atual
+                        const matchPage = currentPageUrl.match(/[\?&]page=(\d+)/);
+                        const paginaAtual = matchPage ? parseInt(matchPage[1]) : 1;
+                        pageInfo.textContent = `Página ${paginaAtual}`;
+                    } else {
+                        pageInfo.textContent = "Página única";
+                    }
                 }
 
-                if (dados && Object.prototype.hasOwnProperty.call(dados, "next")) {
-                    btnNext.disabled = !dados.next;
-                    btnPrev.disabled = !dados.previous;
+                async function carregarOS(url) {
+                    currentPageUrl = url || currentPageUrl;
 
-                    // Guardar as URLs de next/previous
-                    btnNext.dataset.url = dados.next || "";
-                    btnPrev.dataset.url = dados.previous || "";
-                } else {
-                    // Sem paginação (lista simples)
-                    btnNext.disabled = true;
-                    btnPrev.disabled = true;
-                    btnNext.dataset.url = "";
-                    btnPrev.dataset.url = "";
-                }
+                    const urlComFiltros = montarUrlComFiltros(currentPageUrl);
 
-                // Info básica de página (se estiver paginado)
-                if (dados && typeof dados.count === "number" && dados.results) {
-                    // Tentativa simples: extrair ?page=N da URL atual
-                    const matchPage = currentPageUrl.match(/[\?&]page=(\d+)/);
-                    const paginaAtual = matchPage ? parseInt(matchPage[1]) : 1;
-                    pageInfo.textContent = `Página ${paginaAtual}`;
-                } else {
-                    pageInfo.textContent = "Página única";
-                }
-            }
+                    try {
+                        const response = await apiFetch(urlComFiltros, { method: "GET" });
 
-            function carregarOS(url) {
-                currentPageUrl = url || currentPageUrl;
-
-                const urlComFiltros = montarUrlComFiltros(currentPageUrl);
-
-                fetch(urlComFiltros, {
-                    method: "GET",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${token}`,
-                    },
-                })
-                    .then(async (response) => {
                         if (!response.ok) {
                             const text = await response.text();
                             console.error("Erro ao listar OS:", response.status, text);
                             countLabel.textContent = "Erro ao carregar as OS. Veja o console.";
                             tbody.innerHTML = "";
                             emptyMsg.classList.remove("hidden");
-                            return null;
+                            alert("Erro ao carregar as OS. Tente novamente.");
+                            return;
                         }
-                        return response.json();
-                    })
-                    .then((data) => {
-                        if (!data) return;
-                        lastResponse = data;
+
+                        const data = await response.json();
                         renderizarTabela(data);
                         atualizarPaginacao(data);
-                    })
-                    .catch((err) => {
+                    } catch (err) {
                         console.error("Erro inesperado ao listar OS:", err);
                         countLabel.textContent = "Erro inesperado ao carregar as OS.";
                         tbody.innerHTML = "";
                         emptyMsg.classList.remove("hidden");
-                    });
-            }
+                        alert("Erro inesperado ao carregar as OS.");
+                    }
+                }
 
-            // Botão aplicar filtros
-            btnAplicar.addEventListener("click", () => {
-                // Sempre volta para a primeira página da API ao mudar filtros
-                currentPageUrl = "/api/os/";
+                // Botão aplicar filtros
+                btnAplicar.addEventListener("click", () => {
+                    // Sempre volta para a primeira página da API ao mudar filtros
+                    currentPageUrl = "/api/os/";
+                    carregarOS(currentPageUrl);
+                });
+
+                // Navegação entre páginas (se DRF estiver paginando)
+                btnNext.addEventListener("click", () => {
+                    const nextUrl = btnNext.dataset.url;
+                    if (nextUrl) {
+                        // nextUrl pode ser absoluto ou relativo
+                        const nextPath = new URL(nextUrl, window.location.origin);
+                        const path = nextPath.pathname + nextPath.search;
+                        carregarOS(path);
+                    }
+                });
+
+                btnPrev.addEventListener("click", () => {
+                    const prevUrl = btnPrev.dataset.url;
+                    if (prevUrl) {
+                        const prevPath = new URL(prevUrl, window.location.origin);
+                        const path = prevPath.pathname + prevPath.search;
+                        carregarOS(path);
+                    }
+                });
+
+                // Carrega a primeira vez
                 carregarOS(currentPageUrl);
-            });
-
-            // Navegação entre páginas (se DRF estiver paginando)
-            btnNext.addEventListener("click", () => {
-                const nextUrl = btnNext.dataset.url;
-                if (nextUrl) {
-                    // nextUrl pode ser absoluto ou relativo
-                    const path = new URL(nextUrl, window.location.origin).pathname + new URL(nextUrl, window.location.origin).search;
-                    carregarOS(path);
-                }
-            });
-
-            btnPrev.addEventListener("click", () => {
-                const prevUrl = btnPrev.dataset.url;
-                if (prevUrl) {
-                    const path = new URL(prevUrl, window.location.origin).pathname + new URL(prevUrl, window.location.origin).search;
-                    carregarOS(path);
-                }
-            });
-
-            // Carrega a primeira vez
-            carregarOS(currentPageUrl);
+            })();
         });
     </script>
 
