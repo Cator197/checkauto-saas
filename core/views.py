@@ -17,7 +17,7 @@ from google_auth_oauthlib.flow import Flow
 import json
 from .models import OficinaDriveConfig
 from .models import Oficina, UsuarioOficina, Etapa, ConfigFoto, OS, FotoOS, OficinaDriveConfig
-from .utils import get_oficina_do_usuario
+from .utils import get_oficina_do_usuario, get_papel_do_usuario
 from core.drive_service import upload_foto_os_drive
 from core.drive_service import upload_foto_os_drive
 
@@ -81,6 +81,15 @@ class EtapaViewSet(viewsets.ModelViewSet):
     serializer_class = EtapaSerializer
     permission_classes = [IsAuthenticated]
 
+    def create(self, request, *args, **kwargs):
+        if self._is_operador(request):
+            return Response(
+                {"detail": "Operador não tem permissão para criar etapas."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        return super().create(request, *args, **kwargs)
+
     def get_queryset(self):
         user = self.request.user
 
@@ -99,6 +108,7 @@ class EtapaViewSet(viewsets.ModelViewSet):
         não do payload do front.
         """
         user = self.request.user
+
         oficina = get_oficina_do_usuario(user)
 
         if oficina is None and not user.is_superuser:
@@ -107,6 +117,37 @@ class EtapaViewSet(viewsets.ModelViewSet):
 
         # Para superuser, se quiser, poderia aceitar oficina vinda no payload.
         serializer.save(oficina=oficina)
+
+    def update(self, request, *args, **kwargs):
+        if self._is_operador(request):
+            return Response(
+                {"detail": "Operador não pode alterar etapas."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        if self._is_operador(request):
+            return Response(
+                {"detail": "Operador não pode alterar etapas."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        return super().partial_update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        if self._is_operador(request):
+            return Response(
+                {"detail": "Operador não pode excluir etapas."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        return super().destroy(request, *args, **kwargs)
+
+    def _is_operador(self, request):
+        papel = get_papel_do_usuario(request.user, getattr(request, "auth", None))
+        return (papel or "").upper() == "FUNC"
 
 
 from rest_framework import serializers  # garantir que está importado
@@ -231,12 +272,55 @@ class OSViewSet(viewsets.ModelViewSet):
                 extra={"oficina_id": oficina.id, "os_id": os_obj.id},
             )
 
+    def create(self, request, *args, **kwargs):
+        if self._is_operador(request):
+            return Response(
+                {"detail": "Operador não pode criar ou editar dados da OS."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        if self._is_operador(request):
+            return Response(
+                {"detail": "Operador não pode alterar dados da OS."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        if self._is_operador(request):
+            if not self._operator_patch_is_allowed(request):
+                return Response(
+                    {"detail": "Operador só pode editar observações da etapa."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
+        return super().partial_update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        if self._is_operador(request):
+            return Response(
+                {"detail": "Operador não pode remover OS."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        return super().destroy(request, *args, **kwargs)
+
 
     @action(detail=True, methods=["post"], url_path="avancar-etapa")
     def avancar_etapa(self, request, pk=None):
         """
         Avança a OS para a próxima etapa ativa, validando fotos obrigatórias.
         """
+
+        if self._is_operador(request):
+            return Response(
+                {"detail": "Operador não pode alterar a etapa manualmente."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         os_obj = self.get_object()
 
@@ -308,6 +392,20 @@ class OSViewSet(viewsets.ModelViewSet):
 
         serializer = OSSerializer(os_obj, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def _is_operador(self, request):
+        papel = get_papel_do_usuario(request.user, getattr(request, "auth", None))
+        return (papel or "").upper() == "FUNC"
+
+    def _operator_patch_is_allowed(self, request):
+        if request.method.lower() != "patch":
+            return False
+
+        allowed_fields = {"observacoes"}
+        data_keys = set(request.data.keys())
+
+        # Aceita PATCH vazio ou apenas com observacoes
+        return not data_keys or data_keys.issubset(allowed_fields)
 
 
 
