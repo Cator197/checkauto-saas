@@ -26,6 +26,24 @@ document.addEventListener("DOMContentLoaded", () => {
     overlayClose: document.getElementById("btnFecharOverlay"),
   };
 
+  function obterPapelDoToken() {
+    const token = localStorage.getItem("checkauto_token");
+
+    if (!token || token.split(".").length < 2) {
+      return null;
+    }
+
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      return (payload?.papel || "").toUpperCase();
+    } catch (err) {
+      console.warn("Não foi possível ler o papel do token", err);
+      return null;
+    }
+  }
+
+  const isOperador = obterPapelDoToken() === "FUNC";
+
   let state = {
     os_id: osId,
     codigo: `OS ${osId}`,
@@ -90,6 +108,12 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     window.checkautoSalvarOSProducao(state);
+  }
+
+  function aplicarPermissoes() {
+    if (isOperador && refs.btnAvancar) {
+      refs.btnAvancar.style.display = "none";
+    }
   }
 
   function preencherHeader() {
@@ -516,6 +540,7 @@ document.addEventListener("DOMContentLoaded", () => {
   (async function iniciar() {
     await carregarDoCache();
     renderTudo();
+    aplicarPermissoes();
 
     if (navigator.onLine) {
       await buscarOnline();
