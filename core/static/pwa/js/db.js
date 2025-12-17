@@ -7,6 +7,7 @@ const OS_STORE_NAME = "osPendentes";
 const VEICULOS_PRODUCAO_STORE = "veiculosEmProducao";
 const OS_PRODUCAO_STORE = "osProducao";
 const SYNC_QUEUE_STORE = "filaSync";
+const ACAO_AVANCAR_ETAPA = "AVANCAR_ETAPA";
 
 // Abre (ou cria) o banco de dados
 function checkautoOpenDB() {
@@ -117,6 +118,19 @@ function normalizarItemFila(item) {
     created_at: item.created_at || new Date().toISOString(),
     tries: typeof item.tries === "number" ? item.tries : 0,
     last_error: item.last_error || null,
+  };
+}
+
+function normalizarEtapaLocal(etapa) {
+  if (!etapa) return { id: null, nome: "-" };
+
+  if (typeof etapa === "number") {
+    return { id: etapa, nome: `Etapa ${etapa}` };
+  }
+
+  return {
+    id: etapa.id ?? etapa.etapa_atual ?? null,
+    nome: etapa.nome || etapa.etapa_atual_nome || "-",
   };
 }
 
@@ -418,6 +432,39 @@ window.checkautoEnfileirarObservacaoOS = async function (osId, payload, extra = 
   });
 };
 
+window.checkautoEnfileirarAvancoEtapaOS = async function (osId, payload = {}, extra = {}) {
+  await window.checkautoRemoverDaFilaPorFiltro(
+    (item) => item.type === ACAO_AVANCAR_ETAPA && item.os_id === osId
+  );
+
+  const fotosNormalizadas = Array.isArray(payload.fotos) ? payload.fotos : [];
+
+  const operacao = await window.checkautoAdicionarFilaSync({
+    id: `avanco-${Date.now()}-${Math.random()}`,
+    type: ACAO_AVANCAR_ETAPA,
+    os_id: osId,
+    payload: {
+      acao: "avancar_etapa",
+      timestamp: new Date().toISOString(),
+      observacao: payload.observacao || "",
+      fotos: fotosNormalizadas,
+    },
+  });
+
+  return checkautoUpsertOSProducao(osId, (item) => {
+    const filaAtual = Array.isArray(item.fila_sync) ? item.fila_sync : [];
+    const semAvanco = filaAtual.filter((op) => op.type !== ACAO_AVANCAR_ETAPA);
+
+    return {
+      ...item,
+      ...extra,
+      fila_sync: [...semAvanco, operacao],
+      pendente_sync: true,
+      avancar_solicitado: true,
+    };
+  });
+};
+
 // Lista OS com pendências de produção (observação, fotos, avanço de etapa)
 window.checkautoListarOSProducaoPendentes = async function () {
   try {
@@ -473,5 +520,51 @@ window.checkautoMarcarOSProducaoSincronizada = async function (osId) {
   } catch (e) {
     console.error("Falha em checkautoMarcarOSProducaoSincronizada:", e);
     return false;
+  }
+};
+
+window.checkautoAplicarEtapaOS = async function (osId, etapa) {
+  try {
+    const etapaNormalizada = normalizarEtapaLocal(etapa);
+
+    const atualizado = await checkautoUpsertOSProducao(osId, (item) => {
+      const fila = Array.isArray(item.fila_sync) ? item.fila_sync : [];
+      const filaSemAvanco = fila.filter((op) => op.type !== ACAO_AVANCAR_ETAPA);
+      const pendente = filaSemAvanco.length > 0;
+
+      return {
+        ...item,
+        fila_sync: filaSemAvanco,
+        etapa_atual: etapaNormalizada,
+        avancar_solicitado: false,
+        pendente_sync: pendente,
+        ultima_sincronizacao: new Date().toISOString(),
+      };
+    });
+
+    const lista = await window.checkautoBuscarVeiculosEmProducao();
+
+    if (Array.isArray(lista) && lista.length) {
+      const pendente = Boolean(
+        Array.isArray(atualizado?.fila_sync) && atualizado.fila_sync.length > 0
+      );
+
+      const novaLista = lista.map((item) => {
+        if (item.os_id !== osId) return item;
+
+        return {
+          ...item,
+          etapa_atual: etapaNormalizada,
+          pendente_sync: pendente ? true : item.pendente_sync,
+        };
+      });
+
+      await window.checkautoSalvarVeiculosEmProducao(novaLista);
+    }
+
+    return atualizado;
+  } catch (e) {
+    console.error("Falha em checkautoAplicarEtapaOS:", e);
+    return null;
   }
 };

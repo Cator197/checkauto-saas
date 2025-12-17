@@ -62,6 +62,19 @@ document.addEventListener("DOMContentLoaded", () => {
     ativo: false,
   };
 
+  function normalizarEtapaLocal(etapa) {
+    if (!etapa) return { id: null, nome: "-" };
+
+    if (typeof etapa === "number") {
+      return { id: etapa, nome: `Etapa ${etapa}` };
+    }
+
+    return {
+      id: etapa.id ?? etapa.etapa_atual ?? etapa.etapa_atual_id ?? null,
+      nome: etapa.nome || etapa.etapa_atual_nome || etapa.nome_etapa || "-",
+    };
+  }
+
   const debounce = (fn, wait = 300) => {
     let t = null;
     return (...args) => {
@@ -69,6 +82,64 @@ document.addEventListener("DOMContentLoaded", () => {
       t = setTimeout(() => fn(...args), wait);
     };
   };
+
+  function coletarMetadadosFotosPendentes() {
+    const livres = Array.isArray(state.fotos_livres_offline)
+      ? state.fotos_livres_offline
+      : [];
+    const obrigatorias = Array.isArray(state.fotos_obrigatorias_offline)
+      ? state.fotos_obrigatorias_offline
+      : [];
+
+    return [...livres, ...obrigatorias].map((foto) => ({
+      id: foto.id,
+      origem: foto.origem,
+      etapa_id: foto.etapa_id,
+      tipo: foto.tipo,
+      dataUrl: foto.dataUrl || null,
+    }));
+  }
+
+  async function aoSincronizarItem(item, data) {
+    if (item.type !== "AVANCAR_ETAPA") return;
+
+    const etapaNormalizada = normalizarEtapaLocal({
+      id: data?.etapa_atual ?? data?.etapa_atual_id ?? null,
+      nome: data?.etapa_atual_nome || data?.etapa_atual?.nome,
+    });
+
+    const filaRestante = window.checkautoListarFilaSync
+      ? await window.checkautoListarFilaSync()
+      : [];
+    const aindaPendentes = (filaRestante || []).some(
+      (fila) => fila.os_id === osId
+    );
+
+    state = {
+      ...state,
+      etapa_atual: etapaNormalizada,
+      avancar_solicitado: false,
+      pendente_sync: aindaPendentes,
+    };
+
+    salvarCache({
+      etapa_atual: etapaNormalizada,
+      avancar_solicitado: false,
+      pendente_sync: aindaPendentes,
+    });
+
+    preencherHeader();
+    atualizarBotoes();
+    refs.btnAvancar.textContent = "Enviar para próxima etapa";
+    refs.btnAvancar.disabled = false;
+    setStatus("Etapa avançada e sincronizada.");
+  }
+
+  async function sincronizarPendenciasSePossivel() {
+    if (window.processarFilaSyncBackground && navigator.onLine) {
+      await window.processarFilaSyncBackground(aoSincronizarItem);
+    }
+  }
 
   function setStatus(texto) {
     if (refs.status) {
@@ -269,6 +340,8 @@ document.addEventListener("DOMContentLoaded", () => {
         etapa_atual: { id: etapaId, nome: etapaNome },
         fotos_livres_servidor: fotosServidor,
         observacao_etapa: observacaoEtapa,
+        avancar_solicitado: false,
+        pendente_sync: Array.isArray(state.fila_sync) && state.fila_sync.length > 0,
       });
 
       state = {
@@ -279,6 +352,8 @@ document.addEventListener("DOMContentLoaded", () => {
         etapa_atual: { id: etapaId, nome: etapaNome },
         fotos_livres_servidor: fotosServidor,
         observacao_etapa: observacaoEtapa,
+        avancar_solicitado: false,
+        pendente_sync: Array.isArray(state.fila_sync) && state.fila_sync.length > 0,
       };
 
       preencherHeader();
@@ -377,12 +452,42 @@ document.addEventListener("DOMContentLoaded", () => {
     e.target.value = "";
   });
 
-  refs.btnAvancar.addEventListener("click", () => {
+  refs.btnAvancar.addEventListener("click", async () => {
+    const observacaoAtual = refs.observacao.value || state.observacao_etapa || "";
+
     state.avancar_solicitado = true;
-    salvarCache({ avancar_solicitado: true, pendente_sync: true });
+    state.pendente_sync = true;
+
+    salvarCache({
+      observacao_etapa: observacaoAtual,
+      avancar_solicitado: true,
+      pendente_sync: true,
+    });
+
     refs.btnAvancar.textContent = "Agendado para próxima etapa";
     refs.btnAvancar.disabled = true;
-    refs.observacaoStatus.textContent = "Avanço agendado. Será enviado no próximo sync.";
+    refs.observacaoStatus.textContent =
+      "Avanço agendado. Será enviado no próximo sync.";
+
+    if (window.checkautoEnfileirarObservacaoOS) {
+      await window.checkautoEnfileirarObservacaoOS(osId, {
+        texto: observacaoAtual,
+        etapa: state.etapa_atual?.id,
+      });
+    }
+
+    if (window.checkautoEnfileirarAvancoEtapaOS) {
+      await window.checkautoEnfileirarAvancoEtapaOS(
+        osId,
+        {
+          observacao: observacaoAtual,
+          fotos: coletarMetadadosFotosPendentes(),
+        },
+        { pendente_sync: true, etapa_atual: state.etapa_atual }
+      );
+    }
+
+    await sincronizarPendenciasSePossivel();
   });
 
   (async function iniciar() {
@@ -392,11 +497,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (navigator.onLine) {
       await buscarOnline();
+      await sincronizarPendenciasSePossivel();
     } else {
       setStatus("Offline. Usando dados salvos.");
     }
 
-    window.addEventListener("online", buscarOnline);
+    window.addEventListener("online", () => {
+      buscarOnline();
+      sincronizarPendenciasSePossivel();
+    });
   })();
 });
 

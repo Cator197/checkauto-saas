@@ -12,6 +12,8 @@ function formatarTipo(tipo) {
       return "Upload de foto";
     case "UPSERT_OBSERVACAO":
       return "Observação da etapa";
+    case "AVANCAR_ETAPA":
+      return "Avançar etapa";
     default:
       return tipo || "Desconhecido";
   }
@@ -46,6 +48,7 @@ function dataUrlParaArquivo(dataUrl, filename) {
 async function sincronizarItem(item) {
   try {
     let resp = null;
+    let data = null;
 
     if (item.type === "PATCH_OS") {
       resp = await apiFetch(`/api/os/${item.os_id}/`, {
@@ -95,6 +98,17 @@ async function sincronizarItem(item) {
         method: "POST",
         body: payload,
       });
+    } else if (item.type === "AVANCAR_ETAPA") {
+      const body = {};
+
+      if (item.payload?.observacao) {
+        body.observacao = item.payload.observacao;
+      }
+
+      resp = await apiFetch(`/api/os/${item.os_id}/avancar-etapa/`, {
+        method: "POST",
+        body,
+      });
     }
 
     if (!resp) {
@@ -107,12 +121,25 @@ async function sincronizarItem(item) {
       return { ok: false, mensagem: texto };
     }
 
+    try {
+      data = await resp.clone().json();
+    } catch (err) {
+      data = null;
+    }
+
     await window.checkautoRemoverItemFilaSync(item.id);
     if (window.checkautoRemoverOperacaoProducao) {
       await window.checkautoRemoverOperacaoProducao(item.os_id, item.id);
     }
 
-    return { ok: true, mensagem: "Sincronizado" };
+    if (item.type === "AVANCAR_ETAPA" && data && window.checkautoAplicarEtapaOS) {
+      await window.checkautoAplicarEtapaOS(item.os_id, {
+        id: data.etapa_atual ?? data.etapa_atual_id ?? null,
+        nome: data.etapa_atual_nome || data.etapa_atual?.nome,
+      });
+    }
+
+    return { ok: true, mensagem: "Sincronizado", data };
   } catch (err) {
     const mensagem = err?.message || "Falha ao sincronizar";
     await window.checkautoRegistrarErroFilaSync(item.id, mensagem);
@@ -124,7 +151,12 @@ function renderPendencias(lista) {
   const listaDiv = document.getElementById("listaPendentes");
   const spanQtd = document.getElementById("qtdPendentes");
 
-  spanQtd.textContent = (lista?.length || 0).toString();
+  if (spanQtd) {
+    spanQtd.textContent = (lista?.length || 0).toString();
+  }
+
+  if (!listaDiv) return;
+
   listaDiv.innerHTML = "";
 
   if (!lista || lista.length === 0) {
@@ -172,22 +204,30 @@ async function processarFilaSync() {
   const statusBox = document.getElementById("syncStatus");
 
   if (syncEmAndamento) {
-    statusBox.textContent = "Já existe uma sincronização em andamento.";
+    if (statusBox) {
+      statusBox.textContent = "Já existe uma sincronização em andamento.";
+    }
     return;
   }
 
   if (!navigator.onLine) {
-    statusBox.textContent = "❌ Sem internet. Conecte-se e tente novamente.";
+    if (statusBox) {
+      statusBox.textContent = "❌ Sem internet. Conecte-se e tente novamente.";
+    }
     return;
   }
 
   syncEmAndamento = true;
-  statusBox.textContent = "📤 Sincronizando pendências…";
+  if (statusBox) {
+    statusBox.textContent = "📤 Sincronizando pendências…";
+  }
 
   try {
     const pendencias = await carregarPendencias();
     if (!pendencias.length) {
-      statusBox.textContent = "Nenhuma pendência para sincronizar.";
+      if (statusBox) {
+        statusBox.textContent = "Nenhuma pendência para sincronizar.";
+      }
       syncEmAndamento = false;
       return;
     }
@@ -204,13 +244,44 @@ async function processarFilaSync() {
       renderPendencias(await carregarPendencias());
     }
 
-    statusBox.textContent = "✅ Fila de sincronização processada.";
+    if (statusBox) {
+      statusBox.textContent = "✅ Fila de sincronização processada.";
+    }
   } catch (err) {
     console.error("Erro ao processar fila de sync:", err);
-    statusBox.textContent = "❌ Falha na sincronização. Verifique sua conexão.";
+    if (statusBox) {
+      statusBox.textContent = "❌ Falha na sincronização. Verifique sua conexão.";
+    }
   } finally {
     syncEmAndamento = false;
     renderPendencias(await carregarPendencias());
+    if (window.checkautoAtualizarContadoresHome) {
+      window.checkautoAtualizarContadoresHome();
+    }
+  }
+}
+
+async function processarFilaSyncBackground(onItemSuccess) {
+  if (syncEmAndamento || !navigator.onLine) {
+    return;
+  }
+
+  syncEmAndamento = true;
+
+  try {
+    const pendencias = await carregarPendencias();
+
+    for (const item of pendencias) {
+      const resultado = await sincronizarItem(item);
+
+      if (resultado.ok && typeof onItemSuccess === "function") {
+        await onItemSuccess(item, resultado.data);
+      }
+    }
+  } catch (err) {
+    console.error("Erro ao processar fila de sync em segundo plano:", err);
+  } finally {
+    syncEmAndamento = false;
     if (window.checkautoAtualizarContadoresHome) {
       window.checkautoAtualizarContadoresHome();
     }
@@ -228,8 +299,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   const btnSync = document.getElementById("btnSync");
   await carregarPendencias();
 
-  btnSync.addEventListener("click", () => processarFilaSync());
+  if (btnSync) {
+    btnSync.addEventListener("click", () => processarFilaSync());
+  }
 });
 
 // Expor para outros módulos se necessário
 window.processarFilaSync = processarFilaSync;
+window.processarFilaSyncBackground = processarFilaSyncBackground;
