@@ -10,7 +10,6 @@ document.addEventListener("DOMContentLoaded", () => {
     placa: document.getElementById("osPlaca"),
     etapa: document.getElementById("osEtapa"),
     status: document.getElementById("osStatus"),
-    checklist: document.getElementById("listaChecklist"),
     gridFotos: document.getElementById("gridFotosLivres"),
     infoOffline: document.getElementById("infoOffline"),
     observacao: document.getElementById("observacaoEtapa"),
@@ -50,9 +49,6 @@ document.addEventListener("DOMContentLoaded", () => {
     placa: "",
     modelo: "",
     etapa_atual: { id: null, nome: "-" },
-    obrigatorias: [],
-    configs_atendidas_servidor: [],
-    configs_atendidas_offline: [],
     fotos_livres_servidor: [],
     fotos_livres_offline: [],
     fotos_obrigatorias_offline: [],
@@ -64,18 +60,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const cameraSession = {
     ativo: false,
-    modo: "obrigatorias",
-    atualObrigatoria: null,
-  };
-
-  const ordenarObrigatoriasLista = (lista = []) => {
-    return [...lista].sort((a, b) => {
-      const ordemA = Number.isFinite(Number(a?.ordem)) ? Number(a.ordem) : 0;
-      const ordemB = Number.isFinite(Number(b?.ordem)) ? Number(b.ordem) : 0;
-
-      if (ordemA !== ordemB) return ordemA - ordemB;
-      return (a?.nome || "").localeCompare(b?.nome || "");
-    });
   };
 
   const debounce = (fn, wait = 300) => {
@@ -94,12 +78,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function salvarCache(extra = {}) {
     const extraProcessado = { ...extra };
-
-    if (Array.isArray(extraProcessado.obrigatorias)) {
-      extraProcessado.obrigatorias = ordenarObrigatoriasLista(
-        extraProcessado.obrigatorias
-      );
-    }
 
     state = {
       ...state,
@@ -123,85 +101,19 @@ document.addEventListener("DOMContentLoaded", () => {
     refs.etapa.textContent = `Etapa atual: ${state.etapa_atual?.nome || "-"}`;
   }
 
-  function checklistAtendida() {
-    const feitas = new Set([
-      ...(state.configs_atendidas_servidor || []),
-      ...(state.configs_atendidas_offline || []),
-    ]);
-    return state.obrigatorias.every((c) => feitas.has(c.id));
-  }
-
-  function proximaObrigatoriaPendente() {
-    const feitas = new Set([
-      ...(state.configs_atendidas_servidor || []),
-      ...(state.configs_atendidas_offline || []),
-    ]);
-    return ordenarObrigatoriasLista(state.obrigatorias).find((c) => !feitas.has(c.id));
-  }
-
   function atualizarOverlayCamera() {
     if (!refs.overlay) return;
-
-    const isModoObrigatorio = cameraSession.modo === "obrigatorias";
-    const titulo = isModoObrigatorio
-      ? cameraSession.atualObrigatoria?.nome || "Foto obrigatória"
-      : "LIVRE";
-
-    if (refs.overlayTitle) refs.overlayTitle.textContent = titulo;
-    if (refs.overlayMode)
-      refs.overlayMode.textContent = isModoObrigatorio ? "Obrigatórias" : "Livre";
-
+    if (refs.overlayTitle) refs.overlayTitle.textContent = "Foto da etapa";
+    if (refs.overlayMode) refs.overlayMode.textContent = "Captura";
     if (refs.overlaySubtitle) {
-      refs.overlaySubtitle.textContent = isModoObrigatorio
-        ? "Capture esta foto obrigatória. A próxima será carregada automaticamente."
-        : "Modo livre ativo. Tire quantas fotos precisar desta etapa.";
+      refs.overlaySubtitle.textContent =
+        "Capture fotos desta etapa livremente. Elas ficarão salvas nesta tela e serão sincronizadas quando houver conexão.";
     }
-  }
-
-  function entrarModoLivreCamera() {
-    cameraSession.modo = "livre";
-    cameraSession.atualObrigatoria = null;
-    atualizarOverlayCamera();
-  }
-
-  function prepararFluxoObrigatorio() {
-    const pendente = proximaObrigatoriaPendente();
-    if (!pendente) {
-      entrarModoLivreCamera();
-      return;
-    }
-
-    cameraSession.modo = "obrigatorias";
-    cameraSession.atualObrigatoria = pendente;
-    atualizarOverlayCamera();
-  }
-
-  function avancarFluxoObrigatorio(haviaObrigatoria) {
-    if (!haviaObrigatoria) {
-      if (cameraSession.modo !== "livre" && !proximaObrigatoriaPendente()) {
-        entrarModoLivreCamera();
-      } else {
-        atualizarOverlayCamera();
-      }
-      return;
-    }
-
-    const proxima = proximaObrigatoriaPendente();
-    if (proxima) {
-      cameraSession.modo = "obrigatorias";
-      cameraSession.atualObrigatoria = proxima;
-    } else {
-      entrarModoLivreCamera();
-    }
-
-    atualizarOverlayCamera();
   }
 
   function abrirOverlayCamera() {
     cameraSession.ativo = true;
-    cameraSession.modo = "obrigatorias";
-    cameraSession.atualObrigatoria = null;
-    prepararFluxoObrigatorio();
+    atualizarOverlayCamera();
 
     if (refs.overlay) {
       refs.overlay.classList.add("show");
@@ -215,48 +127,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function renderChecklist() {
-    const feitas = new Set([
-      ...(state.configs_atendidas_servidor || []),
-      ...(state.configs_atendidas_offline || []),
-    ]);
-
-    refs.checklist.innerHTML = "";
-
-    if (!state.obrigatorias.length) {
-      refs.checklist.innerHTML = '<li class="muted">Nenhuma configuração obrigatória encontrada para esta etapa.</li>';
-      return;
-    }
-
-    state.obrigatorias.forEach((item) => {
-      const li = document.createElement("li");
-      li.className = "check-item";
-
-      const nome = document.createElement("div");
-      nome.className = "nome";
-      nome.textContent = item.nome || "Foto obrigatória";
-
-      const tag = document.createElement("span");
-      const ok = feitas.has(item.id);
-      tag.className = `tag ${ok ? "ok" : "pendente"}`;
-      tag.textContent = ok ? "tirada" : "pending";
-
-      li.appendChild(nome);
-      li.appendChild(tag);
-      refs.checklist.appendChild(li);
-    });
-  }
-
   function renderFotosLivres() {
     const fotos = [
       ...(state.fotos_livres_servidor || []),
       ...(state.fotos_livres_offline || []),
+      ...(state.fotos_obrigatorias_offline || []),
     ];
 
     refs.gridFotos.innerHTML = "";
 
     if (!fotos.length) {
-      refs.gridFotos.innerHTML = '<p class="muted">Nenhuma foto livre encontrada para esta etapa.</p>';
+      refs.gridFotos.innerHTML = '<p class="muted">Nenhuma foto encontrada para esta etapa.</p>';
       return;
     }
 
@@ -285,7 +166,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function atualizarBotoes() {
-    refs.btnAvancar.disabled = !checklistAtendida();
+    if (refs.btnAvancar) {
+      refs.btnAvancar.disabled = false;
+    }
   }
 
   async function carregarDoCache() {
@@ -294,10 +177,8 @@ document.addEventListener("DOMContentLoaded", () => {
       state = {
         ...state,
         ...salvo,
-        obrigatorias: ordenarObrigatoriasLista(salvo.obrigatorias || []),
       };
       preencherHeader();
-      renderChecklist();
       renderFotosLivres();
       renderObservacao();
       atualizarBotoes();
@@ -315,22 +196,17 @@ document.addEventListener("DOMContentLoaded", () => {
         modelo: item.modelo_veiculo || "",
         etapa_atual: item.etapa_atual || { id: null, nome: "-" },
       });
-      state = { ...state, codigo: `OS ${item.codigo || osId}`, placa: item.placa, modelo: item.modelo_veiculo, etapa_atual: item.etapa_atual };
+      state = {
+        ...state,
+        codigo: `OS ${item.codigo || osId}`,
+        placa: item.placa,
+        modelo: item.modelo_veiculo,
+        etapa_atual: item.etapa_atual,
+      };
       preencherHeader();
     }
 
     return false;
-  }
-
-  async function buscarConfigsDaEtapa(etapaId) {
-    const url = new URL(window.location.origin + "/api/config-fotos/");
-    url.searchParams.set("etapa", etapaId);
-
-    const resp = await apiFetch(url.toString());
-
-    if (!resp.ok) return [];
-    const data = await resp.json();
-    return (data || []).filter((c) => c.obrigatoria);
   }
 
   async function buscarFotosDaEtapa(osId, etapaId) {
@@ -365,28 +241,20 @@ document.addEventListener("DOMContentLoaded", () => {
       const etapaId = osData.etapa_atual || osData.etapa_atual_id || null;
       const etapaNome = osData.etapa_atual_nome || osData.etapa_atual?.nome || "-";
 
-      let configsObrigatorias = [];
       let fotosNaEtapa = [];
 
       if (etapaId) {
-        configsObrigatorias = await buscarConfigsDaEtapa(etapaId);
         fotosNaEtapa = await buscarFotosDaEtapa(osId, etapaId);
       }
 
-      configsObrigatorias = ordenarObrigatoriasLista(configsObrigatorias);
-
-      const configsAtendidasServidor = fotosNaEtapa
-        .map((f) => f.config_foto)
-        .filter(Boolean);
-
-      const fotosLivresServidor = fotosNaEtapa
-        .filter((f) => !f.config_foto)
-        .map((f) => ({
-          id: f.id,
-          origem: "servidor",
-          thumb_url: f.drive_thumb_url || f.drive_url,
-          etapa_id: f.etapa,
-        }));
+      const fotosServidor = fotosNaEtapa.map((f) => ({
+        id: f.id,
+        origem: "servidor",
+        thumb_url: f.drive_thumb_url || f.drive_url,
+        etapa_id: f.etapa || f.etapa_id,
+        config_foto: f.config_foto,
+        config_foto_id: f.config_foto_id,
+      }));
 
       const observacaoEtapa =
         state.observacao_etapa ||
@@ -399,9 +267,7 @@ document.addEventListener("DOMContentLoaded", () => {
         placa: osData.placa,
         modelo: osData.modelo_veiculo,
         etapa_atual: { id: etapaId, nome: etapaNome },
-        obrigatorias: configsObrigatorias,
-        configs_atendidas_servidor: configsAtendidasServidor,
-        fotos_livres_servidor: fotosLivresServidor,
+        fotos_livres_servidor: fotosServidor,
         observacao_etapa: observacaoEtapa,
       });
 
@@ -411,14 +277,11 @@ document.addEventListener("DOMContentLoaded", () => {
         placa: osData.placa,
         modelo: osData.modelo_veiculo,
         etapa_atual: { id: etapaId, nome: etapaNome },
-        obrigatorias: configsObrigatorias,
-        configs_atendidas_servidor: configsAtendidasServidor,
-        fotos_livres_servidor: fotosLivresServidor,
+        fotos_livres_servidor: fotosServidor,
         observacao_etapa: observacaoEtapa,
       };
 
       preencherHeader();
-      renderChecklist();
       renderFotosLivres();
       renderObservacao();
       atualizarBotoes();
@@ -431,7 +294,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function renderTudo() {
     preencherHeader();
-    renderChecklist();
     renderFotosLivres();
     renderObservacao();
     atualizarBotoes();
@@ -471,56 +333,25 @@ document.addEventListener("DOMContentLoaded", () => {
       const reader = new FileReader();
       reader.onload = function (ev) {
         const dataUrl = ev.target.result;
-        const pendente =
-          cameraSession.modo === "obrigatorias"
-            ? cameraSession.atualObrigatoria || proximaObrigatoriaPendente()
-            : proximaObrigatoriaPendente();
-
-        const isObrigatoria = Boolean(pendente);
-
-        if (pendente) {
-          state.configs_atendidas_offline = [
-            ...(state.configs_atendidas_offline || []),
-            pendente.id,
-          ];
-        }
-
         const fotoObj = {
           id: `local-${Date.now()}-${Math.random()}`,
           origem: "offline",
           dataUrl,
           etapa_id: state.etapa_atual?.id,
-          config_foto: pendente?.id || null,
-          config_foto_id: pendente?.id || null,
-          tipo: isObrigatoria ? "PADRAO" : "LIVRE",
+          tipo: "LIVRE",
         };
 
-        if (!pendente) {
-          state.fotos_livres_offline = [...(state.fotos_livres_offline || []), fotoObj];
-        } else {
-          state.fotos_obrigatorias_offline = [
-            ...(state.fotos_obrigatorias_offline || []),
-            fotoObj,
-          ];
-        }
+        state.fotos_livres_offline = [...(state.fotos_livres_offline || []), fotoObj];
 
         salvarCache({
-          configs_atendidas_offline: state.configs_atendidas_offline,
           fotos_livres_offline: state.fotos_livres_offline,
           fotos_obrigatorias_offline: state.fotos_obrigatorias_offline,
           pendente_sync: true,
         });
 
-        renderChecklist();
         renderFotosLivres();
         atualizarBotoes();
         refs.infoOffline.textContent = "Novas fotos salvas localmente. Serão enviadas no próximo sync.";
-
-        if (cameraSession.ativo) {
-          avancarFluxoObrigatorio(isObrigatoria);
-        } else if (!proximaObrigatoriaPendente()) {
-          cameraSession.modo = "livre";
-        }
       };
       reader.readAsDataURL(file);
     });

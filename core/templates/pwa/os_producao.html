@@ -77,41 +77,6 @@
       margin: 0 0 10px;
       color: #0f172a;
     }
-    .lista-checklist {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .check-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border: 1px solid #e2e8f0;
-      border-radius: 10px;
-      padding: 10px 12px;
-      background: #f8fafc;
-    }
-    .check-item .nome {
-      font-weight: 600;
-      color: #0f172a;
-    }
-    .tag {
-      padding: 4px 10px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 700;
-    }
-    .tag.ok {
-      background: #ecfdf3;
-      color: #166534;
-    }
-    .tag.pendente {
-      background: #fef2f2;
-      color: #b91c1c;
-    }
     .grid-fotos {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
@@ -262,13 +227,6 @@
   </div>
 
   <div class="card">
-    <h2 class="section-title">Checklist de fotos obrigatórias</h2>
-    <ul class="lista-checklist" id="listaChecklist">
-      <li class="muted">Carregando checklist…</li>
-    </ul>
-  </div>
-
-  <div class="card">
     <h2 class="section-title">Fotos livres da etapa</h2>
     <div class="grid-fotos" id="gridFotosLivres">
       <p class="muted">Nenhuma foto livre encontrada para esta etapa.</p>
@@ -290,10 +248,10 @@
 
   <div class="camera-overlay" id="cameraOverlay">
     <div class="camera-overlay__content">
-      <div class="camera-overlay__mode" id="cameraOverlayMode">Obrigatórias</div>
-      <h3 class="camera-overlay__title" id="cameraOverlayTitle">Foto obrigatória</h3>
+      <div class="camera-overlay__mode" id="cameraOverlayMode">Captura</div>
+      <h3 class="camera-overlay__title" id="cameraOverlayTitle">Foto da etapa</h3>
       <p class="camera-overlay__subtitle" id="cameraOverlaySubtitle">
-        Tire as fotos obrigatórias na ordem configurada. Após finalizar, o modo livre será ativado automaticamente.
+        Capture fotos desta etapa livremente. Elas ficarão salvas nesta tela e serão sincronizadas quando houver conexão.
       </p>
       <div class="camera-overlay__actions">
         <button class="btn btn-primary" id="btnCapturarFoto">Capturar foto</button>
