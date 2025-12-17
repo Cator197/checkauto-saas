@@ -61,6 +61,37 @@ Timeline do veículo e fotos por etapa.
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <!-- Edição básica da OS -->
+    <section class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 lg:col-span-3">
+        <div class="flex items-center justify-between mb-3">
+            <div>
+                <h3 class="text-xs font-semibold text-slate-200 uppercase tracking-wide">Editar OS</h3>
+                <p class="text-[11px] text-slate-400">Atualize datas e status desta ordem de serviço.</p>
+            </div>
+            <button id="os-edit-salvar" type="button" class="px-3 py-1.5 text-[11px] font-semibold rounded-full bg-indigo-600 hover:bg-indigo-500 text-white transition disabled:opacity-60 disabled:cursor-not-allowed">
+                Salvar alterações
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] text-slate-200">
+            <label class="flex flex-col gap-1">
+                <span class="text-slate-400 text-[10px] uppercase tracking-wide">Data de entrega</span>
+                <input id="os-edit-data-entrega" type="date" class="bg-slate-950/70 border border-slate-800 rounded-lg px-2 py-2 text-[11px] focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+            </label>
+            <label class="flex flex-col gap-1">
+                <span class="text-slate-400 text-[10px] uppercase tracking-wide">Data de saída</span>
+                <input id="os-edit-data-saida" type="date" class="bg-slate-950/70 border border-slate-800 rounded-lg px-2 py-2 text-[11px] focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+            </label>
+            <label class="flex flex-col gap-1">
+                <span class="text-slate-400 text-[10px] uppercase tracking-wide">Status</span>
+                <select id="os-edit-status" class="bg-slate-950/70 border border-slate-800 rounded-lg px-2 py-2 text-[11px] focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                    <option value="aberta">Aberta</option>
+                    <option value="fechada">Fechada</option>
+                </select>
+            </label>
+        </div>
+    </section>
+
     <!-- Timeline -->
     <section class="lg:col-span-1 bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
         <h3 class="text-xs font-semibold text-slate-200 uppercase tracking-wide mb-2">
@@ -150,6 +181,15 @@ document.addEventListener("DOMContentLoaded", () => {
         const elFotoModalClose = document.getElementById("foto-modal-close");
         const elFotoModalImg = document.getElementById("foto-modal-img");
 
+        // Formulário de edição
+        const elEditDataEntrega = document.getElementById("os-edit-data-entrega");
+        const elEditDataSaida = document.getElementById("os-edit-data-saida");
+        const elEditStatus = document.getElementById("os-edit-status");
+        const elEditSalvar = document.getElementById("os-edit-salvar");
+
+        let osDadosAtuais = null;
+        let fotosCache = [];
+
         function abrirModalImagem(url, altTexto) {
             if (!url) return;
             elFotoModalImg.src = url;
@@ -193,6 +233,17 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
 
+        function dataParaInput(dateStr) {
+            if (!dateStr) return "";
+            return dateStr.split("T")[0] || "";
+        }
+
+        function toggleSalvando(ativo) {
+            if (!elEditSalvar) return;
+            elEditSalvar.disabled = ativo;
+            elEditSalvar.textContent = ativo ? "Salvando..." : "Salvar alterações";
+        }
+
         async function carregarDados() {
             const osUrl = `/api/os/${osId}/`;
             const fotosUrl = `/api/fotos-os/?os=${osId}`;
@@ -214,6 +265,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
 
                 const osData = await osResp.json();
+                osDadosAtuais = osData;
 
                 let fotosData = [];
                 let erroFotos = false;
@@ -235,9 +287,12 @@ document.addEventListener("DOMContentLoaded", () => {
                     console.error("Erro ao buscar fotos da OS:", fotosResp.status, t);
                 }
 
+                fotosCache = fotosData;
+
                 preencherCabecalho(osData);
                 preencherTimeline(osData, fotosData);
                 preencherGaleria(fotosData, erroFotos);
+                preencherFormulario(osData);
             } catch (err) {
                 console.error("Erro inesperado ao carregar detalhes da OS:", err);
                 erroBox.classList.remove("hidden");
@@ -264,6 +319,12 @@ document.addEventListener("DOMContentLoaded", () => {
             elDataEntrada.textContent = formatarData(os.data_entrada);
             elDataPrevista.textContent = formatarData(os.data_prevista_entrega);
             elDataSaida.textContent = formatarData(os.data_saida);
+        }
+
+        function preencherFormulario(os) {
+            elEditDataEntrega.value = dataParaInput(os.data_prevista_entrega);
+            elEditDataSaida.value = dataParaInput(os.data_saida);
+            elEditStatus.value = os.aberta ? "aberta" : "fechada";
         }
 
         function preencherTimeline(os, fotos) {
@@ -458,6 +519,51 @@ document.addEventListener("DOMContentLoaded", () => {
                 elFotosContainer.appendChild(bloco);
             });
         }
+
+        async function salvarEdicao() {
+            const payload = {};
+
+            if (elEditDataEntrega) {
+                payload.data_prevista_entrega = elEditDataEntrega.value || null;
+            }
+            if (elEditDataSaida) {
+                payload.data_saida = elEditDataSaida.value || null;
+            }
+            if (elEditStatus) {
+                payload.aberta = elEditStatus.value === "aberta";
+            }
+
+            toggleSalvando(true);
+
+            try {
+                const resp = await apiFetch(`/api/os/${osId}/`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                });
+
+                if (!resp.ok) {
+                    const texto = await resp.text();
+                    alert(`Erro ao salvar (${resp.status}): ${texto}`);
+                    return;
+                }
+
+                const atualizado = await resp.json();
+                osDadosAtuais = atualizado;
+                preencherCabecalho(atualizado);
+                preencherFormulario(atualizado);
+                preencherTimeline(atualizado, fotosCache);
+
+                alert("Salvo com sucesso");
+            } catch (err) {
+                console.error("Erro ao salvar alterações da OS:", err);
+                alert("Erro ao salvar alterações. Tente novamente.");
+            } finally {
+                toggleSalvando(false);
+            }
+        }
+
+        elEditSalvar.addEventListener("click", salvarEdicao);
 
         carregarDados();
     })();
