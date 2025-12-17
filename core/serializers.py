@@ -11,6 +11,7 @@ from .models import (
     OS,
     FotoOS,
     ObservacaoEtapaOS,
+    OSEtapaStatus,
 )
 from .utils import get_oficina_do_usuario
 
@@ -136,6 +137,36 @@ class ObservacaoEtapaOSSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Etapa não encontrada para esta oficina.')
 
         return value
+
+
+class OSEtapaStatusSerializer(serializers.ModelSerializer):
+    etapa_nome = serializers.CharField(source="etapa.nome", read_only=True)
+    ordem = serializers.IntegerField(source="etapa.ordem", read_only=True)
+    status = serializers.SerializerMethodField()
+    is_atual = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OSEtapaStatus
+        fields = [
+            "id",
+            "os",
+            "etapa",
+            "etapa_nome",
+            "ordem",
+            "status",
+            "concluida_em",
+            "is_atual",
+        ]
+        read_only_fields = ("os", "ordem", "status", "is_atual")
+
+    def get_status(self, obj):
+        return "concluida" if obj.concluida_em else "pendente"
+
+    def get_is_atual(self, obj):
+        os_obj = getattr(obj, "os", None)
+        if not os_obj:
+            return False
+        return os_obj.etapa_atual_id == obj.etapa_id
 
 
 class OSSerializer(serializers.ModelSerializer):
