@@ -80,7 +80,7 @@ class EtapaSerializer(serializers.ModelSerializer):
 
 
 class ConfigFotoSerializer(serializers.ModelSerializer):
-    etapa_nome = serializers.CharField(source='etapa.nome', read_only=True)
+    etapa_nome = serializers.CharField(source='etapa.nome', read_only=True, allow_null=True, default=None)
 
     class Meta:
         model = ConfigFoto
@@ -297,7 +297,7 @@ class FotoOSSerializer(serializers.ModelSerializer):
         # FotoOS não possui campo "fotos"; manter apenas campos reais do model.
         extra_kwargs = {
             # Permitem que o viewset injete defaults quando o frontend não envia
-            'etapa': {'required': False},
+            'etapa': {'required': False, 'allow_null': True},
             'tipo': {'required': False},
         }
 
@@ -357,21 +357,26 @@ class FotoOSSerializer(serializers.ModelSerializer):
         etapa = attrs.get('etapa')
         os_obj = attrs.get('os')
 
-        # Garante defaults quando o payload não envia estes campos
-        if etapa is None and os_obj:
-            etapa = Etapa.objects.filter(oficina=os_obj.oficina, is_checkin=True).first()
-            if etapa:
-                attrs['etapa'] = etapa
-        attrs['tipo'] = tipo
+        request = self.context.get('request') if self.context else None
+        user = getattr(request, 'user', None)
 
         # Regras de negócio espelhadas do model.clean para validar antes de salvar
         if not os_obj:
             raise serializers.ValidationError({'os': 'OS é obrigatória.'})
 
-        if not etapa:
-            raise serializers.ValidationError({'etapa': 'Etapa é obrigatória.'})
+        if user and user.is_authenticated and not user.is_superuser:
+            oficina_usuario = get_oficina_do_usuario(user)
+            if not oficina_usuario or os_obj.oficina_id != oficina_usuario.id:
+                raise serializers.ValidationError({'os': 'OS não encontrada para esta oficina.'})
+
+        if etapa and etapa.oficina_id != os_obj.oficina_id:
+            raise serializers.ValidationError({'etapa': 'Etapa não encontrada para esta oficina.'})
+
+        attrs['tipo'] = tipo
 
         if tipo == 'PADRAO':
+            if not etapa:
+                raise serializers.ValidationError({'etapa': 'Fotos PADRÃO precisam de etapa.'})
             if not config_foto:
                 raise serializers.ValidationError({'config_foto': 'Fotos PADRÃO precisam de config_foto.'})
             if config_foto.oficina_id != os_obj.oficina_id:
