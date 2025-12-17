@@ -302,6 +302,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const salvarObservacaoDebounce = debounce((valor) => {
     salvarCache({ observacao_etapa: valor, pendente_sync: true });
     refs.observacaoStatus.textContent = "Observação salva localmente (aguardando sync).";
+    if (window.checkautoEnfileirarObservacaoOS) {
+      window.checkautoEnfileirarObservacaoOS(osId, {
+        texto: valor,
+        etapa_id: state.etapa_atual?.id,
+      });
+    }
   }, 350);
 
   refs.observacao.addEventListener("input", (e) => {
@@ -348,6 +354,18 @@ document.addEventListener("DOMContentLoaded", () => {
           fotos_obrigatorias_offline: state.fotos_obrigatorias_offline,
           pendente_sync: true,
         });
+
+        if (window.checkautoEnfileirarFotoOS) {
+          window.checkautoEnfileirarFotoOS(
+            osId,
+            {
+              dataUrl,
+              etapa_id: state.etapa_atual?.id,
+              tipo: "LIVRE",
+            },
+            { pendente_sync: true }
+          );
+        }
 
         renderFotosLivres();
         atualizarBotoes();

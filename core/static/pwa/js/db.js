@@ -2,10 +2,11 @@
 // Módulo central de IndexedDB para o PWA CheckAuto
 
 const CHECKAUTO_DB_NAME = "checkauto_pwa";
-const CHECKAUTO_DB_VERSION = 3;
+const CHECKAUTO_DB_VERSION = 4;
 const OS_STORE_NAME = "osPendentes";
 const VEICULOS_PRODUCAO_STORE = "veiculosEmProducao";
 const OS_PRODUCAO_STORE = "osProducao";
+const SYNC_QUEUE_STORE = "filaSync";
 
 // Abre (ou cria) o banco de dados
 function checkautoOpenDB() {
@@ -37,6 +38,12 @@ function checkautoOpenDB() {
       if (!db.objectStoreNames.contains(OS_PRODUCAO_STORE)) {
         db.createObjectStore(OS_PRODUCAO_STORE, {
           keyPath: "os_id",
+        });
+      }
+
+      if (!db.objectStoreNames.contains(SYNC_QUEUE_STORE)) {
+        db.createObjectStore(SYNC_QUEUE_STORE, {
+          keyPath: "id",
         });
       }
     };
@@ -99,6 +106,126 @@ window.checkautoBuscarOSPendentes = async function () {
     console.error("Falha em checkautoBuscarOSPendentes:", e);
     return [];
   }
+};
+
+function normalizarItemFila(item) {
+  return {
+    id: item.id || `sync-${Date.now()}-${Math.random()}`,
+    type: item.type,
+    os_id: item.os_id,
+    payload: item.payload || {},
+    created_at: item.created_at || new Date().toISOString(),
+    tries: typeof item.tries === "number" ? item.tries : 0,
+    last_error: item.last_error || null,
+  };
+}
+
+// Adiciona ou sobrescreve um item na fila de sincronização
+window.checkautoAdicionarFilaSync = async function (item) {
+  try {
+    const normalizado = normalizarItemFila(item);
+    const db = await checkautoOpenDB();
+
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(SYNC_QUEUE_STORE, "readwrite");
+      const store = tx.objectStore(SYNC_QUEUE_STORE);
+      store.put(normalizado);
+
+      tx.oncomplete = () => resolve(normalizado);
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    console.error("Falha em checkautoAdicionarFilaSync:", e);
+    return null;
+  }
+};
+
+// Lista todos os itens da fila (mais antigos primeiro)
+window.checkautoListarFilaSync = async function () {
+  try {
+    const db = await checkautoOpenDB();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(SYNC_QUEUE_STORE, "readonly");
+      const store = tx.objectStore(SYNC_QUEUE_STORE);
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        const itens = request.result || [];
+        itens.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        resolve(itens);
+      };
+
+      request.onerror = () => reject(request.error);
+    });
+  } catch (e) {
+    console.error("Falha em checkautoListarFilaSync:", e);
+    return [];
+  }
+};
+
+// Atualiza um item da fila
+window.checkautoAtualizarItemFilaSync = async function (id, patch) {
+  try {
+    const db = await checkautoOpenDB();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(SYNC_QUEUE_STORE, "readwrite");
+      const store = tx.objectStore(SYNC_QUEUE_STORE);
+      const request = store.get(id);
+
+      request.onsuccess = () => {
+        const atual = request.result;
+        if (!atual) {
+          resolve(null);
+          return;
+        }
+
+        const atualizado = { ...atual, ...patch };
+        store.put(atualizado);
+      };
+
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    console.error("Falha em checkautoAtualizarItemFilaSync:", e);
+    return null;
+  }
+};
+
+window.checkautoRegistrarErroFilaSync = async function (id, mensagem) {
+  const item = (await window.checkautoListarFilaSync()).find((i) => i.id === id);
+  if (!item) return null;
+
+  return window.checkautoAdicionarFilaSync({
+    ...item,
+    tries: (item.tries || 0) + 1,
+    last_error: mensagem || "Erro desconhecido",
+  });
+};
+
+// Remove um item da fila
+window.checkautoRemoverItemFilaSync = async function (id) {
+  try {
+    const db = await checkautoOpenDB();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(SYNC_QUEUE_STORE, "readwrite");
+      const store = tx.objectStore(SYNC_QUEUE_STORE);
+      store.delete(id);
+
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    console.error("Falha em checkautoRemoverItemFilaSync:", e);
+    return false;
+  }
+};
+
+// Remove itens que correspondem a um predicado simples
+window.checkautoRemoverDaFilaPorFiltro = async function (filterFn) {
+  const itens = await window.checkautoListarFilaSync();
+  const alvo = itens.filter((item) => filterFn(item));
+  await Promise.all(alvo.map((item) => window.checkautoRemoverItemFilaSync(item.id)));
 };
 
 // Salva a lista de veículos em produção (sobrescreve o store)
@@ -212,13 +339,12 @@ window.checkautoRemoverOperacaoProducao = async function (osId, operacaoId) {
 };
 
 window.checkautoEnfileirarPatchOS = async function (osId, payload, extra = {}) {
-  const novaOperacao = {
+  const operacao = await window.checkautoAdicionarFilaSync({
     id: `patch-${Date.now()}-${Math.random()}`,
     type: "PATCH_OS",
     os_id: osId,
     payload,
-    created_at: new Date().toISOString(),
-  };
+  });
 
   return checkautoUpsertOSProducao(osId, (item) => {
     const filaAtual = Array.isArray(item.fila_sync) ? item.fila_sync : [];
@@ -226,7 +352,53 @@ window.checkautoEnfileirarPatchOS = async function (osId, payload, extra = {}) {
     return {
       ...item,
       ...extra,
-      fila_sync: [...filaAtual, novaOperacao],
+      fila_sync: [...filaAtual.filter((op) => op.id !== operacao.id), operacao],
+      pendente_sync: true,
+    };
+  });
+};
+
+window.checkautoEnfileirarFotoOS = async function (osId, payload, extra = {}) {
+  const operacao = await window.checkautoAdicionarFilaSync({
+    id: `foto-${Date.now()}-${Math.random()}`,
+    type: "POST_FOTO_OS",
+    os_id: osId,
+    payload,
+  });
+
+  return checkautoUpsertOSProducao(osId, (item) => {
+    const filaAtual = Array.isArray(item.fila_sync) ? item.fila_sync : [];
+    const novaFila = [...filaAtual.filter((op) => op.id !== operacao.id), operacao];
+
+    return {
+      ...item,
+      ...extra,
+      fila_sync: novaFila,
+      pendente_sync: true,
+    };
+  });
+};
+
+window.checkautoEnfileirarObservacaoOS = async function (osId, payload, extra = {}) {
+  await window.checkautoRemoverDaFilaPorFiltro(
+    (item) => item.type === "UPSERT_OBSERVACAO" && item.os_id === osId
+  );
+
+  const operacao = await window.checkautoAdicionarFilaSync({
+    id: `obs-${Date.now()}-${Math.random()}`,
+    type: "UPSERT_OBSERVACAO",
+    os_id: osId,
+    payload,
+  });
+
+  return checkautoUpsertOSProducao(osId, (item) => {
+    const filaAtual = Array.isArray(item.fila_sync) ? item.fila_sync : [];
+    const semAntigas = filaAtual.filter((op) => op.type !== "UPSERT_OBSERVACAO");
+
+    return {
+      ...item,
+      ...extra,
+      fila_sync: [...semAntigas, operacao],
       pendente_sync: true,
     };
   });

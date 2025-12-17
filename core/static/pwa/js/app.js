@@ -26,13 +26,19 @@ async function checkautoAtualizarContadoresHome() {
 
   try {
     const pendentes = await window.checkautoBuscarOSPendentes();
+    const filaSync = window.checkautoListarFilaSync
+      ? await window.checkautoListarFilaSync()
+      : [];
     if (spanOs) {
-      spanOs.textContent = pendentes.length.toString();
+      const totalPendencias = pendentes.length + (filaSync?.length || 0);
+      spanOs.textContent = totalPendencias.toString();
     }
 
-    // Por enquanto não contamos fotos separadas
     if (spanFotos) {
-      spanFotos.textContent = "0";
+      const fotosPendentes = (filaSync || []).filter(
+        (item) => item.type === "POST_FOTO_OS"
+      );
+      spanFotos.textContent = fotosPendentes.length.toString();
     }
   } catch (e) {
     console.error("Erro ao atualizar contadores da Home:", e);

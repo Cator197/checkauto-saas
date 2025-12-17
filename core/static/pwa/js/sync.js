@@ -1,213 +1,221 @@
 // static/pwa/js/sync.js
 // Lógica da tela de sincronização do PWA
 
-document.addEventListener("DOMContentLoaded", async () => {
-  const btnSync = document.getElementById("btnSync");
-  const statusBox = document.getElementById("syncStatus");
+let syncEmAndamento = false;
+let statusPendencias = {};
+
+function formatarTipo(tipo) {
+  switch (tipo) {
+    case "PATCH_OS":
+      return "Alteração de etapa";
+    case "POST_FOTO_OS":
+      return "Upload de foto";
+    case "UPSERT_OBSERVACAO":
+      return "Observação da etapa";
+    default:
+      return tipo || "Desconhecido";
+  }
+}
+
+function statusInicial(item) {
+  if (item.last_error) {
+    return { texto: "erro", detalhe: item.last_error };
+  }
+  return { texto: "pendente", detalhe: null };
+}
+
+function dataUrlParaArquivo(dataUrl, filename) {
+  try {
+    const arr = dataUrl.split(",");
+    const mime = arr[0].match(/:(.*?);/)[1];
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+
+    return new File([u8arr], filename, { type: mime });
+  } catch (err) {
+    console.error("Erro ao converter dataURL para arquivo:", err);
+    return null;
+  }
+}
+
+async function sincronizarItem(item) {
+  try {
+    let resp = null;
+
+    if (item.type === "PATCH_OS") {
+      resp = await apiFetch(`/api/os/${item.os_id}/`, {
+        method: "PATCH",
+        body: item.payload,
+      });
+    } else if (item.type === "POST_FOTO_OS") {
+      const arquivo = dataUrlParaArquivo(
+        item.payload?.dataUrl,
+        `foto-os-${item.os_id}-${Date.now()}.jpg`
+      );
+
+      if (!arquivo) {
+        throw new Error("Foto inválida para upload");
+      }
+
+      const formData = new FormData();
+      formData.append("os", item.os_id);
+      if (item.payload?.etapa_id) {
+        formData.append("etapa", item.payload.etapa_id);
+      }
+      if (item.payload?.config_foto_id) {
+        formData.append("config_foto", item.payload.config_foto_id);
+      }
+      formData.append("arquivo", arquivo);
+
+      resp = await apiFetch(`/api/fotos-os/`, {
+        method: "POST",
+        body: formData,
+      });
+    } else if (item.type === "UPSERT_OBSERVACAO") {
+      resp = await apiFetch(`/api/os/${item.os_id}/observacoes/`, {
+        method: "POST",
+        body: item.payload,
+      });
+    }
+
+    if (!resp) {
+      throw new Error("Tipo de operação desconhecido");
+    }
+
+    if (!resp.ok) {
+      const texto = `Erro ${resp.status || "desconhecido"}`;
+      await window.checkautoRegistrarErroFilaSync(item.id, texto);
+      return { ok: false, mensagem: texto };
+    }
+
+    await window.checkautoRemoverItemFilaSync(item.id);
+    if (window.checkautoRemoverOperacaoProducao) {
+      await window.checkautoRemoverOperacaoProducao(item.os_id, item.id);
+    }
+
+    return { ok: true, mensagem: "Sincronizado" };
+  } catch (err) {
+    const mensagem = err?.message || "Falha ao sincronizar";
+    await window.checkautoRegistrarErroFilaSync(item.id, mensagem);
+    return { ok: false, mensagem };
+  }
+}
+
+function renderPendencias(lista) {
   const listaDiv = document.getElementById("listaPendentes");
   const spanQtd = document.getElementById("qtdPendentes");
 
-  async function carregarProducoesPendentes() {
-    if (!window.checkautoListarOSProducaoPendentes) return [];
-    return await window.checkautoListarOSProducaoPendentes();
+  spanQtd.textContent = (lista?.length || 0).toString();
+  listaDiv.innerHTML = "";
+
+  if (!lista || lista.length === 0) {
+    listaDiv.innerHTML = "<p>Nenhuma pendência encontrada.</p>";
+    return;
   }
 
-  async function processarFilaPatchOs(producoesPendentes) {
-    if (!Array.isArray(producoesPendentes) || producoesPendentes.length === 0) {
-      return { sucesso: 0, falha: 0 };
-    }
+  lista.forEach((item) => {
+    const status = statusPendencias[item.id] || statusInicial(item);
+    const div = document.createElement("div");
+    div.className = "os-item";
+    div.innerHTML = `
+      <div class="os-header">
+        <strong>${formatarTipo(item.type)}</strong>
+        <span class="status-badge status-${status.texto}">${
+          status.texto === "pendente"
+            ? "Pendente"
+            : status.texto === "processando"
+              ? "Processando"
+              : status.texto === "erro"
+                ? `Erro` + (status.detalhe ? ` (${status.detalhe})` : "")
+                : "Sincronizado"
+        }</span>
+      </div>
+      <div class="os-meta">OS ${item.os_id || "—"}</div>
+      <div class="os-meta">Criado em: ${
+        item.created_at ? new Date(item.created_at).toLocaleString() : "—"
+      }</div>
+      <div class="os-meta">Tentativas: ${item.tries || 0}</div>
+    `;
 
-    let sucesso = 0;
-    let falha = 0;
-
-    for (const prod of producoesPendentes) {
-      const fila = Array.isArray(prod.fila_sync) ? prod.fila_sync : [];
-
-      for (const op of fila) {
-        if (op.type !== "PATCH_OS") continue;
-
-        try {
-          const resp = await apiFetch(`/api/os/${op.os_id}/`, {
-            method: "PATCH",
-            body: op.payload,
-          });
-
-          if (resp.ok) {
-            sucesso += 1;
-
-            if (window.checkautoRemoverOperacaoProducao) {
-              await window.checkautoRemoverOperacaoProducao(op.os_id, op.id);
-            }
-
-            if (window.checkautoBuscarOSProducao && window.checkautoMarcarOSProducaoSincronizada) {
-              const atualizada = await window.checkautoBuscarOSProducao(op.os_id);
-              const filaRestante = Array.isArray(atualizada?.fila_sync)
-                ? atualizada.fila_sync.length
-                : 0;
-              const fotosPendentes =
-                (atualizada?.fotos_livres_offline?.length || 0) > 0 ||
-                (atualizada?.fotos_obrigatorias_offline?.length || 0) > 0;
-              const apenasFila =
-                !!atualizada?.pendente_sync &&
-                filaRestante === 0 &&
-                !atualizada?.avancar_solicitado &&
-                !fotosPendentes;
-
-              if (apenasFila) {
-                await window.checkautoMarcarOSProducaoSincronizada(op.os_id);
-              }
-            }
-          } else {
-            falha += 1;
-          }
-        } catch (err) {
-          console.error("Erro ao sincronizar PATCH_OS:", err);
-          falha += 1;
-        }
-      }
-    }
-
-    return { sucesso, falha };
-  }
-
-  async function atualizarVeiculosEmProducao() {
-    const token = getAccessToken();
-    if (!token) {
-      return;
-    }
-
-    try {
-      const response = await apiFetch("/api/pwa/veiculos-em-producao/");
-
-      if (!response.ok) {
-        return;
-      }
-
-      const data = await response.json();
-      if (window.checkautoSalvarVeiculosEmProducao) {
-        await window.checkautoSalvarVeiculosEmProducao(data);
-      }
-
-      if (window.checkautoSincronizarVeiculosEmProducao) {
-        window.checkautoSincronizarVeiculosEmProducao();
-      }
-    } catch (err) {
-      console.error("Erro ao atualizar veículos em produção após sync:", err);
-    }
-  }
-
-  async function carregarPendencias() {
-    const pendentes = await window.checkautoBuscarOSPendentes();
-    spanQtd.textContent = pendentes.length.toString();
-
-    listaDiv.innerHTML = "";
-
-    if (pendentes.length === 0) {
-      listaDiv.innerHTML = "<p>Nenhuma OS pendente encontrada.</p>";
-      return pendentes;
-    }
-
-    pendentes.forEach((os) => {
-      const div = document.createElement("div");
-      div.className = "os-item";
-      div.innerHTML = `
-        <strong>ID Offline:</strong> ${os.id}<br>
-        <strong>Placa:</strong> ${os.veiculo?.placa || "-"}<br>
-        <strong>Tipo:</strong> ${os.tipo}<br>
-        <strong>Criado em:</strong> ${new Date(os.criadoEm).toLocaleString()}
-      `;
-      listaDiv.appendChild(div);
-    });
-
-    return pendentes;
-  }
-
-  // Renderiza as pendências ao entrar na tela
-  let pendenciasAtuais = await carregarPendencias();
-  let producoesPendentes = await carregarProducoesPendentes();
-
-  btnSync.addEventListener("click", async () => {
-    statusBox.innerHTML = "⏳ Preparando sincronização…";
-
-    if (!navigator.onLine) {
-      statusBox.innerHTML = "❌ Sem internet. Conecte-se e tente novamente.";
-      return;
-    }
-
-    if (pendenciasAtuais.length === 0 && producoesPendentes.length === 0) {
-      statusBox.innerHTML = "Nenhuma pendência para sincronizar.";
-      return;
-    }
-
-    try {
-      statusBox.innerHTML = "📤 Enviando dados para o servidor…";
-
-      // 🔴 IMPORTANTE: pegar o token salvo e mandar no header
-      const token = getAccessToken();
-      console.log("Token usado na sincronização:", token); // debug
-
-      if (!token) {
-        statusBox.innerHTML = "❌ Você precisa estar logado para sincronizar (token não encontrado).";
-        redirectAfterLogout("pwa");
-        return;
-      }
-
-      const response = await apiFetch("/api/sync/", {
-        method: "POST",
-        body: {
-          osPendentes: pendenciasAtuais,
-          producaoPendencias: producoesPendentes,
-        },
-      });
-
-      if (!response.ok) {
-        statusBox.innerHTML = "❌ Erro no servidor ao sincronizar.";
-        console.log("Status da resposta /api/sync/:", response.status, response.statusText);
-        return;
-      }
-
-      const data = await response.json();
-      console.log("Resposta da API:", data);
-
-      const resultadoFila = await processarFilaPatchOs(producoesPendentes);
-
-      // Remover OS enviadas do IndexedDB
-      const db = await window.checkautoOpenDB();
-      await new Promise((resolve) => {
-        const tx = db.transaction("osPendentes", "readwrite");
-        const store = tx.objectStore("osPendentes");
-
-        pendenciasAtuais.forEach((item) => store.delete(item.id));
-
-        tx.oncomplete = resolve;
-      });
-
-      if (resultadoFila.falha > 0) {
-        statusBox.innerHTML = `⚠️ Sincronização parcial. ${resultadoFila.sucesso} etapas enviadas, ${resultadoFila.falha} pendentes.`;
-      } else {
-        statusBox.innerHTML = "✅ Sincronização concluída com sucesso!";
-      }
-      pendenciasAtuais = await carregarPendencias();
-      producoesPendentes = await carregarProducoesPendentes();
-
-      if (window.checkautoAtualizarContadoresHome) {
-        window.checkautoAtualizarContadoresHome();
-      }
-
-      await atualizarVeiculosEmProducao();
-
-      // Limpa flags de pendência local das telas de produção
-      if (Array.isArray(producoesPendentes)) {
-        for (const prod of producoesPendentes) {
-          if (window.checkautoMarcarOSProducaoSincronizada) {
-            await window.checkautoMarcarOSProducaoSincronizada(prod.os_id);
-          }
-        }
-      }
-
-    } catch (err) {
-      console.error("Erro na sincronização:", err);
-      statusBox.innerHTML = "❌ Falha na sincronização. Verifique sua conexão.";
-    }
+    listaDiv.appendChild(div);
   });
+}
+
+async function carregarPendencias() {
+  const fila = window.checkautoListarFilaSync
+    ? await window.checkautoListarFilaSync()
+    : [];
+  renderPendencias(fila);
+  return fila;
+}
+
+async function processarFilaSync() {
+  const statusBox = document.getElementById("syncStatus");
+
+  if (syncEmAndamento) {
+    statusBox.textContent = "Já existe uma sincronização em andamento.";
+    return;
+  }
+
+  if (!navigator.onLine) {
+    statusBox.textContent = "❌ Sem internet. Conecte-se e tente novamente.";
+    return;
+  }
+
+  syncEmAndamento = true;
+  statusBox.textContent = "📤 Sincronizando pendências…";
+
+  try {
+    const pendencias = await carregarPendencias();
+    if (!pendencias.length) {
+      statusBox.textContent = "Nenhuma pendência para sincronizar.";
+      syncEmAndamento = false;
+      return;
+    }
+
+    for (const item of pendencias) {
+      statusPendencias[item.id] = { texto: "processando" };
+      renderPendencias(pendencias);
+
+      const resultado = await sincronizarItem(item);
+      statusPendencias[item.id] = resultado.ok
+        ? { texto: "sincronizado" }
+        : { texto: "erro", detalhe: resultado.mensagem };
+
+      renderPendencias(await carregarPendencias());
+    }
+
+    statusBox.textContent = "✅ Fila de sincronização processada.";
+  } catch (err) {
+    console.error("Erro ao processar fila de sync:", err);
+    statusBox.textContent = "❌ Falha na sincronização. Verifique sua conexão.";
+  } finally {
+    syncEmAndamento = false;
+    renderPendencias(await carregarPendencias());
+    if (window.checkautoAtualizarContadoresHome) {
+      window.checkautoAtualizarContadoresHome();
+    }
+  }
+}
+
+window.addEventListener("online", () => {
+  carregarPendencias();
+  if (!syncEmAndamento) {
+    processarFilaSync();
+  }
 });
+
+document.addEventListener("DOMContentLoaded", async () => {
+  const btnSync = document.getElementById("btnSync");
+  await carregarPendencias();
+
+  btnSync.addEventListener("click", () => processarFilaSync());
+});
+
+// Expor para outros módulos se necessário
+window.processarFilaSync = processarFilaSync;
