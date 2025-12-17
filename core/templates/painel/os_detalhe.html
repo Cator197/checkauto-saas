@@ -61,6 +61,37 @@ Timeline do veículo e fotos por etapa.
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <!-- Etapa atual da OS -->
+    <section class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 lg:col-span-3">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
+            <div>
+                <h3 class="text-xs font-semibold text-slate-200 uppercase tracking-wide">Etapa atual</h3>
+                <p class="text-[11px] text-slate-400">Selecione manualmente a etapa desta OS.</p>
+            </div>
+            <div id="etapa-feedback" class="text-[11px] text-emerald-300 hidden"></div>
+        </div>
+
+        <div class="flex flex-col md:flex-row md:items-end gap-3 text-[11px] text-slate-200">
+            <label class="flex-1 flex flex-col gap-1">
+                <span class="text-slate-400 text-[10px] uppercase tracking-wide">Etapa</span>
+                <select id="selectEtapaAtual" class="bg-slate-950/70 border border-slate-800 rounded-lg px-2 py-2 text-[11px] focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                    <option value="">Carregando etapas...</option>
+                </select>
+            </label>
+            <div class="flex flex-wrap gap-2">
+                <button id="btnVoltarEtapa" type="button" class="px-3 py-1.5 text-[11px] font-semibold rounded-full bg-slate-800 hover:bg-slate-700 text-white transition">
+                    Voltar etapa
+                </button>
+                <button id="btnAvancarEtapa" type="button" class="px-3 py-1.5 text-[11px] font-semibold rounded-full bg-slate-800 hover:bg-slate-700 text-white transition">
+                    Avançar etapa
+                </button>
+                <button id="btnSalvarEtapa" type="button" class="px-3 py-1.5 text-[11px] font-semibold rounded-full bg-emerald-600 hover:bg-emerald-500 text-white transition">
+                    Salvar etapa
+                </button>
+            </div>
+        </div>
+    </section>
+
     <!-- Edição básica da OS -->
     <section class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 lg:col-span-3">
         <div class="flex items-center justify-between mb-3">
@@ -187,6 +218,13 @@ document.addEventListener("DOMContentLoaded", () => {
         const elEditStatus = document.getElementById("os-edit-status");
         const elEditSalvar = document.getElementById("os-edit-salvar");
 
+        // Controles de etapa
+        const elSelectEtapaAtual = document.getElementById("selectEtapaAtual");
+        const elBtnVoltarEtapa = document.getElementById("btnVoltarEtapa");
+        const elBtnAvancarEtapa = document.getElementById("btnAvancarEtapa");
+        const elBtnSalvarEtapa = document.getElementById("btnSalvarEtapa");
+        const elEtapaFeedback = document.getElementById("etapa-feedback");
+
         let osDadosAtuais = null;
         let fotosCache = [];
 
@@ -244,9 +282,103 @@ document.addEventListener("DOMContentLoaded", () => {
             elEditSalvar.textContent = ativo ? "Salvando..." : "Salvar alterações";
         }
 
+        function mostrarEtapaFeedback(texto, sucesso = true) {
+            if (!elEtapaFeedback) return;
+
+            elEtapaFeedback.textContent = texto;
+            elEtapaFeedback.classList.remove("hidden");
+            elEtapaFeedback.classList.toggle("text-emerald-300", sucesso);
+            elEtapaFeedback.classList.toggle("text-rose-300", !sucesso);
+        }
+
+        function limparEtapaFeedback() {
+            if (!elEtapaFeedback) return;
+            elEtapaFeedback.classList.add("hidden");
+            elEtapaFeedback.textContent = "";
+        }
+
+        function getEtapaAtualId(os) {
+            if (!os) return null;
+            const etapaAtual = os.etapa_atual;
+            if (etapaAtual && typeof etapaAtual === "object") {
+                return etapaAtual.id ?? null;
+            }
+            return etapaAtual ?? null;
+        }
+
+        function preencherSelectEtapas(etapas) {
+            if (!elSelectEtapaAtual) return;
+
+            elSelectEtapaAtual.innerHTML = "";
+
+            if (!etapas || !etapas.length) {
+                const opt = document.createElement("option");
+                opt.value = "";
+                opt.textContent = "Nenhuma etapa disponível";
+                elSelectEtapaAtual.appendChild(opt);
+                return;
+            }
+
+            etapas.forEach((etapa) => {
+                const opt = document.createElement("option");
+                opt.value = etapa.id;
+                opt.textContent = etapa.nome || `Etapa ${etapa.id}`;
+                elSelectEtapaAtual.appendChild(opt);
+            });
+        }
+
+        function selecionarEtapaAtual(os) {
+            if (!elSelectEtapaAtual) return;
+            const etapaId = getEtapaAtualId(os);
+            elSelectEtapaAtual.value = etapaId !== null && etapaId !== undefined ? String(etapaId) : "";
+        }
+
+        function moverEtapaAtual(offset) {
+            if (!elSelectEtapaAtual || !elSelectEtapaAtual.options.length) return;
+            const novoIndex = Math.min(
+                Math.max(elSelectEtapaAtual.selectedIndex + offset, 0),
+                elSelectEtapaAtual.options.length - 1,
+            );
+            elSelectEtapaAtual.selectedIndex = novoIndex;
+        }
+
+        async function carregarEtapas() {
+            try {
+                const resp = await apiFetch("/api/etapas/");
+                if (!resp.ok) {
+                    const texto = await resp.text();
+                    console.error("Erro ao carregar etapas:", resp.status, texto);
+                    preencherSelectEtapas([]);
+                    return [];
+                }
+
+                const data = await resp.json();
+                const lista = data && Array.isArray(data.results)
+                    ? data.results
+                    : Array.isArray(data)
+                        ? data
+                        : [];
+
+                lista.sort((a, b) => {
+                    const ordemA = a.ordem ?? a.id ?? 0;
+                    const ordemB = b.ordem ?? b.id ?? 0;
+                    if (ordemA !== ordemB) return ordemA - ordemB;
+                    return (a.id ?? 0) - (b.id ?? 0);
+                });
+
+                preencherSelectEtapas(lista);
+                return lista;
+            } catch (err) {
+                console.error("Erro inesperado ao carregar etapas:", err);
+                preencherSelectEtapas([]);
+                return [];
+            }
+        }
+
         async function carregarDados() {
             const osUrl = `/api/os/${osId}/`;
             const fotosUrl = `/api/fotos-os/?os=${osId}`;
+            const etapasPromise = carregarEtapas();
 
             try {
                 const [osResp, fotosResp] = await Promise.all([
@@ -266,6 +398,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 const osData = await osResp.json();
                 osDadosAtuais = osData;
+
+                await etapasPromise;
 
                 let fotosData = [];
                 let erroFotos = false;
@@ -293,6 +427,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 preencherTimeline(osData, fotosData);
                 preencherGaleria(fotosData, erroFotos);
                 preencherFormulario(osData);
+                selecionarEtapaAtual(osData);
             } catch (err) {
                 console.error("Erro inesperado ao carregar detalhes da OS:", err);
                 erroBox.classList.remove("hidden");
@@ -520,6 +655,41 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         }
 
+        async function salvarEtapaAtual() {
+            if (!elSelectEtapaAtual) return;
+
+            const valorSelecionado = elSelectEtapaAtual.value;
+            const etapaId = valorSelecionado === "" ? null : Number(valorSelecionado);
+
+            limparEtapaFeedback();
+
+            try {
+                const resp = await apiFetch(`/api/os/${osId}/`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ etapa_atual: etapaId }),
+                });
+
+                if (!resp.ok) {
+                    const texto = await resp.text();
+                    mostrarEtapaFeedback(`Erro ${resp.status}: ${texto}`, false);
+                    return;
+                }
+
+                const atualizado = await resp.json();
+                osDadosAtuais = atualizado;
+                preencherCabecalho(atualizado);
+                preencherFormulario(atualizado);
+                preencherTimeline(atualizado, fotosCache);
+                selecionarEtapaAtual(atualizado);
+
+                mostrarEtapaFeedback("Etapa atual atualizada", true);
+            } catch (err) {
+                console.error("Erro ao salvar etapa:", err);
+                mostrarEtapaFeedback("Erro ao salvar etapa. Tente novamente.", false);
+            }
+        }
+
         async function salvarEdicao() {
             const payload = {};
 
@@ -561,6 +731,22 @@ document.addEventListener("DOMContentLoaded", () => {
             } finally {
                 toggleSalvando(false);
             }
+        }
+
+        if (elBtnVoltarEtapa) {
+            elBtnVoltarEtapa.addEventListener("click", () => moverEtapaAtual(-1));
+        }
+
+        if (elBtnAvancarEtapa) {
+            elBtnAvancarEtapa.addEventListener("click", () => moverEtapaAtual(1));
+        }
+
+        if (elBtnSalvarEtapa) {
+            elBtnSalvarEtapa.addEventListener("click", salvarEtapaAtual);
+        }
+
+        if (elSelectEtapaAtual) {
+            elSelectEtapaAtual.addEventListener("change", limparEtapaFeedback);
         }
 
         elEditSalvar.addEventListener("click", salvarEdicao);
