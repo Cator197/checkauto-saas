@@ -123,6 +123,36 @@ Timeline do veículo e fotos por etapa.
         </div>
     </section>
 
+    <!-- Observações por etapa -->
+    <section class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 lg:col-span-3">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
+            <div>
+                <h3 class="text-xs font-semibold text-slate-200 uppercase tracking-wide">Observações por etapa</h3>
+                <p class="text-[11px] text-slate-400">Selecione uma etapa para visualizar ou salvar observações específicas.</p>
+            </div>
+            <div id="observacao-feedback" class="text-[11px] hidden"></div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] text-slate-200">
+            <label class="flex flex-col gap-1">
+                <span class="text-slate-400 text-[10px] uppercase tracking-wide">Etapa</span>
+                <select id="selectObservacaoEtapa" class="bg-slate-950/70 border border-slate-800 rounded-lg px-2 py-2 text-[11px] focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                    <option value="">Carregando etapas...</option>
+                </select>
+            </label>
+            <div class="md:col-span-2 flex flex-col gap-1">
+                <span class="text-slate-400 text-[10px] uppercase tracking-wide">Observação</span>
+                <textarea id="textareaObservacaoEtapa" rows="3" class="bg-slate-950/70 border border-slate-800 rounded-lg px-2 py-2 text-[11px] focus:outline-none focus:ring-1 focus:ring-indigo-500" placeholder="Digite a observação da etapa"></textarea>
+            </div>
+        </div>
+
+        <div class="flex justify-end mt-3">
+            <button id="btnSalvarObservacao" type="button" class="px-3 py-1.5 text-[11px] font-semibold rounded-full bg-indigo-600 hover:bg-indigo-500 text-white transition">
+                Salvar observação
+            </button>
+        </div>
+    </section>
+
     <!-- Timeline -->
     <section class="lg:col-span-1 bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
         <h3 class="text-xs font-semibold text-slate-200 uppercase tracking-wide mb-2">
@@ -224,9 +254,15 @@ document.addEventListener("DOMContentLoaded", () => {
         const elBtnAvancarEtapa = document.getElementById("btnAvancarEtapa");
         const elBtnSalvarEtapa = document.getElementById("btnSalvarEtapa");
         const elEtapaFeedback = document.getElementById("etapa-feedback");
+        const elSelectObservacaoEtapa = document.getElementById("selectObservacaoEtapa");
+        const elTextareaObservacaoEtapa = document.getElementById("textareaObservacaoEtapa");
+        const elBtnSalvarObservacao = document.getElementById("btnSalvarObservacao");
+        const elObservacaoFeedback = document.getElementById("observacao-feedback");
 
         let osDadosAtuais = null;
         let fotosCache = [];
+        let etapasCache = [];
+        let observacoesCache = [];
 
         function abrirModalImagem(url, altTexto) {
             if (!url) return;
@@ -297,6 +333,31 @@ document.addEventListener("DOMContentLoaded", () => {
             elEtapaFeedback.textContent = "";
         }
 
+        function mostrarObservacaoFeedback(texto, sucesso = true) {
+            if (!elObservacaoFeedback) return;
+
+            elObservacaoFeedback.textContent = texto;
+            elObservacaoFeedback.classList.remove("hidden");
+            elObservacaoFeedback.classList.toggle("text-emerald-300", sucesso);
+            elObservacaoFeedback.classList.toggle("text-rose-300", !sucesso);
+        }
+
+        function limparObservacaoFeedback() {
+            if (!elObservacaoFeedback) return;
+            elObservacaoFeedback.classList.add("hidden");
+            elObservacaoFeedback.textContent = "";
+        }
+
+        function obterIdEtapa(obs) {
+            if (!obs) return null;
+
+            if (typeof obs.etapa === "object" && obs.etapa !== null) {
+                return obs.etapa.id ?? null;
+            }
+
+            return obs.etapa ?? null;
+        }
+
         function getEtapaAtualId(os) {
             if (!os) return null;
             const etapaAtual = os.etapa_atual;
@@ -324,6 +385,27 @@ document.addEventListener("DOMContentLoaded", () => {
                 opt.value = etapa.id;
                 opt.textContent = etapa.nome || `Etapa ${etapa.id}`;
                 elSelectEtapaAtual.appendChild(opt);
+            });
+        }
+
+        function preencherSelectObservacaoEtapa(etapas) {
+            if (!elSelectObservacaoEtapa) return;
+
+            elSelectObservacaoEtapa.innerHTML = "";
+
+            if (!etapas || !etapas.length) {
+                const opt = document.createElement("option");
+                opt.value = "";
+                opt.textContent = "Nenhuma etapa disponível";
+                elSelectObservacaoEtapa.appendChild(opt);
+                return;
+            }
+
+            etapas.forEach((etapa) => {
+                const opt = document.createElement("option");
+                opt.value = etapa.id;
+                opt.textContent = etapa.nome || `Etapa ${etapa.id}`;
+                elSelectObservacaoEtapa.appendChild(opt);
             });
         }
 
@@ -366,11 +448,14 @@ document.addEventListener("DOMContentLoaded", () => {
                     return (a.id ?? 0) - (b.id ?? 0);
                 });
 
+                etapasCache = lista;
                 preencherSelectEtapas(lista);
+                preencherSelectObservacaoEtapa(lista);
                 return lista;
             } catch (err) {
                 console.error("Erro inesperado ao carregar etapas:", err);
                 preencherSelectEtapas([]);
+                preencherSelectObservacaoEtapa([]);
                 return [];
             }
         }
@@ -379,11 +464,13 @@ document.addEventListener("DOMContentLoaded", () => {
             const osUrl = `/api/os/${osId}/`;
             const fotosUrl = `/api/fotos-os/?os=${osId}`;
             const etapasPromise = carregarEtapas();
+            const observacoesUrl = `/api/os/${osId}/observacoes/`;
 
             try {
-                const [osResp, fotosResp] = await Promise.all([
+                const [osResp, fotosResp, observacoesResp] = await Promise.all([
                     apiFetch(osUrl),
                     apiFetch(fotosUrl),
+                    apiFetch(observacoesUrl),
                 ]);
 
                 if (osResp.status === 404) {
@@ -403,6 +490,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 let fotosData = [];
                 let erroFotos = false;
+                let observacoesData = [];
 
                 if (fotosResp.ok) {
                     try {
@@ -421,16 +509,76 @@ document.addEventListener("DOMContentLoaded", () => {
                     console.error("Erro ao buscar fotos da OS:", fotosResp.status, t);
                 }
 
+                if (observacoesResp.ok) {
+                    try {
+                        const raw = await observacoesResp.json();
+                        if (Array.isArray(raw.results)) {
+                            observacoesData = raw.results;
+                        } else if (Array.isArray(raw)) {
+                            observacoesData = raw;
+                        }
+                    } catch (e) {
+                        observacoesData = [];
+                    }
+                } else {
+                    const t = await observacoesResp.text();
+                    console.error(
+                        "Erro ao buscar observações da OS:",
+                        observacoesResp.status,
+                        t,
+                    );
+                }
+
                 fotosCache = fotosData;
+                observacoesCache = observacoesData;
 
                 preencherCabecalho(osData);
                 preencherTimeline(osData, fotosData);
                 preencherGaleria(fotosData, erroFotos);
                 preencherFormulario(osData);
                 selecionarEtapaAtual(osData);
+                selecionarEtapaObservacao(osData);
             } catch (err) {
                 console.error("Erro inesperado ao carregar detalhes da OS:", err);
                 erroBox.classList.remove("hidden");
+            }
+        }
+
+        function selecionarEtapaObservacao(os) {
+            if (!elSelectObservacaoEtapa) return;
+
+            let etapaId = elSelectObservacaoEtapa.value;
+
+            if (!etapaId) {
+                const etapaAtual = getEtapaAtualId(os);
+                const primeiraComObs = observacoesCache.length ? obterIdEtapa(observacoesCache[0]) : null;
+                const primeiraEtapa = etapasCache.length ? etapasCache[0].id : null;
+
+                etapaId = etapaAtual ?? primeiraComObs ?? primeiraEtapa ?? "";
+            }
+
+            elSelectObservacaoEtapa.value = etapaId ? String(etapaId) : "";
+            atualizarTextareaObservacao();
+        }
+
+        function atualizarTextareaObservacao() {
+            if (!elTextareaObservacaoEtapa || !elSelectObservacaoEtapa) return;
+
+            const etapaSelecionada = elSelectObservacaoEtapa.value;
+            const etapaId = etapaSelecionada === "" ? null : Number(etapaSelecionada);
+
+            const existente = observacoesCache.find((obs) => Number(obterIdEtapa(obs)) === etapaId);
+            elTextareaObservacaoEtapa.value = existente ? existente.texto || "" : "";
+        }
+
+        function atualizarObservacoesCache(item) {
+            const etapaId = Number(obterIdEtapa(item));
+            const idx = observacoesCache.findIndex((obs) => Number(obterIdEtapa(obs)) === etapaId);
+
+            if (idx >= 0) {
+                observacoesCache[idx] = item;
+            } else {
+                observacoesCache.push(item);
             }
         }
 
@@ -690,6 +838,47 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
 
+        async function salvarObservacaoEtapa() {
+            if (!elSelectObservacaoEtapa) return;
+
+            const etapaSelecionada = elSelectObservacaoEtapa.value;
+            const etapaId = etapaSelecionada === "" ? null : Number(etapaSelecionada);
+
+            if (!etapaId) {
+                mostrarObservacaoFeedback("Selecione uma etapa", false);
+                return;
+            }
+
+            limparObservacaoFeedback();
+
+            const payload = {
+                etapa: etapaId,
+                texto: elTextareaObservacaoEtapa ? elTextareaObservacaoEtapa.value : "",
+            };
+
+            try {
+                const resp = await apiFetch(`/api/os/${osId}/observacoes/`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                });
+
+                if (!resp.ok) {
+                    const texto = await resp.text();
+                    mostrarObservacaoFeedback(`Erro ${resp.status}: ${texto}`, false);
+                    return;
+                }
+
+                const salvo = await resp.json();
+                atualizarObservacoesCache(salvo);
+                atualizarTextareaObservacao();
+                mostrarObservacaoFeedback("Observação salva", true);
+            } catch (err) {
+                console.error("Erro ao salvar observação:", err);
+                mostrarObservacaoFeedback("Erro ao salvar observação. Tente novamente.", false);
+            }
+        }
+
         async function salvarEdicao() {
             const payload = {};
 
@@ -747,6 +936,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (elSelectEtapaAtual) {
             elSelectEtapaAtual.addEventListener("change", limparEtapaFeedback);
+        }
+
+        if (elBtnSalvarObservacao) {
+            elBtnSalvarObservacao.addEventListener("click", salvarObservacaoEtapa);
+        }
+
+        if (elSelectObservacaoEtapa) {
+            elSelectObservacaoEtapa.addEventListener("change", () => {
+                limparObservacaoFeedback();
+                atualizarTextareaObservacao();
+            });
         }
 
         elEditSalvar.addEventListener("click", salvarEdicao);

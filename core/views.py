@@ -353,6 +353,115 @@ class OSViewSet(viewsets.ModelViewSet):
 
         return super().destroy(request, *args, **kwargs)
 
+    def _get_usuario_oficina(self, os_obj):
+        return UsuarioOficina.objects.filter(
+            user=self.request.user, oficina=os_obj.oficina, ativo=True
+        ).first()
+
+    def _salvar_observacao_etapa(self, *, os_obj, etapa, instance=None, payload=None, partial=False):
+        serializer = ObservacaoEtapaOSSerializer(
+            instance=instance,
+            data=payload,
+            partial=partial,
+            context={"request": self.request, "os": os_obj},
+        )
+        serializer.is_valid(raise_exception=True)
+
+        usuario_oficina = self._get_usuario_oficina(os_obj)
+        criado_por = instance.criado_por if instance else usuario_oficina
+
+        return serializer.save(
+            os=os_obj,
+            etapa=etapa,
+            criado_por=criado_por,
+        )
+
+    @action(detail=True, methods=["get"], url_path="observacoes")
+    def listar_observacoes(self, request, pk=None):
+        os_obj = self.get_object()
+
+        observacoes = (
+            ObservacaoEtapaOS.objects.filter(os=os_obj)
+            .select_related("etapa")
+            .order_by("etapa__ordem", "etapa_id")
+        )
+
+        serializer = ObservacaoEtapaOSSerializer(
+            observacoes, many=True, context={"request": request, "os": os_obj}
+        )
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="observacoes")
+    def criar_ou_atualizar_observacao(self, request, pk=None):
+        os_obj = self.get_object()
+
+        etapa_id = request.data.get("etapa")
+        if not etapa_id:
+            return Response(
+                {"detail": "Campo 'etapa' é obrigatório."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            etapa = Etapa.objects.get(id=etapa_id, oficina=os_obj.oficina)
+        except Etapa.DoesNotExist:
+            return Response(
+                {"detail": "Etapa não encontrada para esta oficina."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        payload = {
+            "etapa": etapa.id,
+            "texto": request.data.get("texto", ""),
+        }
+
+        instance = ObservacaoEtapaOS.objects.filter(os=os_obj, etapa=etapa).first()
+
+        observacao = self._salvar_observacao_etapa(
+            os_obj=os_obj,
+            etapa=etapa,
+            instance=instance,
+            payload=payload,
+            partial=instance is not None,
+        )
+
+        return Response(
+            ObservacaoEtapaOSSerializer(
+                observacao, context={"request": request, "os": os_obj}
+            ).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["patch"], url_path=r"observacoes/(?P<etapa_id>[^/.]+)")
+    def atualizar_observacao(self, request, pk=None, etapa_id=None):
+        os_obj = self.get_object()
+
+        try:
+            instance = ObservacaoEtapaOS.objects.select_related("etapa").get(
+                os=os_obj, etapa_id=etapa_id, etapa__oficina=os_obj.oficina
+            )
+        except ObservacaoEtapaOS.DoesNotExist:
+            return Response(
+                {"detail": "Observação não encontrada para esta OS/etapa."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        observacao = self._salvar_observacao_etapa(
+            os_obj=os_obj,
+            etapa=instance.etapa,
+            instance=instance,
+            payload=request.data,
+            partial=True,
+        )
+
+        return Response(
+            ObservacaoEtapaOSSerializer(
+                observacao, context={"request": request, "os": os_obj}
+            ).data,
+            status=status.HTTP_200_OK,
+        )
+
     @action(detail=True, methods=["put"], url_path=r"etapas/(?P<etapa_id>[^/.]+)/observacao")
     def upsert_observacao_etapa(self, request, pk=None, etapa_id=None):
         os_obj = self.get_object()
@@ -373,7 +482,7 @@ class OSViewSet(viewsets.ModelViewSet):
             instance=observacao,
             data=payload,
             partial=True,
-            context={"request": request},
+            context={"request": request, "os": os_obj},
         )
         serializer.is_valid(raise_exception=True)
 
