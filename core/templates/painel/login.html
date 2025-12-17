@@ -135,10 +135,8 @@
         const data = await resp.json();
 
         // Salva tokens e dados do usuário para o painel
-        // Salva tokens e dados do usuário para o painel
         localStorage.setItem("checkauto_access", data.access);
         localStorage.setItem("checkauto_refresh", data.refresh);
-        localStorage.setItem("checkauto_token", data.access); // <--- COMPATIBILIDADE COM JS ANTIGO
         localStorage.setItem("checkauto_user", JSON.stringify(data.user));
 
         // Redireciona para o dashboard do painel
