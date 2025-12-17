@@ -2,7 +2,7 @@
 // Tela de veículos em produção: busca online + cache IndexedDB
 
 document.addEventListener("DOMContentLoaded", () => {
-  const TOKEN_KEY = "checkauto_token";
+  const TOKEN_KEY = "checkauto_access";
   const isDev =
     window.location.hostname === "localhost" ||
     window.location.hostname === "127.0.0.1";
@@ -67,10 +67,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function buscarOnline() {
-    const token = window.localStorage.getItem(TOKEN_KEY);
+    const token = getAccessToken();
     if (!token) {
       mostrarMensagem("Token não encontrado. Faça login para carregar os veículos.");
       logDev("Token ausente no storage (localStorage)");
+      redirectAfterLogout("pwa");
       return;
     }
 
@@ -89,12 +90,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       mostrarMensagem("Buscando veículos em produção…");
-      const response = await fetch("/api/pwa/veiculos-em-producao/", {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await apiFetch("/api/pwa/veiculos-em-producao/");
 
       if (!response.ok) {
         if (response.status === 401) {

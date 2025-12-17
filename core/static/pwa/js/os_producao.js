@@ -27,7 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   function obterPapelDoToken() {
-    const token = localStorage.getItem("checkauto_token");
+    const token = getAccessToken();
 
     if (!token || token.split(".").length < 2) {
       return null;
@@ -322,26 +322,22 @@ document.addEventListener("DOMContentLoaded", () => {
     return false;
   }
 
-  async function buscarConfigsDaEtapa(etapaId, token) {
+  async function buscarConfigsDaEtapa(etapaId) {
     const url = new URL(window.location.origin + "/api/config-fotos/");
     url.searchParams.set("etapa", etapaId);
 
-    const resp = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const resp = await apiFetch(url.toString());
 
     if (!resp.ok) return [];
     const data = await resp.json();
     return (data || []).filter((c) => c.obrigatoria);
   }
 
-  async function buscarFotosDaEtapa(osId, etapaId, token) {
+  async function buscarFotosDaEtapa(osId, etapaId) {
     const url = new URL(window.location.origin + "/api/fotos-os/");
     url.searchParams.set("os", osId);
 
-    const resp = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const resp = await apiFetch(url.toString());
 
     if (!resp.ok) return [];
     const data = await resp.json();
@@ -349,17 +345,16 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   async function buscarOnline() {
-    const token = localStorage.getItem("checkauto_token");
+    const token = getAccessToken();
     if (!token) {
       setStatus("Token não encontrado. Exibindo dados locais.");
+      redirectAfterLogout("pwa");
       return;
     }
 
     try {
       setStatus("Atualizando do servidor…");
-      const osResp = await fetch(`/api/os/${osId}/`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const osResp = await apiFetch(`/api/os/${osId}/`);
 
       if (!osResp.ok) {
         setStatus("Não foi possível atualizar agora.");
@@ -374,8 +369,8 @@ document.addEventListener("DOMContentLoaded", () => {
       let fotosNaEtapa = [];
 
       if (etapaId) {
-        configsObrigatorias = await buscarConfigsDaEtapa(etapaId, token);
-        fotosNaEtapa = await buscarFotosDaEtapa(osId, etapaId, token);
+        configsObrigatorias = await buscarConfigsDaEtapa(etapaId);
+        fotosNaEtapa = await buscarFotosDaEtapa(osId, etapaId);
       }
 
       configsObrigatorias = ordenarObrigatoriasLista(configsObrigatorias);

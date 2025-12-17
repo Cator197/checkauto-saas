@@ -13,17 +13,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   async function atualizarVeiculosEmProducao() {
-    const token = localStorage.getItem("checkauto_token");
+    const token = getAccessToken();
     if (!token) {
       return;
     }
 
     try {
-      const response = await fetch("/api/pwa/veiculos-em-producao/", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await apiFetch("/api/pwa/veiculos-em-producao/");
 
       if (!response.ok) {
         return;
@@ -89,24 +85,21 @@ document.addEventListener("DOMContentLoaded", async () => {
       statusBox.innerHTML = "📤 Enviando dados para o servidor…";
 
       // 🔴 IMPORTANTE: pegar o token salvo e mandar no header
-      const token = localStorage.getItem("checkauto_token");
+      const token = getAccessToken();
       console.log("Token usado na sincronização:", token); // debug
 
       if (!token) {
         statusBox.innerHTML = "❌ Você precisa estar logado para sincronizar (token não encontrado).";
+        redirectAfterLogout("pwa");
         return;
       }
 
-      const response = await fetch("/api/sync/", {
+      const response = await apiFetch("/api/sync/", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({
+        body: {
           osPendentes: pendenciasAtuais,
           producaoPendencias: producoesPendentes,
-        }),
+        },
       });
 
       if (!response.ok) {

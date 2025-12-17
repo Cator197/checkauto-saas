@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -5,7 +6,7 @@
   <title>CheckAuto - Check-in Completo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <link rel="manifest" href="/static/pwa/manifest.json">
+  <link rel="manifest" href="{% static 'pwa/manifest.json' %}">
   <meta name="theme-color" content="#0f172a">
 
   <style>
@@ -224,10 +225,12 @@
     <div id="msgRetorno" class="msg" style="display:none;"></div>
   </form>
 
-  <script src="/static/pwa/js/db.js"></script>
-  <script src="/static/pwa/js/app.js"></script>
-  <script src="/static/pwa/js/fotos_module.js"></script>
-  <script src="/static/pwa/js/checkin_completo.js"></script>
+  <script src="{% static 'shared/api.js' %}"></script>
+  <script src="{% static 'pwa/js/api.js' %}"></script>
+  <script src="{% static 'pwa/js/db.js' %}"></script>
+  <script src="{% static 'pwa/js/app.js' %}"></script>
+  <script src="{% static 'pwa/js/fotos_module.js' %}"></script>
+  <script src="{% static 'pwa/js/checkin_completo.js' %}"></script>
 </body>
 </html>
 
