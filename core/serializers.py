@@ -14,6 +14,17 @@ from .models import (
 )
 
 
+DATETIME_INPUT_FORMATS = [
+    "%Y-%m-%d",
+    "%Y-%m-%dT%H:%M:%S.%fZ",
+    "%Y-%m-%dT%H:%M:%SZ",
+    "%Y-%m-%dT%H:%M:%S.%f%z",
+    "%Y-%m-%dT%H:%M:%S%z",
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%d %H:%M:%S",
+]
+
+
 class OficinaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Oficina
@@ -117,6 +128,15 @@ class OSSerializer(serializers.ModelSerializer):
     etapa_atual_nome = serializers.CharField(source='etapa_atual.nome', read_only=True, default=None)
     observacoes_etapas = serializers.SerializerMethodField()
     observacao_etapa_atual = serializers.SerializerMethodField()
+    data_entrada = serializers.DateTimeField(
+        required=False, allow_null=True, input_formats=DATETIME_INPUT_FORMATS
+    )
+    data_prevista_entrega = serializers.DateTimeField(
+        required=False, allow_null=True, input_formats=DATETIME_INPUT_FORMATS
+    )
+    data_saida = serializers.DateTimeField(
+        required=False, allow_null=True, input_formats=DATETIME_INPUT_FORMATS
+    )
 
     class Meta:
         model = OS
