@@ -305,7 +305,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (window.checkautoEnfileirarObservacaoOS) {
       window.checkautoEnfileirarObservacaoOS(osId, {
         texto: valor,
-        etapa_id: state.etapa_atual?.id,
+        etapa: state.etapa_atual?.id,
       });
     }
   }, 350);

@@ -380,6 +380,20 @@ window.checkautoEnfileirarFotoOS = async function (osId, payload, extra = {}) {
 };
 
 window.checkautoEnfileirarObservacaoOS = async function (osId, payload, extra = {}) {
+  const payloadNormalizado = { ...(payload || {}) };
+
+  if (payloadNormalizado.etapa_id && !payloadNormalizado.etapa) {
+    payloadNormalizado.etapa = payloadNormalizado.etapa_id;
+    delete payloadNormalizado.etapa_id;
+  }
+
+  if (payloadNormalizado.etapa !== undefined) {
+    const etapaNumero = parseInt(payloadNormalizado.etapa, 10);
+    if (!Number.isNaN(etapaNumero)) {
+      payloadNormalizado.etapa = etapaNumero;
+    }
+  }
+
   await window.checkautoRemoverDaFilaPorFiltro(
     (item) => item.type === "UPSERT_OBSERVACAO" && item.os_id === osId
   );
@@ -388,7 +402,7 @@ window.checkautoEnfileirarObservacaoOS = async function (osId, payload, extra = 
     id: `obs-${Date.now()}-${Math.random()}`,
     type: "UPSERT_OBSERVACAO",
     os_id: osId,
-    payload,
+    payload: payloadNormalizado,
   });
 
   return checkautoUpsertOSProducao(osId, (item) => {
