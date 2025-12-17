@@ -1,87 +1,17 @@
-// ==== Helpers de autenticação para o painel ====
-
-function redirectToLogin() {
-    // limpa tokens e usuário e manda para a tela de login
-    localStorage.removeItem("checkauto_access");
-    localStorage.removeItem("checkauto_refresh");
-    localStorage.removeItem("checkauto_user");
-    window.location.href = "/painel/login/";
-}
-
-async function refreshAccessToken() {
-    const refresh = localStorage.getItem("checkauto_refresh");
-    if (!refresh) {
-        redirectToLogin();
-        return null;
-    }
-
-    try {
-        const resp = await fetch("/api/refresh/", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ refresh }),
-        });
-
-        if (!resp.ok) {
-            redirectToLogin();
-            return null;
-        }
-
-        const data = await resp.json();
-        if (!data.access) {
-            redirectToLogin();
-            return null;
-        }
-
-        localStorage.setItem("checkauto_access", data.access);
-        return data.access;
-    } catch (e) {
-        console.error("Erro ao renovar token:", e);
-        redirectToLogin();
-        return null;
-    }
-}
-
-async function apiFetch(path, options = {}) {
-    let access = localStorage.getItem("checkauto_access");
-    if (!access) {
-        redirectToLogin();
-        return null;
-    }
-
-    const headers = Object.assign({}, options.headers || {}, {
-        "Authorization": `Bearer ${access}`,
-    });
-
-    const init = Object.assign({}, options, { headers });
-
-    // Sempre prefixamos com /api
-    let resp = await fetch(`/api${path}`, init);
-
-    // Se deu 401, tentamos renovar o token e refazer a requisição
-    if (resp.status === 401) {
-        access = await refreshAccessToken();
-        if (!access) {
-            return null;
-        }
-
-        const retryHeaders = Object.assign({}, options.headers || {}, {
-            "Authorization": `Bearer ${access}`,
-        });
-
-        resp = await fetch(`/api${path}`, Object.assign({}, options, { headers: retryHeaders }));
-    }
-
-    return resp;
-}
-
 // ==== Lógica específica do painel / dashboard ====
+// IMPORTANTE:
+// Este arquivo NÃO deve conter helpers de auth/apiFetch.
+// Os helpers oficiais estão em:
+// - /static/painel/js/api.js  (apiFetch + refresh/retry)
+// - /static/painel/js/auth.js (verificarAutenticacao + logout/redirect)
+//
+// Isso evita duplicação e o bug de /api/api/*.
 
 async function carregarDashboardResumo() {
     try {
+        // apiFetch deve vir do api.js (não redefinir aqui)
         const resp = await apiFetch("/dashboard-resumo/");
+
         if (!resp) {
             console.error("Resposta vazia ao buscar dashboard-resumo");
             return;
@@ -107,9 +37,8 @@ async function carregarDashboardResumo() {
             elCheckinsHoje.textContent = data.checkins_hoje ?? 0;
         }
 
-        // Se você tiver uma área de etapas, pode tratar aqui futuramente:
-        // data.etapas é um array com {id, nome, total_os}
-        // por enquanto deixo só logado no console
+        // Etapas em destaque (se você for implementar depois)
+        // data.etapas => array com {id, nome, total_os}
     } catch (err) {
         console.error("Erro ao buscar dashboard-resumo:", err);
     }
@@ -117,7 +46,17 @@ async function carregarDashboardResumo() {
 
 // ==== Código original de sidebar + menu ativo ====
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+    // 1) Verificar autenticação (auth.js)
+    // Se não estiver logado, auth.js deve redirecionar e retornamos.
+    if (typeof verificarAutenticacao === "function") {
+        const ok = await verificarAutenticacao();
+        if (!ok) return;
+    } else {
+        console.warn("verificarAutenticacao() não encontrado. Verifique se auth.js foi carregado antes de painel.js.");
+        // Se não tiver o helper, ainda tentamos seguir (mas pode falhar)
+    }
+
     const sidebar = document.getElementById("sidebar");
     const btnToggleSidebar = document.getElementById("btnToggleSidebar");
     const menuLinks = document.querySelectorAll(".menu-link");
@@ -136,28 +75,33 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Destacar link ativo (por enquanto só pelo pathname simples)
+    // Destacar link ativo
     const path = window.location.pathname;
 
     menuLinks.forEach(link => {
         const menu = link.getAttribute("data-menu");
 
-        // por enquanto vamos só marcar o dashboard quando estiver em /painel/
-        if (menu === "dashboard" && path.startsWith("/painel")) {
+        // Dashboard
+        if (menu === "dashboard" && (path === "/painel/" || path === "/painel")) {
             link.classList.add("bg-slate-800/90", "text-white");
         }
 
-        // no futuro podemos checar outras rotas:
+        // OS
         if (menu === "os" && path.startsWith("/painel/os")) {
             link.classList.add("bg-slate-800/90", "text-white");
         }
 
+        // Etapas
         if (menu === "etapas" && path.startsWith("/painel/etapas")) {
             link.classList.add("bg-slate-800/90", "text-white");
         }
-        if (menu === "fotos" && path.startsWith("/painel/fotos")) {
+
+        // Configurar fotos (ajuste para sua rota real; antes estava /painel/fotos)
+        if (menu === "fotos" && (path.startsWith("/painel/fotos") || path.startsWith("/painel/config-fotos") || path.startsWith("/painel/config_fotos"))) {
             link.classList.add("bg-slate-800/90", "text-white");
         }
+
+        // Usuários
         if (menu === "usuarios" && path.startsWith("/painel/usuarios")) {
             link.classList.add("bg-slate-800/90", "text-white");
         }
@@ -165,6 +109,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Só carrega o resumo do dashboard na tela principal do painel
     if (path === "/painel/" || path === "/painel") {
-        carregarDashboardResumo();
+        await carregarDashboardResumo();
     }
 });

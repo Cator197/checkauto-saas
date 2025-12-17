@@ -25,6 +25,7 @@ from .models import (
     OS,
     FotoOS,
 )
+
 from .utils import get_oficina_do_usuario, get_papel_do_usuario
 from core.drive_service import upload_foto_os_drive
 from core.drive_service import upload_foto_os_drive
