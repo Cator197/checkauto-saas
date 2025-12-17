@@ -1,4 +1,5 @@
 {% extends "painel/base.html" %}
+{% load static %}
 
 {% block title %}CheckAuto - Dashboard{% endblock %}
 
@@ -91,48 +92,33 @@ Resumo das ordens de serviço e etapas do dia.
     </div>
 
     <!-- Script específico do dashboard -->
+    <script src="{% static 'painel/js/auth.js' %}"></script>
+    <script src="{% static 'painel/js/api.js' %}"></script>
     <script>
         document.addEventListener("DOMContentLoaded", () => {
-            // 🔑 Ajuste o nome da chave abaixo para o mesmo usado pelo seu PWA
-            // Ex: "accessToken", "jwt_token", "checkauto_token", etc.
-            const TOKEN_KEY = "checkauto_token";
-
-            const token = window.localStorage.getItem(TOKEN_KEY);
-
             const spanOsAbertas = document.getElementById("card-os-abertas");
             const spanCheckinsHoje = document.getElementById("card-checkins-hoje");
             const containerEtapas = document.getElementById("etapas-cards-container");
             const mensagemVazio = document.getElementById("etapas-vazio");
             const alertaToken = document.getElementById("dashboard-alerta-token");
 
-            if (!token) {
-                alertaToken.classList.remove("hidden");
-                spanOsAbertas.textContent = "--";
-                spanCheckinsHoje.textContent = "--";
-                return;
-            }
+            const carregarDashboard = async () => {
+                const autenticado = await verificarAutenticacao();
+                if (!autenticado) return;
 
-            fetch("/api/dashboard-resumo/", {
-                method: "GET",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
-                }
-            })
-                .then(async (response) => {
+                try {
+                    const response = await apiFetch("/api/dashboard-resumo/");
+
                     if (!response.ok) {
                         const text = await response.text();
                         console.error("Erro ao buscar dashboard-resumo:", response.status, text);
                         alertaToken.classList.remove("hidden");
                         alertaToken.textContent = "⚠ Erro ao consultar a API do dashboard. Verifique se o token ainda é válido.";
-                        return null;
+                        return;
                     }
-                    return response.json();
-                })
-                .then((data) => {
-                    if (!data) return;
 
-                    // Atualiza cards principais
+                    const data = await response.json();
+
                     if (typeof data.os_abertas === "number") {
                         spanOsAbertas.textContent = data.os_abertas;
                     }
@@ -140,7 +126,6 @@ Resumo das ordens de serviço e etapas do dia.
                         spanCheckinsHoje.textContent = data.checkins_hoje;
                     }
 
-                    // Limpa container de etapas
                     containerEtapas.innerHTML = "";
 
                     if (!data.etapas || data.etapas.length === 0) {
@@ -172,12 +157,14 @@ Resumo das ordens de serviço e etapas do dia.
 
                         containerEtapas.appendChild(card);
                     });
-                })
-                .catch((error) => {
+                } catch (error) {
                     console.error("Erro inesperado ao carregar dashboard-resumo:", error);
                     alertaToken.classList.remove("hidden");
                     alertaToken.textContent = "⚠ Erro inesperado ao carregar os dados do dashboard. Veja o console para mais detalhes.";
-                });
+                }
+            };
+
+            carregarDashboard();
         });
     </script>
 {% endblock %}
