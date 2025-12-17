@@ -1087,7 +1087,7 @@ class GoogleDriveOAuth2CallbackView(APIView):
         if error:
             # Erro vindo do Google (usuário cancelou, etc.)
             return redirect(
-                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracoes/drive/')}"
+                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracao_drive/')}"
                 f"?status=error&msg={error}"
             )
 
@@ -1096,7 +1096,7 @@ class GoogleDriveOAuth2CallbackView(APIView):
 
         if not code or not state:
             return redirect(
-                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracoes/drive/')}"
+                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracao_drive/')}"
                 "?status=error&msg=missing_code_or_state"
             )
 
@@ -1107,7 +1107,7 @@ class GoogleDriveOAuth2CallbackView(APIView):
 
         if not oficina_id:
             return redirect(
-                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracoes/drive/')}"
+                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracao_drive/')}"
                 "?status=error&msg=invalid_state"
             )
 
@@ -1115,7 +1115,7 @@ class GoogleDriveOAuth2CallbackView(APIView):
             oficina = Oficina.objects.get(id=oficina_id)
         except Oficina.DoesNotExist:
             return redirect(
-                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracoes/drive/')}"
+                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracao_drive/')}"
                 "?status=error&msg=oficina_not_found"
             )
 
@@ -1130,7 +1130,7 @@ class GoogleDriveOAuth2CallbackView(APIView):
             flow.fetch_token(code=code)
         except Exception:
             return redirect(
-                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracoes/drive/')}"
+                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracao_drive/')}"
                 "?status=error&msg=token_fetch_failed"
             )
 
@@ -1188,15 +1188,14 @@ class GoogleDriveOAuth2CallbackView(APIView):
         redirect_url = getattr(
             settings,
             "GOOGLE_DRIVE_POST_CONNECT_REDIRECT",
-            "/painel/integracoes/drive/",
+            "/painel/integracao_drive/",
         )
 
         return redirect(f"{redirect_url}?status=ok")
 
 # core/views.py
 from django.shortcuts import render
-from django.contrib.auth.decorators import login_required
 
-@login_required
+
 def integracao_drive_view(request):
     return render(request, "integracao_drive.html")

@@ -28,7 +28,7 @@ GOOGLE_DRIVE_REDIRECT_URI = os.getenv(
     "http://localhost:8000/api/google/oauth2/callback/"
 )
 
-GOOGLE_DRIVE_POST_CONNECT_REDIRECT = "/painel/integracoes/drive/"
+GOOGLE_DRIVE_POST_CONNECT_REDIRECT = "/painel/integracao_drive/"
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 

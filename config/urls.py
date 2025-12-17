@@ -23,10 +23,8 @@ from django.views.generic import TemplateView
 from core.authentication import CustomTokenObtainPairView
 from core.views import integracao_drive_view
 
-from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
-    TokenRefreshView,
-)
+from rest_framework_simplejwt.views import TokenRefreshView
+
 
 def pwa_home(request):
     return render(request, "pwa/index.html")
@@ -52,6 +50,33 @@ def pwa_os_producao(request, os_id):
     return render(request, "pwa/os_producao.html", {"os_id": os_id})
 
 
+def painel_dashboard(request):
+    return render(request, "painel/dashboard.html")
+
+
+def painel_os_lista(request):
+    return render(request, "painel/os_lista.html")
+
+
+def painel_os_detalhe(request, os_id):
+    return render(request, "painel/os_detalhe.html", {"os_id": os_id})
+
+
+def painel_etapas(request):
+    return render(request, "painel/etapas.html")
+
+
+def painel_config_fotos(request):
+    return render(request, "painel/config_fotos.html")
+
+
+def painel_usuarios(request):
+    return render(request, "painel/usuarios.html")
+
+
+def painel_integracao_drive(request):
+    return render(request, "painel/integracao_drive.html")
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -73,13 +98,15 @@ urlpatterns = [
 
     #painel
     path("painel/login/", TemplateView.as_view(template_name="painel/login.html"), name="painel_login"),
-    path("painel/", TemplateView.as_view(template_name="painel/dashboard.html"), name="painel_dashboard"),
-    path("painel/os/", TemplateView.as_view(template_name="painel/os_lista.html"), name="painel_os_lista"),
-    path("painel/os/<int:os_id>/", TemplateView.as_view(template_name="painel/os_detalhe.html"), name="painel_os_detalhe"),
-    path("painel/etapas/",TemplateView.as_view(template_name="painel/etapas.html"),name="painel_etapas"),
-    path("painel/fotos/",TemplateView.as_view(template_name="painel/config_fotos.html"),name="painel_config_fotos"),
-    path("painel/usuarios/",TemplateView.as_view(template_name="painel/usuarios.html"),name="painel_usuarios"),
-    path("painel/integracoes/drive/",TemplateView.as_view(template_name="painel/integracao_drive.html"),name="painel_integracao_drive"),
+    path("painel/", painel_dashboard, name="painel_dashboard"),
+    path("painel/os/", painel_os_lista, name="painel_os_lista"),
+    path("painel/os/<int:os_id>/", painel_os_detalhe, name="painel_os_detalhe"),
+    path("painel/etapas/", painel_etapas, name="painel_etapas"),
+    path("painel/config_fotos/", painel_config_fotos, name="painel_config_fotos"),
+    path("painel/usuarios/", painel_usuarios, name="painel_usuarios"),
+    path("painel/integracao_drive/", painel_integracao_drive, name="painel_integracao_drive"),
+    path("painel/integracoes/drive/", painel_integracao_drive, name="painel_integracao_drive_legacy"),
+    path("painel/fotos/", painel_config_fotos, name="painel_config_fotos_legacy"),
     path("integracao-drive/", integracao_drive_view, name="integracao-drive"),
 ]
 
