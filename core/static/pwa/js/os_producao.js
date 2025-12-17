@@ -393,7 +393,11 @@ document.addEventListener("DOMContentLoaded", () => {
           etapa_id: f.etapa,
         }));
 
-      const observacaoEtapa = state.observacao_etapa || osData.observacoes || "";
+      const observacaoEtapa =
+        state.observacao_etapa ||
+        osData.observacao_etapa_atual ||
+        osData.observacoes ||
+        "";
 
       salvarCache({
         codigo: `OS ${osData.codigo || osId}`,

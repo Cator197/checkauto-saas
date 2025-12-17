@@ -15,8 +15,16 @@ from django.conf import settings
 from django.shortcuts import redirect
 from google_auth_oauthlib.flow import Flow
 import json
-from .models import OficinaDriveConfig
-from .models import Oficina, UsuarioOficina, Etapa, ConfigFoto, OS, FotoOS, OficinaDriveConfig
+from .models import (
+    OficinaDriveConfig,
+    ObservacaoEtapaOS,
+    Oficina,
+    UsuarioOficina,
+    Etapa,
+    ConfigFoto,
+    OS,
+    FotoOS,
+)
 from .utils import get_oficina_do_usuario, get_papel_do_usuario
 from core.drive_service import upload_foto_os_drive
 from core.drive_service import upload_foto_os_drive
@@ -32,6 +40,7 @@ from .serializers import (
     OSSerializer,
     PwaVeiculoEmProducaoSerializer,
     FotoOSSerializer,
+    ObservacaoEtapaOSSerializer,
 )
 from .utils import get_oficina_do_usuario
 
@@ -186,7 +195,9 @@ class ConfigFotoViewSet(viewsets.ModelViewSet):
 
 
 class OSViewSet(viewsets.ModelViewSet):
-    queryset = OS.objects.select_related('oficina', 'etapa_atual').all()
+    queryset = OS.objects.select_related('oficina', 'etapa_atual').prefetch_related(
+        'observacoes_etapas__etapa', 'observacoes_etapas__criado_por__user'
+    )
     serializer_class = OSSerializer
     permission_classes = [IsAuthenticated]
 
@@ -200,14 +211,18 @@ class OSViewSet(viewsets.ModelViewSet):
         user = self.request.user
 
         # Base: filtra por oficina
+        base_qs = OS.objects.select_related('oficina', 'etapa_atual').prefetch_related(
+            'observacoes_etapas__etapa', 'observacoes_etapas__criado_por__user'
+        )
+
         if user.is_superuser:
-            qs = OS.objects.select_related('oficina', 'etapa_atual').all()
+            qs = base_qs.all()
         else:
             oficina = get_oficina_do_usuario(user)
             if oficina is None:
                 return OS.objects.none()
 
-            qs = OS.objects.select_related('oficina', 'etapa_atual').filter(oficina=oficina)
+            qs = base_qs.filter(oficina=oficina)
 
         params = self.request.query_params
 
@@ -309,6 +324,46 @@ class OSViewSet(viewsets.ModelViewSet):
 
         return super().destroy(request, *args, **kwargs)
 
+    @action(detail=True, methods=["put"], url_path=r"etapas/(?P<etapa_id>[^/.]+)/observacao")
+    def upsert_observacao_etapa(self, request, pk=None, etapa_id=None):
+        os_obj = self.get_object()
+
+        try:
+            etapa = Etapa.objects.get(id=etapa_id, oficina=os_obj.oficina)
+        except Etapa.DoesNotExist:
+            return Response(
+                {"detail": "Etapa não encontrada para esta oficina."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        payload = {"texto": request.data.get("texto", "")}
+
+        observacao = ObservacaoEtapaOS.objects.filter(os=os_obj, etapa=etapa).first()
+
+        serializer = ObservacaoEtapaOSSerializer(
+            instance=observacao,
+            data=payload,
+            partial=True,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+
+        usuario_oficina = UsuarioOficina.objects.filter(
+            user=request.user, oficina=os_obj.oficina, ativo=True
+        ).first()
+
+        criado_por = serializer.instance.criado_por if serializer.instance else None
+
+        observacao = serializer.save(
+            os=os_obj,
+            etapa=etapa,
+            criado_por=criado_por or usuario_oficina,
+        )
+
+        return Response(
+            ObservacaoEtapaOSSerializer(observacao, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
 
     @action(detail=True, methods=["post"], url_path="avancar-etapa")
     def avancar_etapa(self, request, pk=None):

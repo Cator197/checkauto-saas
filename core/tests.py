@@ -32,6 +32,7 @@ class SyncViewTests(APITestCase):
         self.usuario_oficina = UsuarioOficina.objects.create(
             user=self.user,
             oficina=self.oficina,
+            papel="GERENTE",
             ativo=True,
         )
         self.etapa = Etapa.objects.create(
@@ -188,6 +189,7 @@ class AvancarEtapaTests(APITestCase):
         self.usuario_oficina = UsuarioOficina.objects.create(
             user=self.user,
             oficina=self.oficina,
+            papel="GERENTE",
             ativo=True,
         )
 
