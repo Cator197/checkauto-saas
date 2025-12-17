@@ -13,6 +13,18 @@ document.addEventListener("DOMContentLoaded", () => {
   let etapasCache = { nomes: {}, lista: [] };
   let etapasOrdenadas = [];
   let listaAtual = [];
+  const proximaEtapaCache = new Map();
+
+  function obterProximaEtapaCache(osId, etapaAtualId) {
+    const item = proximaEtapaCache.get(osId);
+    if (!item) return undefined;
+    if (item.etapaId !== etapaAtualId) return undefined;
+    return item.proxima;
+  }
+
+  function salvarProximaEtapaCache(osId, etapaAtualId, proxima) {
+    proximaEtapaCache.set(osId, { etapaId: etapaAtualId, proxima });
+  }
 
   function carregarCacheLocalEtapas() {
     try {
@@ -135,6 +147,31 @@ document.addEventListener("DOMContentLoaded", () => {
     return etapas[idx + 1] || null;
   }
 
+  async function buscarProximaEtapa(osId, etapaAtualId) {
+    const cache = obterProximaEtapaCache(osId, etapaAtualId);
+    if (cache !== undefined) {
+      return cache;
+    }
+
+    if (navigator.onLine) {
+      try {
+        const resp = await apiFetch(`/api/etapas/proxima/?os=${osId}`);
+        if (resp.ok) {
+          const data = await resp.json();
+          const proxima = data?.proxima_etapa || null;
+          salvarProximaEtapaCache(osId, etapaAtualId, proxima);
+          return proxima;
+        }
+      } catch (err) {
+        logDev("Falha ao buscar próxima etapa online", err);
+      }
+    }
+
+    const fallback = calcularProximaEtapa(etapaAtualId);
+    salvarProximaEtapaCache(osId, etapaAtualId, fallback);
+    return fallback;
+  }
+
   async function normalizarListaComEtapas(lista) {
     if (!Array.isArray(lista)) return [];
 
@@ -155,6 +192,26 @@ document.addEventListener("DOMContentLoaded", () => {
         item.etapa_atual || item.etapa_atual_id || item.etapa_atual_obj || null
       ),
     }));
+  }
+
+  async function anexarProximasEtapas(lista) {
+    if (!Array.isArray(lista)) return [];
+
+    const itensComProxima = await Promise.all(
+      lista.map(async (item) => {
+        const proxima = await buscarProximaEtapa(
+          item.os_id,
+          item.etapa_atual?.id ?? null
+        );
+
+        return {
+          ...item,
+          proxima_etapa: proxima,
+        };
+      })
+    );
+
+    return itensComProxima;
   }
 
   async function anexarPendenciasLocais(lista) {
@@ -206,8 +263,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
     listaAtual.forEach((item) => {
       const etapaNome = item.etapa_atual?.nome || "—";
-      const proximaEtapa = calcularProximaEtapa(item.etapa_atual?.id);
-      const proximaNome = proximaEtapa ? proximaEtapa.nome || "—" : "Última etapa";
+      const proximaEtapa =
+        item.hasOwnProperty("proxima_etapa")
+          ? item.proxima_etapa
+          : calcularProximaEtapa(item.etapa_atual?.id);
+      const podeAvancar = Boolean(proximaEtapa);
+      const proximaNome =
+        proximaEtapa === null
+          ? "Última etapa"
+          : proximaEtapa?.nome || "—";
+      const textoBotaoProxima = proximaEtapa === null
+        ? "Última etapa"
+        : podeAvancar
+          ? "Enviar para próxima etapa"
+          : "Próxima etapa indisponível";
       const pendenteSync = item.pendente_sync || (item.fila_sync || []).length > 0;
 
       const card = document.createElement("div");
@@ -220,20 +289,39 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="card-body">
           <div class="modelo">${item.modelo_veiculo || "Modelo não informado"}</div>
           <div class="placa">${item.placa || "Sem placa"}</div>
-          <div class="proxima">Próxima: ${proximaNome}</div>
+          <div class="proxima">Próxima etapa: ${proximaNome}</div>
         </div>
         <div class="card-footer">
           ${pendenteSync ? '<span class="badge badge-pendente">Pendente de sync</span>' : ""}
-          <button class="btn-primario" ${!proximaEtapa ? "disabled" : ""}>Enviar para próxima etapa</button>
+          <div class="actions">
+            <button class="btn-secundario" data-action="checkin">Check-in</button>
+            <button class="btn-primario" ${podeAvancar ? "" : "disabled"}>${textoBotaoProxima}</button>
+          </div>
         </div>
       `;
 
       const btnAvancar = card.querySelector(".btn-primario");
+      const btnCheckin = card.querySelector('[data-action="checkin"]');
 
-      if (btnAvancar && proximaEtapa) {
+      if (btnAvancar && podeAvancar) {
         btnAvancar.addEventListener("click", (ev) => {
           ev.stopPropagation();
           enviarParaProximaEtapa(item, proximaEtapa);
+        });
+      }
+
+      if (btnCheckin) {
+        btnCheckin.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          const escolherCompleto = window.confirm(
+            "Deseja iniciar um check-in completo? Escolha 'Cancelar' para somente fotos."
+          );
+
+          if (escolherCompleto) {
+            window.location.href = "/pwa/checkin-completo/";
+          } else {
+            window.location.href = "/pwa/checkin-fotos/";
+          }
         });
       }
 
@@ -250,7 +338,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (cache && cache.length) {
       const lista = await normalizarListaComEtapas(cache);
       const listaComPendencias = await anexarPendenciasLocais(lista);
-      renderizar(listaComPendencias);
+      const listaComProxima = await anexarProximasEtapas(listaComPendencias);
+      renderizar(listaComProxima);
       mostrarMensagem("Exibindo lista salva (offline).");
     } else {
       renderizar([]);
@@ -266,6 +355,8 @@ document.addEventListener("DOMContentLoaded", () => {
       redirectAfterLogout("pwa");
       return;
     }
+
+    proximaEtapaCache.clear();
 
     try {
       if (window.checkautoBuscarVeiculosEmProducao) {
@@ -298,9 +389,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await response.json();
       const listaNormalizada = await normalizarListaComEtapas(data);
       const listaComPendencias = await anexarPendenciasLocais(listaNormalizada);
+      const listaComProxima = await anexarProximasEtapas(listaComPendencias);
 
-      await window.checkautoSalvarVeiculosEmProducao(listaComPendencias);
-      renderizar(listaComPendencias);
+      await window.checkautoSalvarVeiculosEmProducao(listaComProxima);
+      renderizar(listaComProxima);
       mostrarMensagem("Lista atualizada do servidor.");
     } catch (err) {
       console.error("Erro ao buscar veículos em produção:", err);
@@ -310,19 +402,26 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function atualizarListaLocal(osId, etapaAtual, pendenteSync, fila = []) {
-    listaAtual = (listaAtual || []).map((item) => {
-      if (item.os_id !== osId) return item;
+    const atualizarProxima = async () => {
+      const proxima = await buscarProximaEtapa(osId, etapaAtual?.id ?? null);
 
-      return {
-        ...item,
-        etapa_atual: etapaAtual,
-        pendente_sync: pendenteSync,
-        fila_sync: fila,
-      };
-    });
+      listaAtual = (listaAtual || []).map((item) => {
+        if (item.os_id !== osId) return item;
 
-    renderizar(listaAtual);
-    window.checkautoSalvarVeiculosEmProducao(listaAtual);
+        return {
+          ...item,
+          etapa_atual: etapaAtual,
+          pendente_sync: pendenteSync,
+          fila_sync: fila,
+          proxima_etapa: proxima,
+        };
+      });
+
+      renderizar(listaAtual);
+      window.checkautoSalvarVeiculosEmProducao(listaAtual);
+    };
+
+    atualizarProxima();
   }
 
   async function registrarPendencia(osItem, proximaEtapa, payload) {

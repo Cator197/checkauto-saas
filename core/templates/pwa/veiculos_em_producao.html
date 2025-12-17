@@ -61,10 +61,8 @@
       font-size: 14px;
       color: #475569;
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      flex-wrap: wrap;
+      flex-direction: column;
+      gap: 10px;
     }
     .muted {
       color: #94a3b8;
@@ -94,6 +92,16 @@
       background: #cbd5e1;
       cursor: not-allowed;
     }
+    .btn-secundario {
+      background: #e2e8f0;
+      color: #0f172a;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-weight: bold;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
     .badge {
       display: inline-block;
       padding: 4px 10px;
@@ -105,6 +113,11 @@
       background: #fef3c7;
       color: #b45309;
       border: 1px solid #f59e0b;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
     }
   </style>
 </head>
