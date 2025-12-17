@@ -169,6 +169,14 @@ window.checkautoSalvarOSProducao = async function (dados) {
   }
 };
 
+async function checkautoUpsertOSProducao(osId, transformFn) {
+  const atual = (await window.checkautoBuscarOSProducao(osId)) || { os_id: osId };
+  const atualizado = transformFn ? transformFn({ ...atual, os_id: osId }) : atual;
+
+  await window.checkautoSalvarOSProducao(atualizado);
+  return atualizado;
+}
+
 // Busca dados salvos da produção da OS
 window.checkautoBuscarOSProducao = async function (osId) {
   try {
@@ -190,6 +198,40 @@ window.checkautoBuscarOSProducao = async function (osId) {
   }
 };
 
+window.checkautoRemoverOperacaoProducao = async function (osId, operacaoId) {
+  return checkautoUpsertOSProducao(osId, (item) => {
+    const filaAtual = Array.isArray(item.fila_sync) ? item.fila_sync : [];
+    const novaFila = filaAtual.filter((op) => op.id !== operacaoId);
+
+    return {
+      ...item,
+      fila_sync: novaFila,
+      pendente_sync: item.pendente_sync || item.avancar_solicitado || novaFila.length > 0,
+    };
+  });
+};
+
+window.checkautoEnfileirarPatchOS = async function (osId, payload, extra = {}) {
+  const novaOperacao = {
+    id: `patch-${Date.now()}-${Math.random()}`,
+    type: "PATCH_OS",
+    os_id: osId,
+    payload,
+    created_at: new Date().toISOString(),
+  };
+
+  return checkautoUpsertOSProducao(osId, (item) => {
+    const filaAtual = Array.isArray(item.fila_sync) ? item.fila_sync : [];
+
+    return {
+      ...item,
+      ...extra,
+      fila_sync: [...filaAtual, novaOperacao],
+      pendente_sync: true,
+    };
+  });
+};
+
 // Lista OS com pendências de produção (observação, fotos, avanço de etapa)
 window.checkautoListarOSProducaoPendentes = async function () {
   try {
@@ -201,9 +243,10 @@ window.checkautoListarOSProducaoPendentes = async function () {
 
       request.onsuccess = () => {
         const todos = request.result || [];
-        const pendentes = todos.filter(
-          (item) => item?.pendente_sync || item?.avancar_solicitado
-        );
+        const pendentes = todos.filter((item) => {
+          const fila = Array.isArray(item?.fila_sync) ? item.fila_sync : [];
+          return item?.pendente_sync || item?.avancar_solicitado || fila.length > 0;
+        });
         resolve(pendentes);
       };
 
@@ -225,6 +268,8 @@ window.checkautoMarcarOSProducaoSincronizada = async function (osId) {
     if (!atual) return false;
 
     atual.pendente_sync = false;
+    atual.avancar_solicitado = false;
+    atual.fila_sync = [];
     atual.ultima_sincronizacao = new Date().toISOString();
 
     const db = await checkautoOpenDB();

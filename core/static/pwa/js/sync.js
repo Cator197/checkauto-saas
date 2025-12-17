@@ -12,6 +12,64 @@ document.addEventListener("DOMContentLoaded", async () => {
     return await window.checkautoListarOSProducaoPendentes();
   }
 
+  async function processarFilaPatchOs(producoesPendentes) {
+    if (!Array.isArray(producoesPendentes) || producoesPendentes.length === 0) {
+      return { sucesso: 0, falha: 0 };
+    }
+
+    let sucesso = 0;
+    let falha = 0;
+
+    for (const prod of producoesPendentes) {
+      const fila = Array.isArray(prod.fila_sync) ? prod.fila_sync : [];
+
+      for (const op of fila) {
+        if (op.type !== "PATCH_OS") continue;
+
+        try {
+          const resp = await apiFetch(`/api/os/${op.os_id}/`, {
+            method: "PATCH",
+            body: op.payload,
+          });
+
+          if (resp.ok) {
+            sucesso += 1;
+
+            if (window.checkautoRemoverOperacaoProducao) {
+              await window.checkautoRemoverOperacaoProducao(op.os_id, op.id);
+            }
+
+            if (window.checkautoBuscarOSProducao && window.checkautoMarcarOSProducaoSincronizada) {
+              const atualizada = await window.checkautoBuscarOSProducao(op.os_id);
+              const filaRestante = Array.isArray(atualizada?.fila_sync)
+                ? atualizada.fila_sync.length
+                : 0;
+              const fotosPendentes =
+                (atualizada?.fotos_livres_offline?.length || 0) > 0 ||
+                (atualizada?.fotos_obrigatorias_offline?.length || 0) > 0;
+              const apenasFila =
+                !!atualizada?.pendente_sync &&
+                filaRestante === 0 &&
+                !atualizada?.avancar_solicitado &&
+                !fotosPendentes;
+
+              if (apenasFila) {
+                await window.checkautoMarcarOSProducaoSincronizada(op.os_id);
+              }
+            }
+          } else {
+            falha += 1;
+          }
+        } catch (err) {
+          console.error("Erro ao sincronizar PATCH_OS:", err);
+          falha += 1;
+        }
+      }
+    }
+
+    return { sucesso, falha };
+  }
+
   async function atualizarVeiculosEmProducao() {
     const token = getAccessToken();
     if (!token) {
@@ -111,6 +169,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       const data = await response.json();
       console.log("Resposta da API:", data);
 
+      const resultadoFila = await processarFilaPatchOs(producoesPendentes);
+
       // Remover OS enviadas do IndexedDB
       const db = await window.checkautoOpenDB();
       await new Promise((resolve) => {
@@ -122,7 +182,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         tx.oncomplete = resolve;
       });
 
-      statusBox.innerHTML = "✅ Sincronização concluída com sucesso!";
+      if (resultadoFila.falha > 0) {
+        statusBox.innerHTML = `⚠️ Sincronização parcial. ${resultadoFila.sucesso} etapas enviadas, ${resultadoFila.falha} pendentes.`;
+      } else {
+        statusBox.innerHTML = "✅ Sincronização concluída com sucesso!";
+      }
       pendenciasAtuais = await carregarPendencias();
       producoesPendentes = await carregarProducoesPendentes();
 

@@ -2,7 +2,6 @@
 // Tela de veículos em produção: busca online + cache IndexedDB
 
 document.addEventListener("DOMContentLoaded", () => {
-  const TOKEN_KEY = "checkauto_access";
   const isDev =
     window.location.hostname === "localhost" ||
     window.location.hostname === "127.0.0.1";
@@ -11,20 +10,48 @@ document.addEventListener("DOMContentLoaded", () => {
   const statusEl = document.getElementById("statusVeiculos");
 
   const ETAPAS_CACHE_KEY = "checkauto_pwa_etapas_cache";
-  let etapasCache = {};
+  let etapasCache = { nomes: {}, lista: [] };
+  let etapasOrdenadas = [];
+  let listaAtual = [];
 
   function carregarCacheLocalEtapas() {
     try {
       const salvo = localStorage.getItem(ETAPAS_CACHE_KEY);
-      etapasCache = salvo ? JSON.parse(salvo) : {};
+      if (!salvo) {
+        etapasCache = { nomes: {}, lista: [] };
+        return;
+      }
+
+      const parsed = JSON.parse(salvo);
+
+      if (Array.isArray(parsed)) {
+        etapasCache = {
+          nomes: parsed.reduce((acc, etapa) => {
+            if (etapa?.id != null && etapa?.nome) {
+              acc[etapa.id] = etapa.nome;
+            }
+            return acc;
+          }, {}),
+          lista: parsed,
+        };
+        etapasOrdenadas = parsed;
+        return;
+      }
+
+      etapasCache = {
+        nomes: parsed?.nomes || parsed || {},
+        lista: Array.isArray(parsed?.lista) ? parsed.lista : [],
+      };
+      etapasOrdenadas = etapasCache.lista || [];
     } catch (err) {
-      etapasCache = {};
+      etapasCache = { nomes: {}, lista: [] };
     }
   }
 
   function salvarCacheLocalEtapas() {
     try {
-      localStorage.setItem(ETAPAS_CACHE_KEY, JSON.stringify(etapasCache));
+      const payload = { nomes: etapasCache.nomes || {}, lista: etapasOrdenadas };
+      localStorage.setItem(ETAPAS_CACHE_KEY, JSON.stringify(payload));
     } catch (err) {
       logDev("Não foi possível salvar cache de etapas", err);
     }
@@ -34,7 +61,26 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!etapa || typeof etapa !== "object") return;
     if (etapa.id == null) return;
 
-    etapasCache[etapa.id] = etapa.nome || "-";
+    if (!etapasCache.nomes) {
+      etapasCache.nomes = {};
+    }
+
+    etapasCache.nomes[etapa.id] = etapa.nome || "-";
+  }
+
+  function ordenarEtapas(lista) {
+    if (!Array.isArray(lista)) return [];
+
+    return [...lista].sort((a, b) => {
+      const ordemA = a?.ordem ?? a?.id ?? 0;
+      const ordemB = b?.ordem ?? b?.id ?? 0;
+
+      if (ordemA === ordemB) {
+        return (a?.id ?? 0) - (b?.id ?? 0);
+      }
+
+      return ordemA - ordemB;
+    });
   }
 
   async function carregarEtapasDaApi() {
@@ -43,6 +89,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!resp.ok) return;
 
       const lista = await resp.json();
+      etapasOrdenadas = ordenarEtapas(lista || []);
       (lista || []).forEach(registrarEtapaNoCache);
       salvarCacheLocalEtapas();
     } catch (err) {
@@ -65,15 +112,37 @@ document.addEventListener("DOMContentLoaded", () => {
       };
     }
 
-    const nomeCache = etapasCache?.[etapaAtual];
+    const nomeCache = etapasCache?.nomes?.[etapaAtual];
     return { id: etapaAtual, nome: nomeCache || "—" };
+  }
+
+  function obterEtapasOrdenadas() {
+    if (etapasOrdenadas.length) return etapasOrdenadas;
+    if (Array.isArray(etapasCache?.lista)) {
+      etapasOrdenadas = etapasCache.lista;
+    }
+
+    return etapasOrdenadas;
+  }
+
+  function calcularProximaEtapa(etapaAtualId) {
+    const etapas = obterEtapasOrdenadas();
+    if (!etapas.length || etapaAtualId == null) return null;
+
+    const idx = etapas.findIndex((etapa) => etapa?.id === etapaAtualId);
+    if (idx === -1) return null;
+
+    return etapas[idx + 1] || null;
   }
 
   async function normalizarListaComEtapas(lista) {
     if (!Array.isArray(lista)) return [];
 
     const precisaBuscarEtapas = lista.some(
-      (item) => item && typeof item.etapa_atual === "number" && !etapasCache[item.etapa_atual]
+      (item) =>
+        item &&
+        typeof item.etapa_atual === "number" &&
+        !etapasCache?.nomes?.[item.etapa_atual]
     );
 
     if (precisaBuscarEtapas) {
@@ -86,6 +155,32 @@ document.addEventListener("DOMContentLoaded", () => {
         item.etapa_atual || item.etapa_atual_id || item.etapa_atual_obj || null
       ),
     }));
+  }
+
+  async function anexarPendenciasLocais(lista) {
+    if (!Array.isArray(lista) || !window.checkautoListarOSProducaoPendentes) {
+      return lista || [];
+    }
+
+    const pendentes = await window.checkautoListarOSProducaoPendentes();
+    const mapaPendentes = new Map((pendentes || []).map((p) => [p.os_id, p]));
+
+    return (lista || []).map((item) => {
+      const pendente = mapaPendentes.get(item.os_id);
+      if (!pendente) return item;
+
+      const fila = Array.isArray(pendente.fila_sync) ? pendente.fila_sync : [];
+      const etapaPendente = pendente.etapa_atual?.id
+        ? normalizarEtapa(pendente.etapa_atual)
+        : item.etapa_atual;
+
+      return {
+        ...item,
+        etapa_atual: etapaPendente,
+        fila_sync: fila,
+        pendente_sync: Boolean(pendente.pendente_sync || pendente.avancar_solicitado || fila.length > 0),
+      };
+    });
   }
 
   function logDev(...args) {
@@ -101,15 +196,20 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function renderizar(lista) {
+    listaAtual = lista || [];
     listaEl.innerHTML = "";
 
-    if (!lista || lista.length === 0) {
+    if (!listaAtual || listaAtual.length === 0) {
       listaEl.innerHTML = '<p class="muted">Nenhum veículo em produção.</p>';
       return;
     }
 
-    lista.forEach((item) => {
+    listaAtual.forEach((item) => {
       const etapaNome = item.etapa_atual?.nome || "—";
+      const proximaEtapa = calcularProximaEtapa(item.etapa_atual?.id);
+      const proximaNome = proximaEtapa ? proximaEtapa.nome || "—" : "Última etapa";
+      const pendenteSync = item.pendente_sync || (item.fila_sync || []).length > 0;
+
       const card = document.createElement("div");
       card.className = "card-veiculo";
       card.innerHTML = `
@@ -120,8 +220,22 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="card-body">
           <div class="modelo">${item.modelo_veiculo || "Modelo não informado"}</div>
           <div class="placa">${item.placa || "Sem placa"}</div>
+          <div class="proxima">Próxima: ${proximaNome}</div>
+        </div>
+        <div class="card-footer">
+          ${pendenteSync ? '<span class="badge badge-pendente">Pendente de sync</span>' : ""}
+          <button class="btn-primario" ${!proximaEtapa ? "disabled" : ""}>Enviar para próxima etapa</button>
         </div>
       `;
+
+      const btnAvancar = card.querySelector(".btn-primario");
+
+      if (btnAvancar && proximaEtapa) {
+        btnAvancar.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          enviarParaProximaEtapa(item, proximaEtapa);
+        });
+      }
 
       card.addEventListener("click", () => {
         window.location.href = `/pwa/os/${item.os_id}/`;
@@ -135,7 +249,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const cache = await window.checkautoBuscarVeiculosEmProducao();
     if (cache && cache.length) {
       const lista = await normalizarListaComEtapas(cache);
-      renderizar(lista);
+      const listaComPendencias = await anexarPendenciasLocais(lista);
+      renderizar(listaComPendencias);
       mostrarMensagem("Exibindo lista salva (offline).");
     } else {
       renderizar([]);
@@ -182,14 +297,77 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const data = await response.json();
       const listaNormalizada = await normalizarListaComEtapas(data);
+      const listaComPendencias = await anexarPendenciasLocais(listaNormalizada);
 
-      await window.checkautoSalvarVeiculosEmProducao(listaNormalizada);
-      renderizar(listaNormalizada);
+      await window.checkautoSalvarVeiculosEmProducao(listaComPendencias);
+      renderizar(listaComPendencias);
       mostrarMensagem("Lista atualizada do servidor.");
     } catch (err) {
       console.error("Erro ao buscar veículos em produção:", err);
       mostrarMensagem("Erro ao atualizar. Mostrando cache.");
       await carregarDoCache();
+    }
+  }
+
+  function atualizarListaLocal(osId, etapaAtual, pendenteSync, fila = []) {
+    listaAtual = (listaAtual || []).map((item) => {
+      if (item.os_id !== osId) return item;
+
+      return {
+        ...item,
+        etapa_atual: etapaAtual,
+        pendente_sync: pendenteSync,
+        fila_sync: fila,
+      };
+    });
+
+    renderizar(listaAtual);
+    window.checkautoSalvarVeiculosEmProducao(listaAtual);
+  }
+
+  async function registrarPendencia(osItem, proximaEtapa, payload) {
+    const etapaNormalizada = normalizarEtapa(proximaEtapa);
+    const pendencia = await window.checkautoEnfileirarPatchOS(
+      osItem.os_id,
+      payload,
+      { etapa_atual: etapaNormalizada }
+    );
+    const fila = Array.isArray(pendencia?.fila_sync) ? pendencia.fila_sync : [];
+
+    atualizarListaLocal(osItem.os_id, etapaNormalizada, true, fila);
+    mostrarMensagem("Enfileirado para sincronização.");
+    alert("Enfileirado para sincronização.");
+  }
+
+  async function enviarParaProximaEtapa(osItem, proximaEtapa) {
+    const payload = { etapa_atual: proximaEtapa.id };
+    const etapaNormalizada = normalizarEtapa(proximaEtapa);
+
+    if (!navigator.onLine) {
+      await registrarPendencia(osItem, etapaNormalizada, payload);
+      return;
+    }
+
+    try {
+      const resp = await apiFetch(`/api/os/${osItem.os_id}/`, {
+        method: "PATCH",
+        body: payload,
+      });
+
+      if (resp.ok) {
+        atualizarListaLocal(osItem.os_id, etapaNormalizada, false, []);
+        if (window.checkautoMarcarOSProducaoSincronizada) {
+          await window.checkautoMarcarOSProducaoSincronizada(osItem.os_id);
+        }
+        mostrarMensagem("Etapa atualizada.");
+        alert("Etapa atualizada.");
+        return;
+      }
+
+      await registrarPendencia(osItem, etapaNormalizada, payload);
+    } catch (err) {
+      logDev("Erro ao enviar etapa online, enfileirando", err);
+      await registrarPendencia(osItem, etapaNormalizada, payload);
     }
   }
 
