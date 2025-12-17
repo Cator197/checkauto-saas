@@ -10,6 +10,7 @@ from django.utils import timezone
 from datetime import date
 from django.db.models import Q
 from django.db import transaction
+from django.utils.dateparse import parse_datetime
 from .drive_service import criar_pasta_os, upload_foto_para_drive  # <-- novo
 from django.conf import settings
 from django.shortcuts import redirect
@@ -24,6 +25,7 @@ from .models import (
     ConfigFoto,
     OS,
     FotoOS,
+    OSEtapaStatus,
 )
 
 
@@ -358,6 +360,53 @@ class OSViewSet(viewsets.ModelViewSet):
             user=self.request.user, oficina=os_obj.oficina, ativo=True
         ).first()
 
+    def _montar_timeline(self, os_obj):
+        etapas = (
+            Etapa.objects.filter(oficina=os_obj.oficina, ativa=True)
+            .order_by("ordem", "id")
+            .all()
+        )
+
+        status_map = {
+            item.etapa_id: item
+            for item in OSEtapaStatus.objects.filter(os=os_obj, etapa__in=etapas)
+        }
+
+        timeline = []
+        for etapa in etapas:
+            status_obj = status_map.get(etapa.id)
+            concluida_em = status_obj.concluida_em if status_obj else None
+
+            timeline.append(
+                {
+                    "etapa": etapa.id,
+                    "etapa_nome": etapa.nome,
+                    "ordem": etapa.ordem,
+                    "status": "concluida" if concluida_em else "pendente",
+                    "concluida_em": concluida_em,
+                    "is_atual": os_obj.etapa_atual_id == etapa.id,
+                }
+            )
+
+        return timeline
+
+    def _obter_etapa_da_os(self, os_obj, etapa_id):
+        try:
+            return Etapa.objects.get(id=etapa_id, oficina=os_obj.oficina)
+        except Etapa.DoesNotExist:
+            return None
+
+    def _parse_data_conclusao(self, valor):
+        if not valor:
+            return None
+
+        if isinstance(valor, str):
+            parsed = parse_datetime(valor)
+            if parsed:
+                return parsed
+
+        return None
+
     def _salvar_observacao_etapa(self, *, os_obj, etapa, instance=None, payload=None, partial=False):
         serializer = ObservacaoEtapaOSSerializer(
             instance=instance,
@@ -500,6 +549,106 @@ class OSViewSet(viewsets.ModelViewSet):
 
         return Response(
             ObservacaoEtapaOSSerializer(observacao, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["get"], url_path="timeline")
+    def timeline(self, request, pk=None):
+        os_obj = self.get_object()
+        return Response(self._montar_timeline(os_obj), status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="timeline/marcar-concluida")
+    def marcar_etapa_concluida(self, request, pk=None):
+        if self._is_operador(request):
+            return Response(
+                {"detail": "Operador não pode alterar etapas."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        os_obj = self.get_object()
+        etapa_id = request.data.get("etapa")
+
+        if not etapa_id:
+            return Response(
+                {"detail": "Campo etapa é obrigatório."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        etapa = self._obter_etapa_da_os(os_obj, etapa_id)
+        if not etapa:
+            return Response(
+                {"detail": "Etapa não encontrada para esta OS."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        data_conclusao = self._parse_data_conclusao(request.data.get("concluida_em"))
+        concluida_em = data_conclusao or timezone.now()
+
+        with transaction.atomic():
+            status_obj, _ = OSEtapaStatus.objects.select_for_update().get_or_create(
+                os=os_obj, etapa=etapa
+            )
+
+            status_obj.concluida_em = concluida_em
+            status_obj.save(update_fields=["concluida_em", "atualizado_em"])
+
+            if os_obj.etapa_atual_id == etapa.id:
+                proxima_etapa = (
+                    Etapa.objects.filter(
+                        oficina=os_obj.oficina,
+                        ativa=True,
+                        ordem__gt=etapa.ordem,
+                    )
+                    .order_by("ordem", "id")
+                    .first()
+                )
+
+                os_obj.etapa_atual = proxima_etapa
+                os_obj.save(update_fields=["etapa_atual", "atualizado_em"])
+
+        return Response(
+            {"timeline": self._montar_timeline(os_obj), "etapa_atual": os_obj.etapa_atual_id},
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=["post"], url_path="timeline/reabrir")
+    def reabrir_etapa(self, request, pk=None):
+        if self._is_operador(request):
+            return Response(
+                {"detail": "Operador não pode alterar etapas."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        os_obj = self.get_object()
+        etapa_id = request.data.get("etapa")
+
+        if not etapa_id:
+            return Response(
+                {"detail": "Campo etapa é obrigatório."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        etapa = self._obter_etapa_da_os(os_obj, etapa_id)
+        if not etapa:
+            return Response(
+                {"detail": "Etapa não encontrada para esta OS."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        with transaction.atomic():
+            status_obj, _ = OSEtapaStatus.objects.select_for_update().get_or_create(
+                os=os_obj, etapa=etapa
+            )
+
+            status_obj.concluida_em = None
+            status_obj.save(update_fields=["concluida_em", "atualizado_em"])
+
+            if os_obj.etapa_atual is None or etapa.ordem <= os_obj.etapa_atual.ordem:
+                os_obj.etapa_atual = etapa
+                os_obj.save(update_fields=["etapa_atual", "atualizado_em"])
+
+        return Response(
+            {"timeline": self._montar_timeline(os_obj), "etapa_atual": os_obj.etapa_atual_id},
             status=status.HTTP_200_OK,
         )
 

@@ -308,6 +308,25 @@ class ObservacaoEtapaOS(models.Model):
         return f"OS {self.os.codigo} - {self.etapa.nome}"
 
 
+class OSEtapaStatus(models.Model):
+    os = models.ForeignKey(OS, on_delete=models.CASCADE, related_name="status_etapas")
+    etapa = models.ForeignKey(Etapa, on_delete=models.CASCADE, related_name="status_os")
+    concluida_em = models.DateTimeField(null=True, blank=True)
+
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("os", "etapa")
+        ordering = ("etapa__ordem", "id")
+        verbose_name = "Status da etapa da OS"
+        verbose_name_plural = "Status das etapas da OS"
+
+    def __str__(self):
+        status = "concluída" if self.concluida_em else "pendente"
+        return f"OS {self.os.codigo} - {self.etapa.nome} ({status})"
+
+
 class OficinaDriveConfig(models.Model):
     """
     Configuração de integração com o Google Drive para uma oficina.

@@ -299,6 +299,7 @@ document.addEventListener("DOMContentLoaded", () => {
         let fotosCache = [];
         let etapasCache = [];
         let observacoesCache = [];
+        let timelineCache = [];
 
         function abrirModalImagem(url, altTexto) {
             if (!url) return;
@@ -397,6 +398,19 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!elFotoUploadFeedback) return;
             elFotoUploadFeedback.classList.add("hidden");
             elFotoUploadFeedback.textContent = "";
+        }
+
+        function marcarBotaoCarregando(btn, ativo, textoCarregando = "Processando...") {
+            if (!btn) return () => {};
+
+            const original = btn.textContent;
+            btn.disabled = !!ativo;
+            btn.textContent = ativo ? textoCarregando : original;
+
+            return () => {
+                btn.disabled = false;
+                btn.textContent = original;
+            };
         }
 
         function obterIdEtapa(obs) {
@@ -529,6 +543,109 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
 
+        async function recarregarOsBasico() {
+            try {
+                const resp = await apiFetch(`/api/os/${osId}/`);
+                if (!resp.ok) return;
+
+                const osData = await resp.json();
+                osDadosAtuais = osData;
+                preencherCabecalho(osData);
+                preencherFormulario(osData);
+                selecionarEtapaAtual(osData);
+                selecionarEtapaObservacao(osData);
+            } catch (err) {
+                console.error("Erro ao recarregar OS", err);
+            }
+        }
+
+        async function carregarTimeline() {
+            try {
+                const resp = await apiFetch(`/api/os/${osId}/timeline/`);
+                if (!resp.ok) {
+                    const texto = await resp.text();
+                    console.error("Erro ao carregar timeline:", resp.status, texto);
+                    timelineCache = [];
+                    preencherTimeline();
+                    return [];
+                }
+
+                const data = await resp.json();
+                const lista = Array.isArray(data.results)
+                    ? data.results
+                    : Array.isArray(data)
+                        ? data
+                        : data.timeline || [];
+
+                timelineCache = lista;
+                preencherTimeline();
+                return lista;
+            } catch (err) {
+                console.error("Erro inesperado ao carregar timeline:", err);
+                timelineCache = [];
+                preencherTimeline();
+                return [];
+            }
+        }
+
+        async function marcarEtapa(etapaId, botao) {
+            const restaurar = marcarBotaoCarregando(botao, true, "Salvando...");
+
+            try {
+                const resp = await apiFetch(`/api/os/${osId}/timeline/marcar-concluida/`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ etapa: etapaId }),
+                });
+
+                if (!resp.ok) {
+                    const texto = await resp.text();
+                    alert(`Erro ${resp.status}: ${texto}`);
+                    return;
+                }
+
+                const data = await resp.json();
+                timelineCache = data.timeline || [];
+                preencherTimeline();
+                await recarregarOsBasico();
+                alert("Etapa marcada como concluída.");
+            } catch (err) {
+                console.error("Erro ao marcar etapa concluída:", err);
+                alert("Erro ao marcar etapa. Tente novamente.");
+            } finally {
+                restaurar();
+            }
+        }
+
+        async function reabrirEtapa(etapaId, botao) {
+            const restaurar = marcarBotaoCarregando(botao, true, "Reabrindo...");
+
+            try {
+                const resp = await apiFetch(`/api/os/${osId}/timeline/reabrir/`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ etapa: etapaId }),
+                });
+
+                if (!resp.ok) {
+                    const texto = await resp.text();
+                    alert(`Erro ${resp.status}: ${texto}`);
+                    return;
+                }
+
+                const data = await resp.json();
+                timelineCache = data.timeline || [];
+                preencherTimeline();
+                await recarregarOsBasico();
+                alert("Etapa reaberta.");
+            } catch (err) {
+                console.error("Erro ao reabrir etapa:", err);
+                alert("Erro ao reabrir etapa. Tente novamente.");
+            } finally {
+                restaurar();
+            }
+        }
+
         async function carregarDados() {
             const osUrl = `/api/os/${osId}/`;
             const fotosUrl = `/api/fotos-os/?os=${osId}`;
@@ -602,11 +719,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 observacoesCache = observacoesData;
 
                 preencherCabecalho(osData);
-                preencherTimeline(osData, fotosData);
                 preencherGaleria(fotosData, erroFotos);
                 preencherFormulario(osData);
                 selecionarEtapaAtual(osData);
                 selecionarEtapaObservacao(osData);
+                await carregarTimeline();
             } catch (err) {
                 console.error("Erro inesperado ao carregar detalhes da OS:", err);
                 erroBox.classList.remove("hidden");
@@ -636,7 +753,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 fotosCache = fotosData;
                 preencherGaleria(fotosData, false);
-                preencherTimeline(osDadosAtuais, fotosData);
             } catch (err) {
                 console.error("Erro inesperado ao recarregar fotos:", err);
                 mostrarUploadFeedback("Erro inesperado ao recarregar fotos", false);
@@ -709,85 +825,95 @@ document.addEventListener("DOMContentLoaded", () => {
             elEditStatus.value = os.aberta ? "aberta" : "fechada";
         }
 
-        function preencherTimeline(os, fotos) {
+        function preencherTimeline() {
             elTimeline.innerHTML = "";
 
-            const eventos = [];
-
-            if (os.data_entrada) {
-                eventos.push({
-                    tipo: "marco",
-                    ordem: os.data_entrada,
-                    titulo: "Entrada do veículo",
-                    descricao: `OS criada em ${formatarData(os.data_entrada)}.`,
-                });
-            }
-            if (os.data_prevista_entrega) {
-                eventos.push({
-                    tipo: "marco",
-                    ordem: os.data_prevista_entrega,
-                    titulo: "Previsão de entrega",
-                    descricao: `Previsão para ${formatarData(os.data_prevista_entrega)}.`,
-                });
-            }
-            if (os.data_saida) {
-                eventos.push({
-                    tipo: "marco",
-                    ordem: os.data_saida,
-                    titulo: "Veículo entregue",
-                    descricao: `Saída registrada em ${formatarData(os.data_saida)}.`,
-                });
-            }
-
-            fotos.forEach((f) => {
-                if (!f.tirada_em) return;
-
-                eventos.push({
-                    tipo: "foto",
-                    ordem: f.tirada_em,
-                    titulo: f.etapa_nome || "Foto registrada",
-                    descricao: f.titulo || f.observacao || "Foto da etapa.",
-                    detalhe: f,
-                });
+            const itens = [...timelineCache].sort((a, b) => {
+                const ordemA = a.ordem ?? 0;
+                const ordemB = b.ordem ?? 0;
+                if (ordemA !== ordemB) return ordemA - ordemB;
+                return (a.etapa ?? 0) - (b.etapa ?? 0);
             });
 
-            // Ordena por data
-            eventos.sort((a, b) => {
-                if (!a.ordem) return 1;
-                if (!b.ordem) return -1;
-                return a.ordem.localeCompare(b.ordem);
-            });
-
-            if (!eventos.length) {
+            if (!itens.length) {
                 elTimelineVazio.classList.remove("hidden");
                 return;
-            } else {
-                elTimelineVazio.classList.add("hidden");
             }
 
-            eventos.forEach((ev, idx) => {
+            elTimelineVazio.classList.add("hidden");
+
+            itens.forEach((item) => {
                 const li = document.createElement("li");
                 li.className = "mb-3 ml-1";
 
-                const dotBase = "absolute -left-2.5 w-2 h-2 rounded-full border border-slate-900";
-                const dotColor = ev.tipo === "foto" ? "bg-indigo-400" : "bg-emerald-400";
+                const badgeBase = "inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold";
+                const badgeClass =
+                    item.status === "concluida"
+                        ? "bg-emerald-500/20 text-emerald-200 border border-emerald-600/60"
+                        : "bg-amber-500/20 text-amber-200 border border-amber-600/60";
 
-                li.innerHTML = `
-                    <div class="relative">
-                        <span class="${dotBase} ${dotColor}"></span>
-                        <div class="ml-3">
-                            <p class="text-[11px] font-semibold text-slate-100">
-                                ${ev.titulo}
-                            </p>
-                            <p class="text-[11px] text-slate-400">
-                                ${ev.descricao}
-                            </p>
-                            <p class="text-[10px] text-slate-500 mt-0.5">
-                                ${ev.ordem ? formatarDataHora(ev.ordem) : ""}
-                            </p>
-                        </div>
-                    </div>
-                `;
+                const titulo = document.createElement("p");
+                titulo.className = "text-[11px] font-semibold text-slate-100 flex items-center gap-2";
+                titulo.textContent = item.etapa_nome || `Etapa ${item.etapa}`;
+
+                const badge = document.createElement("span");
+                badge.className = `${badgeBase} ${badgeClass}`;
+                badge.textContent = item.status === "concluida" ? "Concluída" : "Pendente";
+                titulo.appendChild(badge);
+
+                if (item.is_atual) {
+                    const atual = document.createElement("span");
+                    atual.className = "bg-indigo-500/20 text-indigo-100 border border-indigo-600/60 px-2 py-1 rounded-full text-[10px] font-semibold";
+                    atual.textContent = "Atual";
+                    titulo.appendChild(atual);
+                }
+
+                const conteudo = document.createElement("div");
+                conteudo.className = "ml-3 flex flex-col gap-1";
+                conteudo.appendChild(titulo);
+
+                const info = document.createElement("p");
+                info.className = "text-[10px] text-slate-400";
+                info.textContent = item.concluida_em
+                    ? `Concluída em ${formatarDataHora(item.concluida_em)}`
+                    : "Ainda pendente";
+                conteudo.appendChild(info);
+
+                const actions = document.createElement("div");
+                actions.className = "flex gap-2";
+
+                if (item.status === "pendente") {
+                    const btnConcluir = document.createElement("button");
+                    btnConcluir.type = "button";
+                    btnConcluir.textContent = "Marcar concluída";
+                    btnConcluir.className =
+                        "px-2 py-1 rounded-full text-[10px] font-semibold bg-emerald-600/80 hover:bg-emerald-500 text-white transition disabled:opacity-60";
+                    btnConcluir.addEventListener("click", () => marcarEtapa(item.etapa, btnConcluir));
+                    actions.appendChild(btnConcluir);
+                }
+
+                if (item.status === "concluida") {
+                    const btnReabrir = document.createElement("button");
+                    btnReabrir.type = "button";
+                    btnReabrir.textContent = "Reabrir";
+                    btnReabrir.className =
+                        "px-2 py-1 rounded-full text-[10px] font-semibold bg-amber-600/80 hover:bg-amber-500 text-white transition disabled:opacity-60";
+                    btnReabrir.addEventListener("click", () => reabrirEtapa(item.etapa, btnReabrir));
+                    actions.appendChild(btnReabrir);
+                }
+
+                conteudo.appendChild(actions);
+
+                const wrapper = document.createElement("div");
+                wrapper.className = "relative";
+                const dotBase = "absolute -left-2.5 w-2 h-2 rounded-full border border-slate-900";
+                const dotColor = item.status === "concluida" ? "bg-emerald-400" : "bg-amber-400";
+                const dot = document.createElement("span");
+                dot.className = `${dotBase} ${dotColor}`;
+
+                wrapper.appendChild(dot);
+                wrapper.appendChild(conteudo);
+                li.appendChild(wrapper);
 
                 elTimeline.appendChild(li);
             });
@@ -970,7 +1096,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 osDadosAtuais = atualizado;
                 preencherCabecalho(atualizado);
                 preencherFormulario(atualizado);
-                preencherTimeline(atualizado, fotosCache);
+                await carregarTimeline();
                 selecionarEtapaAtual(atualizado);
 
                 mostrarEtapaFeedback("Etapa atual atualizada", true);
@@ -1110,7 +1236,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 osDadosAtuais = atualizado;
                 preencherCabecalho(atualizado);
                 preencherFormulario(atualizado);
-                preencherTimeline(atualizado, fotosCache);
+                await carregarTimeline();
 
                 alert("Salvo com sucesso");
             } catch (err) {
