@@ -12,6 +12,9 @@ Gerencie quem tem acesso à sua oficina no CheckAuto.
 
 {% block content %}
 
+<script src="{% static 'painel/js/auth.js' %}"></script>
+<script src="{% static 'painel/js/api.js' %}"></script>
+
 <div id="usuarios-erro" class="hidden mb-4 bg-rose-900/40 border border-rose-700/70 text-rose-100 text-xs rounded-xl px-3 py-2">
     Ocorreu um erro ao carregar ou atualizar os usuários. Veja o console para detalhes.
 </div>
@@ -61,16 +64,11 @@ Gerencie quem tem acesso à sua oficina no CheckAuto.
 </div>
 
 <script>
-document.addEventListener("DOMContentLoaded", () => {
-    const TOKEN_KEY = "checkauto_token";
-    const token = window.localStorage.getItem(TOKEN_KEY);
+document.addEventListener("DOMContentLoaded", async () => {
     const erroBox = document.getElementById("usuarios-erro");
 
-    if (!token) {
-        erroBox.classList.remove("hidden");
-        erroBox.textContent = "⚠ Não foi encontrado token (checkauto_token). Faça login para gerenciar os usuários.";
-        return;
-    }
+    const ok = await verificarAutenticacao();
+    if (!ok) return;
 
     const tbody = document.getElementById("usuarios-tbody");
     const countLabel = document.getElementById("usuarios-count");
@@ -86,11 +84,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function carregarUsuarios() {
-        fetch("/api/usuarios-oficina/", {
+        apiFetch("/api/usuarios-oficina/", {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`,
             },
         })
         .then(async (resp) => {
@@ -177,13 +174,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function atualizarAtivoUsuario(id, novoValor) {
-        fetch(`/api/usuarios-oficina/${id}/`, {
+        apiFetch(`/api/usuarios-oficina/${id}/`, {
             method: "PATCH",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`,
             },
-            body: JSON.stringify({ ativo: novoValor }),
+            body: { ativo: novoValor },
         })
         .then(async (resp) => {
             if (!resp.ok) {

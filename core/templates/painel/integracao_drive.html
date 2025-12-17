@@ -1,6 +1,8 @@
 {% extends "painel/base.html" %} {# se você tiver um base; senão remova essa linha #}
 
 {% block content %}
+<script src="{% static 'painel/js/auth.js' %}"></script>
+<script src="{% static 'painel/js/api.js' %}"></script>
 <div class="max-w-3xl mx-auto mt-8">
   <h1 class="text-2xl font-bold mb-4">Integração com Google Drive</h1>
 
@@ -29,34 +31,19 @@
 </div>
 
 <script>
+document.addEventListener("DOMContentLoaded", async () => {
+  const ok = await verificarAutenticacao();
+  if (!ok) return;
 
-    function buildAuthHeaders(extra = {}) {
-  // pega exatamente o access_token que o painel grava ao logar
-  const token = window.localStorage.getItem("checkauto_token");
-
-  const headers = {
-    "X-Requested-With": "XMLHttpRequest",
-    ...extra,
-  };
-
-  if (token) {
-    headers["Authorization"] = "Bearer " + token;
-  }
-
-  return headers;
-}
-
+  const statusEl = document.getElementById("status-text");
+  const rootEl = document.getElementById("root-folder");
+  const btnConnect = document.getElementById("btn-connect");
+  const btnReconnect = document.getElementById("btn-reconnect");
+  const feedback = document.getElementById("feedback");
 
   async function carregarStatus() {
-    const statusEl = document.getElementById("status-text");
-    const rootEl = document.getElementById("root-folder");
-    const btnConnect = document.getElementById("btn-connect");
-    const btnReconnect = document.getElementById("btn-reconnect");
-    const feedback = document.getElementById("feedback");
-
     try {
-      const resp = await fetch("/api/drive/status/", {
-          headers: buildAuthHeaders(),
+      const resp = await apiFetch("/api/drive/status/", {
           credentials: "include", // <--- IMPORTANTE
         });
 
@@ -103,8 +90,7 @@
   }
 
   async function iniciarConexao() {
-    const resp = await fetch("/api/drive/auth-url/", {
-      headers: buildAuthHeaders(),
+    const resp = await apiFetch("/api/drive/auth-url/", {
       credentials: "include", // <--- IMPORTANTE
     });
 
@@ -125,5 +111,6 @@
   document.getElementById("btn-reconnect").addEventListener("click", iniciarConexao);
 
   carregarStatus();
+});
 </script>
 {% endblock %}
