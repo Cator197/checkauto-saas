@@ -3,7 +3,15 @@ import uuid
 import imghdr
 from django.core.files.base import ContentFile
 from rest_framework import serializers
-from .models import Oficina, UsuarioOficina, Etapa, ConfigFoto, OS, FotoOS
+from .models import (
+    Oficina,
+    UsuarioOficina,
+    Etapa,
+    ConfigFoto,
+    OS,
+    FotoOS,
+    ObservacaoEtapaOS,
+)
 
 
 class OficinaSerializer(serializers.ModelSerializer):
@@ -81,9 +89,34 @@ class ConfigFotoSerializer(serializers.ModelSerializer):
             'oficina': {'read_only': True},
         }
 
+
+class ObservacaoEtapaOSSerializer(serializers.ModelSerializer):
+    etapa_nome = serializers.CharField(source='etapa.nome', read_only=True)
+    criado_por_nome = serializers.CharField(
+        source='criado_por.user.get_full_name', read_only=True, default=None
+    )
+
+    class Meta:
+        model = ObservacaoEtapaOS
+        fields = [
+            'id',
+            'os',
+            'etapa',
+            'etapa_nome',
+            'texto',
+            'criado_por',
+            'criado_por_nome',
+            'criado_em',
+            'atualizado_em',
+        ]
+        read_only_fields = ('os', 'etapa', 'criado_por', 'criado_em', 'atualizado_em')
+
+
 class OSSerializer(serializers.ModelSerializer):
     oficina_nome = serializers.CharField(source='oficina.nome', read_only=True)
     etapa_atual_nome = serializers.CharField(source='etapa_atual.nome', read_only=True, default=None)
+    observacoes_etapas = serializers.SerializerMethodField()
+    observacao_etapa_atual = serializers.SerializerMethodField()
 
     class Meta:
         model = OS
@@ -100,6 +133,8 @@ class OSSerializer(serializers.ModelSerializer):
             'etapa_atual',
             'etapa_atual_nome',
             'observacoes',
+            'observacoes_etapas',
+            'observacao_etapa_atual',
             'data_entrada',
             'data_prevista_entrega',
             'data_saida',
@@ -122,6 +157,28 @@ class OSSerializer(serializers.ModelSerializer):
                 },
             },
         }
+
+    def get_observacoes_etapas(self, obj):
+        qs = getattr(obj, 'observacoes_etapas', None)
+        if qs is None:
+            return []
+
+        itens = qs.all() if hasattr(qs, 'all') else qs
+
+        return ObservacaoEtapaOSSerializer(
+            itens, many=True, context=self.context
+        ).data
+
+    def get_observacao_etapa_atual(self, obj):
+        if not obj.etapa_atual_id:
+            return None
+
+        qs = getattr(obj, 'observacoes_etapas', None) or []
+        itens = qs.all() if hasattr(qs, 'all') else qs
+
+        obs = next((item for item in itens if item.etapa_id == obj.etapa_atual_id), None)
+
+        return obs.texto if obs else None
 
 
 class PwaEtapaAtualSerializer(serializers.Serializer):

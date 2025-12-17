@@ -274,6 +274,31 @@ class FotoOS(models.Model):
 
 
 
+
+class ObservacaoEtapaOS(models.Model):
+    os = models.ForeignKey(OS, on_delete=models.CASCADE, related_name='observacoes_etapas')
+    etapa = models.ForeignKey(Etapa, on_delete=models.CASCADE, related_name='observacoes_os')
+    texto = models.TextField()
+    criado_por = models.ForeignKey(
+        UsuarioOficina,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='observacoes_criadas',
+    )
+
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('os', 'etapa')
+        verbose_name = "Observação da Etapa"
+        verbose_name_plural = "Observações das Etapas"
+
+    def __str__(self):
+        return f"OS {self.os.codigo} - {self.etapa.nome}"
+
+
 class OficinaDriveConfig(models.Model):
     """
     Configuração de integração com o Google Drive para uma oficina.
