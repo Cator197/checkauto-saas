@@ -121,7 +121,21 @@ class ObservacaoEtapaOSSerializer(serializers.ModelSerializer):
             'criado_em',
             'atualizado_em',
         ]
-        read_only_fields = ('os', 'etapa', 'criado_por', 'criado_em', 'atualizado_em')
+        read_only_fields = ('os', 'criado_por', 'criado_em', 'atualizado_em')
+        extra_kwargs = {
+            'texto': {'allow_blank': True},
+        }
+
+    def validate_etapa(self, value):
+        os_obj = self.context.get('os')
+
+        if not os_obj:
+            return value
+
+        if value.oficina_id != os_obj.oficina_id:
+            raise serializers.ValidationError('Etapa não encontrada para esta oficina.')
+
+        return value
 
 
 class OSSerializer(serializers.ModelSerializer):
