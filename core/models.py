@@ -181,7 +181,13 @@ class FotoOS(models.Model):
     )
 
     os = models.ForeignKey(OS, on_delete=models.CASCADE, related_name='fotos')
-    etapa = models.ForeignKey(Etapa, on_delete=models.CASCADE, related_name='fotos')
+    etapa = models.ForeignKey(
+        Etapa,
+        on_delete=models.CASCADE,
+        related_name='fotos',
+        null=True,
+        blank=True,
+    )
     tipo = models.CharField(max_length=10, choices=TIPO_CHOICES)
 
     # Se for PADRÃO, aponta para a configuração de foto do check-in
@@ -238,12 +244,15 @@ class FotoOS(models.Model):
         - Se tipo == PADRAO -> precisa de config_foto e a etapa deve ser a mesma da config
         - Se tipo == LIVRE -> config_foto deve ser vazia
         """
-        # Segurança: garantir que temos OS e Etapa antes
-        if not self.os or not self.etapa:
+        # Segurança: garantir que temos OS antes
+        if not self.os:
             return
 
         # Foto padrão
         if self.tipo == 'PADRAO':
+            if not self.etapa:
+                raise ValidationError("Fotos do tipo PADRÃO precisam estar vinculadas a uma etapa.")
+
             if not self.config_foto:
                 raise ValidationError("Fotos do tipo PADRÃO precisam ter uma ConfigFoto associada.")
 

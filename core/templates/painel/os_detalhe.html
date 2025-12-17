@@ -180,6 +180,36 @@ Timeline do veículo e fotos por etapa.
             </p>
         </div>
 
+        <div class="mb-3 border border-slate-800 rounded-2xl p-3 bg-slate-950/40">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-2">
+                <div>
+                    <h4 class="text-[11px] font-semibold text-slate-200 uppercase tracking-wide">Adicionar foto (livre)</h4>
+                    <p class="text-[10px] text-slate-400">Envie uma nova foto para esta OS.</p>
+                </div>
+                <span id="foto-upload-feedback" class="hidden text-[11px]"></span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] text-slate-200">
+                <label class="flex flex-col gap-1">
+                    <span class="text-slate-400 text-[10px] uppercase tracking-wide">Arquivo</span>
+                    <input id="fotoLivreInput" type="file" accept="image/*" class="bg-slate-950/70 border border-slate-800 rounded-lg px-2 py-2 text-[11px] focus:outline-none focus:ring-1 focus:ring-indigo-500" />
+                </label>
+
+                <label class="flex flex-col gap-1">
+                    <span class="text-slate-400 text-[10px] uppercase tracking-wide">Etapa (opcional)</span>
+                    <select id="fotoLivreEtapaSelect" class="bg-slate-950/70 border border-slate-800 rounded-lg px-2 py-2 text-[11px] focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                        <option value="">Sem etapa</option>
+                    </select>
+                </label>
+
+                <div class="flex items-end">
+                    <button id="btnEnviarFotoLivre" type="button" class="w-full px-3 py-2 text-[11px] font-semibold rounded-full bg-indigo-600 hover:bg-indigo-500 text-white transition">
+                        Enviar foto
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <div id="os-fotos-vazio" class="hidden text-[11px] text-slate-500 mb-2">
             Nenhuma foto registrada para esta OS até o momento.
         </div>
@@ -235,6 +265,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const elFotosVazio = document.getElementById("os-fotos-vazio");
         const elFotosContainer = document.getElementById("os-fotos-container");
         const mensagemFotosPadrao = elFotosVazio.textContent;
+
+        // Upload de foto livre
+        const elFotoLivreInput = document.getElementById("fotoLivreInput");
+        const elFotoLivreEtapaSelect = document.getElementById("fotoLivreEtapaSelect");
+        const elBtnEnviarFotoLivre = document.getElementById("btnEnviarFotoLivre");
+        const elFotoUploadFeedback = document.getElementById("foto-upload-feedback");
 
         // Modal de visualização de foto
         const elFotoModal = document.getElementById("foto-modal");
@@ -348,6 +384,21 @@ document.addEventListener("DOMContentLoaded", () => {
             elObservacaoFeedback.textContent = "";
         }
 
+        function mostrarUploadFeedback(texto, sucesso = true) {
+            if (!elFotoUploadFeedback) return;
+
+            elFotoUploadFeedback.textContent = texto;
+            elFotoUploadFeedback.classList.remove("hidden");
+            elFotoUploadFeedback.classList.toggle("text-emerald-300", sucesso);
+            elFotoUploadFeedback.classList.toggle("text-rose-300", !sucesso);
+        }
+
+        function limparUploadFeedback() {
+            if (!elFotoUploadFeedback) return;
+            elFotoUploadFeedback.classList.add("hidden");
+            elFotoUploadFeedback.textContent = "";
+        }
+
         function obterIdEtapa(obs) {
             if (!obs) return null;
 
@@ -368,24 +419,42 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         function preencherSelectEtapas(etapas) {
-            if (!elSelectEtapaAtual) return;
+            if (elSelectEtapaAtual) {
+                elSelectEtapaAtual.innerHTML = "";
 
-            elSelectEtapaAtual.innerHTML = "";
-
-            if (!etapas || !etapas.length) {
-                const opt = document.createElement("option");
-                opt.value = "";
-                opt.textContent = "Nenhuma etapa disponível";
-                elSelectEtapaAtual.appendChild(opt);
-                return;
+                if (!etapas || !etapas.length) {
+                    const opt = document.createElement("option");
+                    opt.value = "";
+                    opt.textContent = "Nenhuma etapa disponível";
+                    elSelectEtapaAtual.appendChild(opt);
+                } else {
+                    etapas.forEach((etapa) => {
+                        const opt = document.createElement("option");
+                        opt.value = etapa.id;
+                        opt.textContent = etapa.nome || `Etapa ${etapa.id}`;
+                        elSelectEtapaAtual.appendChild(opt);
+                    });
+                }
             }
 
-            etapas.forEach((etapa) => {
-                const opt = document.createElement("option");
-                opt.value = etapa.id;
-                opt.textContent = etapa.nome || `Etapa ${etapa.id}`;
-                elSelectEtapaAtual.appendChild(opt);
-            });
+            if (elFotoLivreEtapaSelect) {
+                const manterSelecao = elFotoLivreEtapaSelect.value;
+                elFotoLivreEtapaSelect.innerHTML = "";
+
+                const optDefault = document.createElement("option");
+                optDefault.value = "";
+                optDefault.textContent = "Sem etapa";
+                elFotoLivreEtapaSelect.appendChild(optDefault);
+
+                (etapas || []).forEach((etapa) => {
+                    const opt = document.createElement("option");
+                    opt.value = etapa.id;
+                    opt.textContent = etapa.nome || `Etapa ${etapa.id}`;
+                    elFotoLivreEtapaSelect.appendChild(opt);
+                });
+
+                elFotoLivreEtapaSelect.value = manterSelecao ?? "";
+            }
         }
 
         function preencherSelectObservacaoEtapa(etapas) {
@@ -541,6 +610,36 @@ document.addEventListener("DOMContentLoaded", () => {
             } catch (err) {
                 console.error("Erro inesperado ao carregar detalhes da OS:", err);
                 erroBox.classList.remove("hidden");
+            }
+        }
+
+        async function recarregarFotos() {
+            const fotosUrl = `/api/fotos-os/?os=${osId}`;
+
+            try {
+                const resp = await apiFetch(fotosUrl);
+                if (!resp.ok) {
+                    const texto = await resp.text();
+                    console.error("Erro ao recarregar fotos:", resp.status, texto);
+                    mostrarUploadFeedback(`Erro ${resp.status}: ${texto}`, false);
+                    return;
+                }
+
+                const raw = await resp.json();
+                let fotosData = [];
+
+                if (Array.isArray(raw.results)) {
+                    fotosData = raw.results;
+                } else if (Array.isArray(raw)) {
+                    fotosData = raw;
+                }
+
+                fotosCache = fotosData;
+                preencherGaleria(fotosData, false);
+                preencherTimeline(osDadosAtuais, fotosData);
+            } catch (err) {
+                console.error("Erro inesperado ao recarregar fotos:", err);
+                mostrarUploadFeedback("Erro inesperado ao recarregar fotos", false);
             }
         }
 
@@ -879,6 +978,63 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
 
+        async function enviarFotoLivre() {
+            if (!elBtnEnviarFotoLivre || !elFotoLivreInput) return;
+
+            limparUploadFeedback();
+
+            const file = elFotoLivreInput.files?.[0];
+
+            if (!file) {
+                mostrarUploadFeedback("Selecione uma imagem para enviar", false);
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("os", osId);
+            formData.append("arquivo", file);
+
+            if (elFotoLivreEtapaSelect && elFotoLivreEtapaSelect.value) {
+                formData.append("etapa", elFotoLivreEtapaSelect.value);
+            }
+
+            formData.append("tipo", "LIVRE");
+
+            elBtnEnviarFotoLivre.disabled = true;
+            elBtnEnviarFotoLivre.textContent = "Enviando...";
+
+            try {
+                const resp = await apiFetch("/api/fotos-os/", {
+                    method: "POST",
+                    body: formData,
+                });
+
+                if (!resp.ok) {
+                    const texto = await resp.text();
+                    mostrarUploadFeedback(`Erro ${resp.status}: ${texto}`, false);
+                    return;
+                }
+
+                await resp.json();
+                mostrarUploadFeedback("Foto enviada", true);
+
+                if (elFotoLivreInput) {
+                    elFotoLivreInput.value = "";
+                }
+                if (elFotoLivreEtapaSelect) {
+                    elFotoLivreEtapaSelect.value = "";
+                }
+
+                await recarregarFotos();
+            } catch (err) {
+                console.error("Erro ao enviar foto livre:", err);
+                mostrarUploadFeedback("Erro ao enviar foto. Tente novamente.", false);
+            } finally {
+                elBtnEnviarFotoLivre.disabled = false;
+                elBtnEnviarFotoLivre.textContent = "Enviar foto";
+            }
+        }
+
         async function salvarEdicao() {
             const payload = {};
 
@@ -947,6 +1103,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 limparObservacaoFeedback();
                 atualizarTextareaObservacao();
             });
+        }
+
+        if (elBtnEnviarFotoLivre) {
+            elBtnEnviarFotoLivre.addEventListener("click", enviarFotoLivre);
+        }
+
+        if (elFotoLivreInput) {
+            elFotoLivreInput.addEventListener("change", () => limparUploadFeedback());
         }
 
         elEditSalvar.addEventListener("click", salvarEdicao);

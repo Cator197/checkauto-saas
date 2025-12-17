@@ -646,24 +646,25 @@ class FotoOSViewSet(viewsets.ModelViewSet):
 
         # tenta subir pro drive
         try:
-            drive_file_id = upload_foto_os_drive(
-                os_obj=foto.os,
-                etapa=foto.etapa,
-                caminho_arquivo_local=foto.arquivo.path,
-                nome_arquivo=foto.arquivo.name,
-            )
-            if drive_file_id:
-                foto.drive_file_id = drive_file_id
-                foto.save(update_fields=["drive_file_id"])
-            else:
-                logger.warning(
-                    "Upload do Drive indisponível para foto",
-                    extra={
-                        "oficina_id": foto.os.oficina_id,
-                        "os_id": foto.os_id,
-                        "foto_id": foto.id,
-                    },
+            if foto.etapa:
+                drive_file_id = upload_foto_os_drive(
+                    os_obj=foto.os,
+                    etapa=foto.etapa,
+                    caminho_arquivo_local=foto.arquivo.path,
+                    nome_arquivo=foto.arquivo.name,
                 )
+                if drive_file_id:
+                    foto.drive_file_id = drive_file_id
+                    foto.save(update_fields=["drive_file_id"])
+                else:
+                    logger.warning(
+                        "Upload do Drive indisponível para foto",
+                        extra={
+                            "oficina_id": foto.os.oficina_id,
+                            "os_id": foto.os_id,
+                            "foto_id": foto.id,
+                        },
+                    )
         except Exception:
             logger.exception(
                 "Erro ao enviar foto para o Drive",
