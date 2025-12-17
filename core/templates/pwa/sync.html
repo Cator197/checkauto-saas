@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -5,7 +6,7 @@
   <title>CheckAuto - Sincronização</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <link rel="manifest" href="/static/pwa/manifest.json">
+  <link rel="manifest" href="{% static 'pwa/manifest.json' %}">
   <meta name="theme-color" content="#0f172a">
 
   <style>
@@ -77,8 +78,10 @@
 
   <div class="status" id="syncStatus">Aguardando ação do usuário…</div>
 
-  <script src="/static/pwa/js/db.js"></script>
-  <script src="/static/pwa/js/sync.js"></script>
+  <script src="{% static 'shared/api.js' %}"></script>
+  <script src="{% static 'pwa/js/api.js' %}"></script>
+  <script src="{% static 'pwa/js/db.js' %}"></script>
+  <script src="{% static 'pwa/js/sync.js' %}"></script>
 
 </body>
 </html>

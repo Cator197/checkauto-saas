@@ -1,10 +1,11 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
   <title>Produção do Veículo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="manifest" href="/static/pwa/manifest.json">
+  <link rel="manifest" href="{% static 'pwa/manifest.json' %}">
   <meta name="theme-color" content="#0f172a" />
   <style>
     :root {
@@ -301,8 +302,10 @@
     </div>
   </div>
 
-  <script src="/static/pwa/js/db.js"></script>
-  <script src="/static/pwa/js/app.js"></script>
-  <script src="/static/pwa/js/os_producao.js"></script>
+  <script src="{% static 'shared/api.js' %}"></script>
+  <script src="{% static 'pwa/js/api.js' %}"></script>
+  <script src="{% static 'pwa/js/db.js' %}"></script>
+  <script src="{% static 'pwa/js/app.js' %}"></script>
+  <script src="{% static 'pwa/js/os_producao.js' %}"></script>
 </body>
 </html>

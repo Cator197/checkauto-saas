@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -7,7 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <!-- Manifest -->
-  <link rel="manifest" href="/static/pwa/manifest.json">
+  <link rel="manifest" href="{% static 'pwa/manifest.json' %}">
 
   <meta name="theme-color" content="#0f172a" />
 
@@ -56,8 +57,10 @@
     Fotos pendentes: <span id="fotosPendentes">0</span>
   </div>
 
-  <script src="/static/pwa/js/db.js"></script>
-  <script src="/static/pwa/js/app.js"></script>
+  <script src="{% static 'shared/api.js' %}"></script>
+  <script src="{% static 'pwa/js/api.js' %}"></script>
+  <script src="{% static 'pwa/js/db.js' %}"></script>
+  <script src="{% static 'pwa/js/app.js' %}"></script>
 
 </body>
 </html>
