@@ -59,16 +59,52 @@
     }
     .card-footer {
       font-size: 14px;
-      color: #eab308;
+      color: #475569;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
     }
     .muted {
       color: #94a3b8;
+    }
+    .proxima {
+      margin-top: 4px;
+      color: #0f172a;
+      font-weight: bold;
     }
     .back {
       display: inline-block;
       margin-top: 10px;
       color: #2563eb;
       text-decoration: none;
+    }
+    .btn-primario {
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-weight: bold;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .btn-primario:disabled {
+      background: #cbd5e1;
+      cursor: not-allowed;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+    .badge-pendente {
+      background: #fef3c7;
+      color: #b45309;
+      border: 1px solid #f59e0b;
     }
   </style>
 </head>
