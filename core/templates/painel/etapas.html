@@ -12,6 +12,9 @@ Defina as etapas do processo e quais aparecem no dashboard.
 
 {% block content %}
 
+<script src="{% static 'painel/js/auth.js' %}"></script>
+<script src="{% static 'painel/js/api.js' %}"></script>
+
 <div id="etapas-erro" class="hidden mb-4 bg-rose-900/40 border border-rose-700/70 text-rose-100 text-xs rounded-xl px-3 py-2">
     Ocorreu um erro ao carregar ou salvar as etapas. Veja o console para detalhes.
 </div>
@@ -120,16 +123,11 @@ Defina as etapas do processo e quais aparecem no dashboard.
 </div>
 
 <script>
-document.addEventListener("DOMContentLoaded", () => {
-    const TOKEN_KEY = "checkauto_token";
-    const token = window.localStorage.getItem(TOKEN_KEY);
+document.addEventListener("DOMContentLoaded", async () => {
     const erroBox = document.getElementById("etapas-erro");
 
-    if (!token) {
-        erroBox.classList.remove("hidden");
-        erroBox.textContent = "⚠ Não foi encontrado token (checkauto_token). Faça login para configurar as etapas.";
-        return;
-    }
+    const ok = await verificarAutenticacao();
+    if (!ok) return;
 
     const tbody = document.getElementById("etapas-tbody");
     const countLabel = document.getElementById("etapas-count");
@@ -157,11 +155,10 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     function carregarEtapas() {
-        fetch("/api/etapas/", {
+        apiFetch("/api/etapas/", {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`,
             },
         })
         .then(async (resp) => {
@@ -279,13 +276,12 @@ document.addEventListener("DOMContentLoaded", () => {
             method = "PATCH";
         }
 
-        fetch(url, {
+        apiFetch(url, {
             method: method,
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`,
             },
-            body: JSON.stringify(payload),
+            body: payload,
         })
         .then(async (resp) => {
             if (!resp.ok) {
