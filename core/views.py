@@ -1163,6 +1163,72 @@ class PwaVeiculosEmProducaoView(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+class ProximaEtapaAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
+
+    def get(self, request):
+        os_id = request.query_params.get("os")
+
+        if not os_id:
+            return Response(
+                {"detail": "Parâmetro 'os' é obrigatório."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            os_id = int(os_id)
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "Parâmetro 'os' inválido."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = request.user
+        oficina_usuario = get_oficina_do_usuario(user)
+
+        try:
+            os_obj = OS.objects.select_related("oficina", "etapa_atual").get(id=os_id)
+        except OS.DoesNotExist:
+            return Response(
+                {"detail": "OS não encontrada."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not user.is_superuser:
+            if oficina_usuario is None or os_obj.oficina_id != oficina_usuario.id:
+                return Response(
+                    {"detail": "OS não encontrada para esta oficina."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+        etapa_atual = os_obj.etapa_atual
+
+        if etapa_atual is None:
+            return Response(
+                {"detail": "A OS não possui etapa atual definida."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        proxima_etapa = (
+            Etapa.objects.filter(
+                oficina=os_obj.oficina,
+                ativa=True,
+                ordem__gt=etapa_atual.ordem,
+            )
+            .order_by("ordem", "id")
+            .first()
+        )
+
+        if proxima_etapa is None:
+            return Response({"proxima_etapa": None}, status=status.HTTP_200_OK)
+
+        return Response(
+            {"proxima_etapa": {"id": proxima_etapa.id, "nome": proxima_etapa.nome}},
+            status=status.HTTP_200_OK,
+        )
+
+
 class DashboardResumoView(APIView):
     """
     Retorna o resumo para o dashboard do painel web:
