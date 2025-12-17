@@ -1,12 +1,12 @@
 from rest_framework import viewsets
-from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.utils import timezone
+import base64
+from django.core.files.base import ContentFile
 from datetime import date
 from django.db.models import Q
 from django.db import transaction
@@ -15,17 +15,9 @@ from django.conf import settings
 from django.shortcuts import redirect
 from google_auth_oauthlib.flow import Flow
 import json
-from .models import (
-    OficinaDriveConfig,
-    ObservacaoEtapaOS,
-    Oficina,
-    UsuarioOficina,
-    Etapa,
-    ConfigFoto,
-    OS,
-    FotoOS,
-)
-from .utils import get_oficina_do_usuario, get_papel_do_usuario
+from .models import OficinaDriveConfig
+from .models import Oficina, UsuarioOficina, Etapa, ConfigFoto, OS, FotoOS, OficinaDriveConfig
+from .utils import get_oficina_do_usuario
 from core.drive_service import upload_foto_os_drive
 from core.drive_service import upload_foto_os_drive
 
@@ -38,38 +30,13 @@ from .serializers import (
     EtapaSerializer,
     ConfigFotoSerializer,
     OSSerializer,
-    PwaVeiculoEmProducaoSerializer,
     FotoOSSerializer,
-    ObservacaoEtapaOSSerializer,
 )
 from .utils import get_oficina_do_usuario
 
 import logging
 from .drive_service import criar_pasta_os, upload_foto_para_drive
 logger = logging.getLogger(__name__)
-
-
-class AuthMeView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        user = request.user
-
-        payload = {
-            "id": user.id,
-            "username": user.username,
-            "full_name": user.get_full_name() or user.username,
-        }
-
-        oficina = get_oficina_do_usuario(user)
-        if oficina is not None:
-            payload["oficina_id"] = oficina.id
-
-        papel = get_papel_do_usuario(user, getattr(request, "auth", None))
-        if papel:
-            payload["papel"] = papel
-
-        return Response(payload)
 
 
 class OficinaViewSet(viewsets.ModelViewSet):
@@ -113,15 +80,6 @@ class EtapaViewSet(viewsets.ModelViewSet):
     serializer_class = EtapaSerializer
     permission_classes = [IsAuthenticated]
 
-    def create(self, request, *args, **kwargs):
-        if self._is_operador(request):
-            return Response(
-                {"detail": "Operador não tem permissão para criar etapas."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        return super().create(request, *args, **kwargs)
-
     def get_queryset(self):
         user = self.request.user
 
@@ -140,7 +98,6 @@ class EtapaViewSet(viewsets.ModelViewSet):
         não do payload do front.
         """
         user = self.request.user
-
         oficina = get_oficina_do_usuario(user)
 
         if oficina is None and not user.is_superuser:
@@ -149,37 +106,6 @@ class EtapaViewSet(viewsets.ModelViewSet):
 
         # Para superuser, se quiser, poderia aceitar oficina vinda no payload.
         serializer.save(oficina=oficina)
-
-    def update(self, request, *args, **kwargs):
-        if self._is_operador(request):
-            return Response(
-                {"detail": "Operador não pode alterar etapas."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        return super().update(request, *args, **kwargs)
-
-    def partial_update(self, request, *args, **kwargs):
-        if self._is_operador(request):
-            return Response(
-                {"detail": "Operador não pode alterar etapas."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        return super().partial_update(request, *args, **kwargs)
-
-    def destroy(self, request, *args, **kwargs):
-        if self._is_operador(request):
-            return Response(
-                {"detail": "Operador não pode excluir etapas."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        return super().destroy(request, *args, **kwargs)
-
-    def _is_operador(self, request):
-        papel = get_papel_do_usuario(request.user, getattr(request, "auth", None))
-        return (papel or "").upper() == "FUNC"
 
 
 from rest_framework import serializers  # garantir que está importado
@@ -218,9 +144,7 @@ class ConfigFotoViewSet(viewsets.ModelViewSet):
 
 
 class OSViewSet(viewsets.ModelViewSet):
-    queryset = OS.objects.select_related('oficina', 'etapa_atual').prefetch_related(
-        'observacoes_etapas__etapa', 'observacoes_etapas__criado_por__user'
-    )
+    queryset = OS.objects.select_related('oficina', 'etapa_atual').all()
     serializer_class = OSSerializer
     permission_classes = [IsAuthenticated]
 
@@ -234,18 +158,14 @@ class OSViewSet(viewsets.ModelViewSet):
         user = self.request.user
 
         # Base: filtra por oficina
-        base_qs = OS.objects.select_related('oficina', 'etapa_atual').prefetch_related(
-            'observacoes_etapas__etapa', 'observacoes_etapas__criado_por__user'
-        )
-
         if user.is_superuser:
-            qs = base_qs.all()
+            qs = OS.objects.select_related('oficina', 'etapa_atual').all()
         else:
             oficina = get_oficina_do_usuario(user)
             if oficina is None:
                 return OS.objects.none()
 
-            qs = base_qs.filter(oficina=oficina)
+            qs = OS.objects.select_related('oficina', 'etapa_atual').filter(oficina=oficina)
 
         params = self.request.query_params
 
@@ -305,185 +225,8 @@ class OSViewSet(viewsets.ModelViewSet):
             logger.info("Chamando criar_pasta_os para OS id=%s codigo=%s", os_obj.id, os_obj.codigo)
             criar_pasta_os(os_obj)
         except Exception:
-            logger.exception(
-                "Erro ao criar pasta no Drive para OS",
-                extra={"oficina_id": oficina.id, "os_id": os_obj.id},
-            )
+            logger.exception("Erro ao criar pasta no Drive para OS id=%s", os_obj.id)
 
-    def create(self, request, *args, **kwargs):
-        if self._is_operador(request):
-            return Response(
-                {"detail": "Operador não pode criar ou editar dados da OS."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        return super().create(request, *args, **kwargs)
-
-    def update(self, request, *args, **kwargs):
-        if self._is_operador(request):
-            return Response(
-                {"detail": "Operador não pode alterar dados da OS."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        return super().update(request, *args, **kwargs)
-
-    def partial_update(self, request, *args, **kwargs):
-        if self._is_operador(request):
-            if not self._operator_patch_is_allowed(request):
-                return Response(
-                    {"detail": "Operador só pode editar observações da etapa."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-
-        return super().partial_update(request, *args, **kwargs)
-
-    def destroy(self, request, *args, **kwargs):
-        if self._is_operador(request):
-            return Response(
-                {"detail": "Operador não pode remover OS."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        return super().destroy(request, *args, **kwargs)
-
-    @action(detail=True, methods=["put"], url_path=r"etapas/(?P<etapa_id>[^/.]+)/observacao")
-    def upsert_observacao_etapa(self, request, pk=None, etapa_id=None):
-        os_obj = self.get_object()
-
-        try:
-            etapa = Etapa.objects.get(id=etapa_id, oficina=os_obj.oficina)
-        except Etapa.DoesNotExist:
-            return Response(
-                {"detail": "Etapa não encontrada para esta oficina."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        payload = {"texto": request.data.get("texto", "")}
-
-        observacao = ObservacaoEtapaOS.objects.filter(os=os_obj, etapa=etapa).first()
-
-        serializer = ObservacaoEtapaOSSerializer(
-            instance=observacao,
-            data=payload,
-            partial=True,
-            context={"request": request},
-        )
-        serializer.is_valid(raise_exception=True)
-
-        usuario_oficina = UsuarioOficina.objects.filter(
-            user=request.user, oficina=os_obj.oficina, ativo=True
-        ).first()
-
-        criado_por = serializer.instance.criado_por if serializer.instance else None
-
-        observacao = serializer.save(
-            os=os_obj,
-            etapa=etapa,
-            criado_por=criado_por or usuario_oficina,
-        )
-
-        return Response(
-            ObservacaoEtapaOSSerializer(observacao, context={"request": request}).data,
-            status=status.HTTP_200_OK,
-        )
-
-    @action(detail=True, methods=["post"], url_path="avancar-etapa")
-    def avancar_etapa(self, request, pk=None):
-        """
-        Avança a OS para a próxima etapa ativa, validando fotos obrigatórias.
-        """
-
-        if self._is_operador(request):
-            return Response(
-                {"detail": "Operador não pode alterar a etapa manualmente."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        os_obj = self.get_object()
-
-        etapa_atual = os_obj.etapa_atual
-        if etapa_atual is None:
-            return Response(
-                {"detail": "A OS não possui etapa atual definida."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        configs_obrigatorias = list(
-            ConfigFoto.objects.filter(
-                oficina=os_obj.oficina,
-                etapa=etapa_atual,
-                obrigatoria=True,
-                ativa=True,
-            )
-        )
-
-        pendentes = [
-            cfg
-            for cfg in configs_obrigatorias
-            if not FotoOS.objects.filter(
-                os=os_obj, config_foto=cfg, tipo="PADRAO"
-            ).exists()
-        ]
-
-        if pendentes:
-            return Response(
-                {
-                    "detail": "Fotos obrigatórias pendentes na etapa atual.",
-                    "configs_pendentes": [cfg.id for cfg in pendentes],
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        proxima_etapa = (
-            Etapa.objects.filter(
-                oficina=os_obj.oficina,
-                ativa=True,
-                ordem__gt=etapa_atual.ordem,
-            )
-            .order_by("ordem")
-            .first()
-        )
-
-        if proxima_etapa is None:
-            return Response(
-                {"detail": "A OS já está na última etapa ativa."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        observacao = request.data.get("observacao")
-
-        with transaction.atomic():
-            os_obj.etapa_atual = proxima_etapa
-
-            fields_to_update = ["etapa_atual", "atualizado_em"]
-
-            if observacao:
-                os_obj.observacoes = (
-                    f"{os_obj.observacoes}\n\n{observacao}"
-                    if os_obj.observacoes
-                    else observacao
-                )
-                fields_to_update.append("observacoes")
-
-            os_obj.save(update_fields=fields_to_update)
-
-        serializer = OSSerializer(os_obj, context={"request": request})
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-    def _is_operador(self, request):
-        papel = get_papel_do_usuario(request.user, getattr(request, "auth", None))
-        return (papel or "").upper() == "FUNC"
-
-    def _operator_patch_is_allowed(self, request):
-        if request.method.lower() != "patch":
-            return False
-
-        allowed_fields = {"observacoes"}
-        data_keys = set(request.data.keys())
-
-        # Aceita PATCH vazio ou apenas com observacoes
-        return not data_keys or data_keys.issubset(allowed_fields)
 
 
 
@@ -537,33 +280,17 @@ class FotoOSViewSet(viewsets.ModelViewSet):
                 caminho_arquivo_local=foto.arquivo.path,
                 nome_arquivo=foto.arquivo.name,
             )
-            if drive_file_id:
-                foto.drive_file_id = drive_file_id
-                foto.save(update_fields=["drive_file_id"])
-            else:
-                logger.warning(
-                    "Upload do Drive indisponível para foto",
-                    extra={
-                        "oficina_id": foto.os.oficina_id,
-                        "os_id": foto.os_id,
-                        "foto_id": foto.id,
-                    },
-                )
+            foto.drive_file_id = drive_file_id
+            foto.save(update_fields=["drive_file_id"])
         except Exception:
-            logger.exception(
-                "Erro ao enviar foto para o Drive",
-                extra={
-                    "oficina_id": foto.os.oficina_id,
-                    "os_id": foto.os_id,
-                    "foto_id": foto.id,
-                },
-            )
+            logger.exception("Erro ao enviar foto id=%s para o Drive", foto.id)
 
 
 from django.utils import timezone
+import base64
+from django.core.files.base import ContentFile
 
 from .models import Etapa, UsuarioOficina, Oficina  # garante esses imports
-from .services.fotos import criar_foto_os
 
 
 class SyncView(APIView):
@@ -604,12 +331,6 @@ class SyncView(APIView):
             # converte para o formato do serializer de OS
             item_convertido = self.converter_payload_pwa(item)
 
-            if not item_convertido.get("modelo_veiculo"):
-                return Response(
-                    {"detail": "Modelo do veículo não pode ser vazio."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
             serializer = OSSerializer(
                 data=item_convertido,
                 context={"request": request},
@@ -624,29 +345,17 @@ class SyncView(APIView):
                         criar_pasta_os(os_obj)
                     except Exception as e:
                         # não quebra o sync se o Drive falhar
-                        logger.warning(
-                            "[SYNC] Erro ao criar pasta da OS %s no Drive: %s",
-                            os_obj.id,
-                            e,
-                        )
+                        logger.warning("[SYNC] Erro ao criar pasta da OS %s no Drive: %s", os_obj.id, e)
 
                     # 2) Salva fotos (padrão + livres) como FotoOS tipo LIVRE
-                    photo_errors = self.salvar_fotos(os_obj, item, user)
+                    self.salvar_fotos(os_obj, item, user)
 
-                resultados.append({
-                    "saved": True,
-                    "os_id": os_obj.id,
-                    "os_codigo": os_obj.codigo,
-                    "errors": [],
-                    "photo_errors": photo_errors,
-                })
+                # re-serializa com o objeto salvo (só pra garantir consistência)
+                resultados.append(OSSerializer(os_obj, context={"request": request}).data)
             else:
                 resultados.append({
-                    "saved": False,
-                    "os_id": None,
-                    "os_codigo": item.get("codigo"),
+                    "input": item,
                     "errors": serializer.errors,
-                    "photo_errors": [],
                 })
 
         return Response({"os": resultados}, status=status.HTTP_200_OK)
@@ -659,10 +368,6 @@ class SyncView(APIView):
         os_data = item.get("os", {}) or {}
         cliente = item.get("cliente", {}) or {}
 
-        modelo_veiculo = veiculo.get("modelo")
-        if modelo_veiculo:
-            modelo_veiculo = modelo_veiculo.strip()
-
         # Código da OS:
         numero_interno = os_data.get("numeroInterno") or veiculo.get("placa")
         if not numero_interno:
@@ -672,7 +377,7 @@ class SyncView(APIView):
             "oficina": item.get("oficina"),
             "codigo": numero_interno,
             "placa": veiculo.get("placa"),
-            "modelo_veiculo": modelo_veiculo,
+            "modelo_veiculo": veiculo.get("modelo"),
             "cor_veiculo": veiculo.get("cor"),
             "nome_cliente": cliente.get("nome"),
             "telefone_cliente": cliente.get("telefone"),
@@ -692,7 +397,13 @@ class SyncView(APIView):
         - etapa = etapa de check-in da oficina (ou etapa_atual da OS)
         - sem config_foto (regra de negócio das fotos LIVRES).
         """
-        photo_errors = []
+        print("[SYNC] fotos keys:",
+              (item.get("fotos") or {}).keys() if isinstance(item.get("fotos"), dict) else type(item.get("fotos")))
+        print("[SYNC] qtd padrao:",
+              len((item.get("fotos") or {}).get("padrao", []) if isinstance(item.get("fotos"), dict) else []))
+        print("[SYNC] qtd livres:",
+              len((item.get("fotos") or {}).get("livres", []) if isinstance(item.get("fotos"), dict) else []))
+
 
         fotos = item.get("fotos", {}) or {}
         todas_fotos = []
@@ -700,7 +411,7 @@ class SyncView(APIView):
         todas_fotos.extend(fotos.get("livres", []) or [])
 
         if not todas_fotos:
-            return photo_errors
+            return
 
         # Descobre etapa para associar as fotos
         etapa = os_obj.etapa_atual
@@ -713,17 +424,8 @@ class SyncView(APIView):
             etapa = Etapa.objects.filter(oficina=os_obj.oficina).order_by("ordem", "id").first()
 
         if etapa is None:
-            message = "[SYNC] Sem etapas cadastradas para oficina. Fotos ignoradas."
-            logger.warning(
-                message,
-                extra={
-                    "user_id": user.id,
-                    "oficina_id": os_obj.oficina_id,
-                    "os_codigo": os_obj.codigo,
-                },
-            )
-            photo_errors.append(message)
-            return photo_errors
+            print(f"[SYNC] Sem etapas cadastradas para oficina_id={os_obj.oficina_id}. Fotos ignoradas.")
+            return
 
         # Descobre o UsuarioOficina (se existir) para preencher tirada_por
         usuario_oficina = None
@@ -736,152 +438,63 @@ class SyncView(APIView):
         except UsuarioOficina.DoesNotExist:
             usuario_oficina = None
 
-        for idx, foto in enumerate(todas_fotos):
-            extra_log = {
-                "user_id": user.id,
-                "oficina_id": os_obj.oficina_id,
-                "os_codigo": os_obj.codigo,
-                "foto_idx": idx,
-            }
+        for foto in todas_fotos:
+            # ✅ aceita tanto "arquivo" quanto "dataUrl" (como no teu IndexedDB)
+            conteudo_base64 = foto.get("arquivo") or foto.get("dataUrl")
+            if not conteudo_base64:
+                continue
 
-            foto_obj, error_message = criar_foto_os(
-                foto=foto,
-                os_obj=os_obj,
-                etapa=etapa,
-                usuario_oficina=usuario_oficina,
-                extra_log=extra_log,
+            # Se vier no formato data:image/png;base64,AAAA...
+            header = None
+            if conteudo_base64.startswith("data:"):
+                header, conteudo_base64 = conteudo_base64.split(",", 1)
+
+            # fallback: se tiver vírgula, remove prefixo
+            elif "," in conteudo_base64:
+                conteudo_base64 = conteudo_base64.split(",", 1)[1]
+
+            try:
+                conteudo = base64.b64decode(conteudo_base64)
+            except Exception:
+                continue
+
+            # ✅ tenta pegar extensão do payload / header
+            extensao = (foto.get("extensao") or "").lower().strip().lstrip(".")
+            if not extensao and header:
+                # exemplo header: data:image/png;base64
+                if "image/png" in header:
+                    extensao = "png"
+                elif "image/webp" in header:
+                    extensao = "webp"
+                elif "image/jpeg" in header or "image/jpg" in header:
+                    extensao = "jpg"
+            if not extensao:
+                extensao = "jpg"
+
+            arquivo = ContentFile(
+                conteudo,
+                name=f"pwa_os{os_obj.id}_{foto.get('id') or '0'}.{extensao}"
             )
 
-            if error_message:
-                photo_errors.append(error_message)
+            try:
+                foto_obj = FotoOS.objects.create(
+                    os=os_obj,
+                    etapa=etapa,
+                    tipo="LIVRE",
+                    config_foto=None,
+                    arquivo=arquivo,
+                    titulo=foto.get("nome") or None,
+                    tirada_por=usuario_oficina,
+                )
+            except Exception as e:
+                print(f"[SYNC] Falha ao criar FotoOS para os_id={os_obj.id}: {e}")
                 continue
 
             # Envia essa foto para o Drive (na pasta da OS + subpasta da etapa)
             try:
                 upload_foto_para_drive(foto_obj)
             except Exception as e:
-                message = f"[SYNC] Erro ao enviar foto {foto_obj.id} para o Drive: {e}"
-                logger.warning(
-                    message,
-                    extra={
-                        "user_id": user.id,
-                        "oficina_id": os_obj.oficina_id,
-                        "os_codigo": os_obj.codigo,
-                        "foto_idx": idx,
-                    },
-                )
-                photo_errors.append(message)
-
-        return photo_errors
-
-
-class PwaVeiculosEmProducaoView(APIView):
-    permission_classes = [IsAuthenticated]
-    authentication_classes = [JWTAuthentication]
-
-    def get(self, request):
-        user = request.user
-
-        if user.is_superuser:
-            queryset = OS.objects.select_related("etapa_atual", "oficina").filter(aberta=True)
-        else:
-            oficina = get_oficina_do_usuario(user)
-            if oficina is None:
-                return Response([], status=status.HTTP_200_OK)
-
-            queryset = OS.objects.select_related("etapa_atual", "oficina").filter(
-                oficina=oficina,
-                aberta=True,
-            )
-
-        ordens = list(queryset.order_by("-atualizado_em"))
-
-        if not ordens:
-            return Response([], status=status.HTTP_200_OK)
-
-        os_ids = [os_obj.id for os_obj in ordens]
-        fotos_por_os = {}
-
-        for foto in FotoOS.objects.filter(os_id__in=os_ids).select_related("etapa"):
-            fotos_por_os.setdefault(foto.os_id, []).append(foto)
-
-        primeira_etapa_cache = {}
-        configs_cache = {}
-
-        def obter_etapa_atual(os_obj):
-            if os_obj.etapa_atual:
-                return os_obj.etapa_atual
-
-            oficina_id = os_obj.oficina_id
-            if oficina_id not in primeira_etapa_cache:
-                primeira_etapa_cache[oficina_id] = (
-                    Etapa.objects.filter(oficina_id=oficina_id, ativa=True)
-                    .order_by("ordem")
-                    .first()
-                )
-            return primeira_etapa_cache[oficina_id]
-
-        def obter_configs(oficina_id, etapa_id):
-            chave = (oficina_id, etapa_id)
-            if chave not in configs_cache:
-                if etapa_id is None:
-                    configs_cache[chave] = []
-                else:
-                    configs_cache[chave] = list(
-                        ConfigFoto.objects.filter(
-                            oficina_id=oficina_id,
-                            etapa_id=etapa_id,
-                            obrigatoria=True,
-                            ativa=True,
-                        ).values_list("id", flat=True)
-                    )
-            return configs_cache[chave]
-
-        def build_drive_thumb(drive_file_id):
-            if not drive_file_id:
-                return None
-            return f"https://drive.google.com/thumbnail?id={drive_file_id}&sz=w800"
-
-        resposta = []
-
-        for os_obj in ordens:
-            etapa = obter_etapa_atual(os_obj)
-            etapa_id = etapa.id if etapa else None
-            config_ids = obter_configs(os_obj.oficina_id, etapa_id)
-            fotos_da_os = fotos_por_os.get(os_obj.id, [])
-
-            configs_atendidos = {
-                foto.config_foto_id
-                for foto in fotos_da_os
-                if foto.config_foto_id in config_ids
-            }
-            faltantes = max(len(config_ids) - len(configs_atendidos), 0)
-
-            thumb_url = None
-            if etapa_id is not None:
-                fotos_na_etapa = [f for f in fotos_da_os if f.etapa_id == etapa_id]
-                if fotos_na_etapa:
-                    ultima_foto = max(fotos_na_etapa, key=lambda f: (f.tirada_em, f.id))
-                    thumb_url = build_drive_thumb(ultima_foto.drive_file_id)
-
-            resposta.append(
-                {
-                    "os_id": os_obj.id,
-                    "codigo": os_obj.codigo,
-                    "placa": os_obj.placa,
-                    "modelo_veiculo": os_obj.modelo_veiculo,
-                    "etapa_atual": {
-                        "id": etapa_id,
-                        "nome": etapa.nome if etapa else None,
-                    },
-                    "faltam_fotos_obrigatorias": faltantes,
-                    "thumb_url": thumb_url,
-                }
-            )
-
-        serializer = PwaVeiculoEmProducaoSerializer(data=resposta, many=True)
-        serializer.is_valid(raise_exception=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+                print(f"[SYNC] Erro ao enviar foto {foto_obj.id} para o Drive: {e}")
 
 
 class DashboardResumoView(APIView):
@@ -1087,7 +700,7 @@ class GoogleDriveOAuth2CallbackView(APIView):
         if error:
             # Erro vindo do Google (usuário cancelou, etc.)
             return redirect(
-                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracao_drive/')}"
+                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracoes/drive/')}"
                 f"?status=error&msg={error}"
             )
 
@@ -1096,7 +709,7 @@ class GoogleDriveOAuth2CallbackView(APIView):
 
         if not code or not state:
             return redirect(
-                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracao_drive/')}"
+                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracoes/drive/')}"
                 "?status=error&msg=missing_code_or_state"
             )
 
@@ -1107,7 +720,7 @@ class GoogleDriveOAuth2CallbackView(APIView):
 
         if not oficina_id:
             return redirect(
-                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracao_drive/')}"
+                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracoes/drive/')}"
                 "?status=error&msg=invalid_state"
             )
 
@@ -1115,7 +728,7 @@ class GoogleDriveOAuth2CallbackView(APIView):
             oficina = Oficina.objects.get(id=oficina_id)
         except Oficina.DoesNotExist:
             return redirect(
-                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracao_drive/')}"
+                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracoes/drive/')}"
                 "?status=error&msg=oficina_not_found"
             )
 
@@ -1130,7 +743,7 @@ class GoogleDriveOAuth2CallbackView(APIView):
             flow.fetch_token(code=code)
         except Exception:
             return redirect(
-                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracao_drive/')}"
+                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracoes/drive/')}"
                 "?status=error&msg=token_fetch_failed"
             )
 
@@ -1188,14 +801,15 @@ class GoogleDriveOAuth2CallbackView(APIView):
         redirect_url = getattr(
             settings,
             "GOOGLE_DRIVE_POST_CONNECT_REDIRECT",
-            "/painel/integracao_drive/",
+            "/painel/integracoes/drive/",
         )
 
         return redirect(f"{redirect_url}?status=ok")
 
 # core/views.py
 from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
 
-
+@login_required
 def integracao_drive_view(request):
     return render(request, "integracao_drive.html")
