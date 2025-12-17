@@ -49,6 +49,29 @@ from .drive_service import criar_pasta_os, upload_foto_para_drive
 logger = logging.getLogger(__name__)
 
 
+class AuthMeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        payload = {
+            "id": user.id,
+            "username": user.username,
+            "full_name": user.get_full_name() or user.username,
+        }
+
+        oficina = get_oficina_do_usuario(user)
+        if oficina is not None:
+            payload["oficina_id"] = oficina.id
+
+        papel = get_papel_do_usuario(user, getattr(request, "auth", None))
+        if papel:
+            payload["papel"] = papel
+
+        return Response(payload)
+
+
 class OficinaViewSet(viewsets.ModelViewSet):
     queryset = Oficina.objects.all()  # <-- necessário pro router
     serializer_class = OficinaSerializer

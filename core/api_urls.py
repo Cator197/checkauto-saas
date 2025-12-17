@@ -8,6 +8,7 @@ from rest_framework.routers import DefaultRouter
 from core.views import DashboardResumoView
 
 from .views import (
+    AuthMeView,
     OficinaViewSet,
     UsuarioOficinaViewSet,
     EtapaViewSet,
@@ -32,6 +33,7 @@ router.register(r'fotos-os', FotoOSViewSet)
 urlpatterns = [
     path('sync/', SyncView.as_view(), name='sync'),
     path("dashboard-resumo/", DashboardResumoView.as_view(), name="dashboard-resumo"),
+    path("auth/me/", AuthMeView.as_view(), name="auth-me"),
 
     # Integração Google Drive
     path("drive/status/", OficinaDriveStatusView.as_view(), name="drive-status"),
