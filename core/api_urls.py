@@ -20,6 +20,7 @@ from .views import (
     GoogleDriveAuthURLView,
     GoogleDriveOAuth2CallbackView,
     PwaVeiculosEmProducaoView,
+    ProximaEtapaAPIView,
 )
 
 router = routers.DefaultRouter()
@@ -40,6 +41,7 @@ urlpatterns = [
     path("drive/auth-url/", GoogleDriveAuthURLView.as_view(), name="drive-auth-url"),
     path("google/oauth2/callback/", GoogleDriveOAuth2CallbackView.as_view(), name="google-oauth2-callback"),
     path("pwa/veiculos-em-producao/", PwaVeiculosEmProducaoView.as_view(), name="pwa-veiculos-em-producao"),
+    path("etapas/proxima/", ProximaEtapaAPIView.as_view(), name="proxima-etapa"),
 
 ]
 
