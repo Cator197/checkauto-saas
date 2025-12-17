@@ -128,13 +128,17 @@ class EtapaViewSet(viewsets.ModelViewSet):
         user = self.request.user
 
         if user.is_superuser:
-            return Etapa.objects.select_related('oficina').all()
+            return Etapa.objects.select_related('oficina').order_by('ordem', 'id')
 
         oficina = get_oficina_do_usuario(user)
         if oficina is None:
             return Etapa.objects.none()
 
-        return Etapa.objects.select_related('oficina').filter(oficina=oficina)
+        return (
+            Etapa.objects.select_related('oficina')
+            .filter(oficina=oficina)
+            .order_by('ordem', 'id')
+        )
 
     def perform_create(self, serializer):
         """

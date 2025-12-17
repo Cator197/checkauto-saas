@@ -12,6 +12,7 @@ from .models import (
     FotoOS,
     ObservacaoEtapaOS,
 )
+from .utils import get_oficina_do_usuario
 
 
 DATETIME_INPUT_FORMATS = [
@@ -128,6 +129,9 @@ class OSSerializer(serializers.ModelSerializer):
     etapa_atual_nome = serializers.CharField(source='etapa_atual.nome', read_only=True, default=None)
     observacoes_etapas = serializers.SerializerMethodField()
     observacao_etapa_atual = serializers.SerializerMethodField()
+    etapa_atual = serializers.PrimaryKeyRelatedField(
+        queryset=Etapa.objects.all(), allow_null=True, required=False
+    )
     data_entrada = serializers.DateTimeField(
         required=False, allow_null=True, input_formats=DATETIME_INPUT_FORMATS
     )
@@ -199,6 +203,30 @@ class OSSerializer(serializers.ModelSerializer):
         obs = next((item for item in itens if item.etapa_id == obj.etapa_atual_id), None)
 
         return obs.texto if obs else None
+
+    def validate_etapa_atual(self, value):
+        if value is None:
+            return value
+
+        request = self.context.get('request') if self.context else None
+        user = getattr(request, "user", None)
+
+        if not user or not user.is_authenticated:
+            return value
+
+        oficina_usuario = None if user.is_superuser else get_oficina_do_usuario(user)
+        oficina_os = getattr(self.instance, "oficina", None)
+
+        alvo_oficina_id = None
+        if oficina_os:
+            alvo_oficina_id = oficina_os.id
+        elif oficina_usuario:
+            alvo_oficina_id = oficina_usuario.id
+
+        if alvo_oficina_id is not None and value.oficina_id != alvo_oficina_id:
+            raise serializers.ValidationError("Etapa não encontrada para esta oficina.")
+
+        return value
 
 
 class PwaEtapaAtualSerializer(serializers.Serializer):
