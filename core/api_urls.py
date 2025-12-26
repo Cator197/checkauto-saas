@@ -1,48 +1,60 @@
+from django.urls import path
 from rest_framework import routers
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
-from core.views import DashboardResumoView
-from rest_framework import routers
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
+
 from core.views import DashboardResumoView
 
 from .views import (
     AuthMeView,
-    OficinaViewSet,
-    UsuarioOficinaViewSet,
-    EtapaViewSet,
     ConfigFotoViewSet,
-    OSViewSet,
+    EtapaViewSet,
     FotoOSViewSet,
-    SyncView,
-    OficinaDriveStatusView,
     GoogleDriveAuthURLView,
     GoogleDriveOAuth2CallbackView,
-    PwaVeiculosEmProducaoView,
+    OSViewSet,
+    OficinaDriveStatusView,
+    OficinaViewSet,
     ProximaEtapaAPIView,
+    PwaVeiculosEmProducaoView,
+    SyncView,
+    UsuarioOficinaViewSet,
 )
 
 router = routers.DefaultRouter()
-router.register(r'oficinas', OficinaViewSet)
-router.register(r'usuarios-oficina', UsuarioOficinaViewSet)
-router.register(r'etapas', EtapaViewSet)
-router.register(r'config-fotos', ConfigFotoViewSet)
-router.register(r'os', OSViewSet)
-router.register(r'fotos-os', FotoOSViewSet)
+
+# Oficina e usuários
+router.register(r"oficinas", OficinaViewSet)
+router.register(r"usuarios-oficina", UsuarioOficinaViewSet)
+
+# Produção e fotos
+router.register(r"etapas", EtapaViewSet)
+router.register(r"config-fotos", ConfigFotoViewSet)
+router.register(r"os", OSViewSet)
+router.register(r"fotos-os", FotoOSViewSet)
 
 urlpatterns = [
-    path('sync/', SyncView.as_view(), name='sync'),
+    # Operações gerais
+    path("sync/", SyncView.as_view(), name="sync"),
     path("dashboard-resumo/", DashboardResumoView.as_view(), name="dashboard-resumo"),
+
+    # Autenticação
     path("auth/me/", AuthMeView.as_view(), name="auth-me"),
 
     # Integração Google Drive
     path("drive/status/", OficinaDriveStatusView.as_view(), name="drive-status"),
     path("drive/auth-url/", GoogleDriveAuthURLView.as_view(), name="drive-auth-url"),
-    path("google/oauth2/callback/", GoogleDriveOAuth2CallbackView.as_view(), name="google-oauth2-callback"),
-    path("pwa/veiculos-em-producao/", PwaVeiculosEmProducaoView.as_view(), name="pwa-veiculos-em-producao"),
-    path("etapas/proxima/", ProximaEtapaAPIView.as_view(), name="proxima-etapa"),
+    path(
+        "google/oauth2/callback/",
+        GoogleDriveOAuth2CallbackView.as_view(),
+        name="google-oauth2-callback",
+    ),
 
+    # PWA e fluxo de etapas
+    path(
+        "pwa/veiculos-em-producao/",
+        PwaVeiculosEmProducaoView.as_view(),
+        name="pwa-veiculos-em-producao",
+    ),
+    path("etapas/proxima/", ProximaEtapaAPIView.as_view(), name="proxima-etapa"),
 ]
 
 urlpatterns += router.urls

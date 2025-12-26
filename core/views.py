@@ -1,55 +1,46 @@
-from rest_framework import viewsets
-from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework_simplejwt.authentication import JWTAuthentication
-from django.utils import timezone
-from datetime import date
-from django.db.models import Q
-from django.db import transaction
-from django.utils.dateparse import parse_datetime
-from .drive_service import criar_pasta_os, upload_foto_para_drive  # <-- novo
-from django.conf import settings
-from django.shortcuts import redirect
-from google_auth_oauthlib.flow import Flow
 import json
+import logging
+from datetime import date
+
+from django.conf import settings
+from django.db import transaction
+from django.db.models import Q
+from django.shortcuts import redirect
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
+from google_auth_oauthlib.flow import Flow
+from rest_framework import serializers, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
+from .drive_service import criar_pasta_os, upload_foto_os_drive, upload_foto_para_drive
 from .models import (
-    OficinaDriveConfig,
+    ConfigFoto,
+    Etapa,
+    FotoOS,
+    OS,
+    OSEtapaStatus,
     ObservacaoEtapaOS,
     Oficina,
+    OficinaDriveConfig,
     UsuarioOficina,
-    Etapa,
-    ConfigFoto,
-    OS,
-    FotoOS,
-    OSEtapaStatus,
 )
-
-
-from .utils import get_oficina_do_usuario, get_papel_do_usuario
-from core.drive_service import upload_foto_os_drive
-from core.drive_service import upload_foto_os_drive
-
-
-from django.utils import timezone
-from .models import Oficina, UsuarioOficina, Etapa, ConfigFoto, OS, FotoOS
 from .serializers import (
-    OficinaSerializer,
-    UsuarioOficinaSerializer,
-    EtapaSerializer,
     ConfigFotoSerializer,
-    OSSerializer,
-    PwaVeiculoEmProducaoSerializer,
+    EtapaSerializer,
     FotoOSSerializer,
     ObservacaoEtapaOSSerializer,
+    OSSerializer,
+    OficinaSerializer,
+    PwaVeiculoEmProducaoSerializer,
+    UsuarioOficinaSerializer,
 )
-from .utils import get_oficina_do_usuario
+from .utils import get_oficina_do_usuario, get_papel_do_usuario
 
-import logging
-from .drive_service import criar_pasta_os, upload_foto_para_drive
 logger = logging.getLogger(__name__)
 
 
