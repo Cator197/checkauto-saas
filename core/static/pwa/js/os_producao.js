@@ -454,6 +454,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   refs.btnAvancar.addEventListener("click", async () => {
     const observacaoAtual = refs.observacao.value || state.observacao_etapa || "";
+    const etapaLocal = state.etapa_atual?.id ?? state.etapa_atual;
+    const possuiEtapa = etapaLocal !== null && etapaLocal !== undefined;
 
     state.avancar_solicitado = true;
     state.pendente_sync = true;
@@ -466,8 +468,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     refs.btnAvancar.textContent = "Agendado para próxima etapa";
     refs.btnAvancar.disabled = true;
-    refs.observacaoStatus.textContent =
-      "Avanço agendado. Será enviado no próximo sync.";
+    refs.observacaoStatus.textContent = possuiEtapa
+      ? "Avanço agendado. Será enviado no próximo sync."
+      : "⚠️ Etapa local desconhecida. Enviaremos com fallback do servidor ao sincronizar.";
+
+    if (!possuiEtapa) {
+      console.warn(
+        `Avanço de etapa enfileirado sem etapa_atual em cache para OS ${osId}. Servidor fará fallback se necessário.`
+      );
+    }
 
     if (window.checkautoEnfileirarObservacaoOS) {
       await window.checkautoEnfileirarObservacaoOS(osId, {

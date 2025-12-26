@@ -45,10 +45,87 @@ function dataUrlParaArquivo(dataUrl, filename) {
   }
 }
 
+function normalizarIdEtapaLocal(valor) {
+  if (valor === undefined) return null;
+
+  const possivel = valor?.id ?? valor?.etapa_atual ?? valor?.etapa_atual_id ?? valor;
+  const numero = parseInt(possivel, 10);
+
+  if (Number.isNaN(numero)) return null;
+
+  return numero;
+}
+
+async function buscarEtapaRemota(osId) {
+  try {
+    const resp = await apiFetch(`/api/os/${osId}/`);
+    if (!resp.ok) return { etapa: null, data: null };
+
+    const data = await resp.clone().json().catch(() => null);
+    const etapa = normalizarIdEtapaLocal(data?.etapa_atual ?? data?.etapa_atual_id);
+
+    return { etapa, data };
+  } catch (err) {
+    console.warn("Falha ao buscar etapa atual remota da OS", osId, err);
+    return { etapa: null, data: null };
+  }
+}
+
+async function obterEtapaOrigemParaAvanco(item) {
+  let etapaOrigem = normalizarIdEtapaLocal(item.payload?.etapa_origem);
+  let dadosRemotos = null;
+
+  if (!etapaOrigem && window.checkautoBuscarOSProducao) {
+    try {
+      const cache = await window.checkautoBuscarOSProducao(item.os_id);
+      etapaOrigem = normalizarIdEtapaLocal(cache?.etapa_atual);
+    } catch (err) {
+      console.warn("Erro ao buscar etapa local para avanço de etapa", err);
+    }
+  }
+
+  if (!etapaOrigem) {
+    const remoto = await buscarEtapaRemota(item.os_id);
+    etapaOrigem = remoto.etapa;
+    dadosRemotos = remoto.data;
+
+    if (etapaOrigem && item?.id && window.checkautoAtualizarItemFilaSync) {
+      await window.checkautoAtualizarItemFilaSync(item.id, {
+        payload: { ...(item.payload || {}), etapa_origem: etapaOrigem },
+      });
+    }
+  }
+
+  return { etapaOrigem, dadosRemotos };
+}
+
+async function limparAvancosDuplicados(osId, manterId = null) {
+  if (!window.checkautoListarFilaSync) return;
+
+  const fila = await window.checkautoListarFilaSync();
+  const duplicatas = fila.filter(
+    (item) =>
+      item.type === "AVANCAR_ETAPA" &&
+      item.os_id === osId &&
+      (manterId ? item.id !== manterId : true)
+  );
+
+  if (!duplicatas.length) return;
+
+  await Promise.all(duplicatas.map((item) => window.checkautoRemoverItemFilaSync(item.id)));
+
+  if (window.checkautoRemoverOperacaoProducao) {
+    await Promise.all(
+      duplicatas.map((item) => window.checkautoRemoverOperacaoProducao(osId, item.id))
+    );
+  }
+}
+
 async function sincronizarItem(item) {
   try {
     let resp = null;
     let data = null;
+    let dadosRemotos = null;
 
     if (item.type === "PATCH_OS") {
       resp = await apiFetch(`/api/os/${item.os_id}/`, {
@@ -101,9 +178,21 @@ async function sincronizarItem(item) {
     } else if (item.type === "AVANCAR_ETAPA") {
       const body = {};
 
+      const { etapaOrigem, dadosRemotos: dadosPreFetch } = await obterEtapaOrigemParaAvanco(item);
+      dadosRemotos = dadosPreFetch;
+      const etapaFinal = etapaOrigem ?? null;
+
+      if (!etapaFinal) {
+        console.warn(
+          `Avanço de etapa para OS ${item.os_id} sem etapa_origem local; enviando com fallback.`
+        );
+      }
+
       if (item.payload?.observacao) {
         body.observacao = item.payload.observacao;
       }
+
+      body.etapa_origem = etapaFinal;
 
       resp = await apiFetch(`/api/os/${item.os_id}/avancar-etapa/`, {
         method: "POST",
@@ -132,11 +221,33 @@ async function sincronizarItem(item) {
       await window.checkautoRemoverOperacaoProducao(item.os_id, item.id);
     }
 
-    if (item.type === "AVANCAR_ETAPA" && data && window.checkautoAplicarEtapaOS) {
-      await window.checkautoAplicarEtapaOS(item.os_id, {
-        id: data.etapa_atual ?? data.etapa_atual_id ?? null,
-        nome: data.etapa_atual_nome || data.etapa_atual?.nome,
-      });
+    if (item.type === "AVANCAR_ETAPA") {
+      await limparAvancosDuplicados(item.os_id, item.id);
+
+      const possuiEtapa = (dados) =>
+        dados &&
+        (dados.etapa_atual !== undefined ||
+          dados.etapa_atual_id !== undefined ||
+          dados.etapa_atual_nome !== undefined ||
+          (dados.etapa_atual && typeof dados.etapa_atual === "object"));
+
+      let dadosParaAplicar = data;
+
+      if (!possuiEtapa(dadosParaAplicar) && dadosRemotos) {
+        dadosParaAplicar = dadosRemotos;
+      }
+
+      if (!possuiEtapa(dadosParaAplicar)) {
+        const atualizado = await buscarEtapaRemota(item.os_id);
+        dadosParaAplicar = atualizado.data || dadosParaAplicar;
+      }
+
+      if (dadosParaAplicar && window.checkautoAplicarEtapaOS) {
+        await window.checkautoAplicarEtapaOS(item.os_id, {
+          id: dadosParaAplicar.etapa_atual ?? dadosParaAplicar.etapa_atual_id ?? null,
+          nome: dadosParaAplicar.etapa_atual_nome || dadosParaAplicar.etapa_atual?.nome,
+        });
+      }
     }
 
     return { ok: true, mensagem: "Sincronizado", data };
@@ -233,6 +344,16 @@ async function processarFilaSync() {
     }
 
     for (const item of pendencias) {
+      if (item.type === "AVANCAR_ETAPA" && (!item.payload || item.payload.etapa_origem == null)) {
+        console.warn(
+          `OS ${item.os_id} será enviada sem etapa_origem local. Tentando recuperar antes do envio.`
+        );
+        if (statusBox) {
+          statusBox.textContent =
+            "⚠️ Etapa local desconhecida; tentando recuperar estado antes de avançar.";
+        }
+      }
+
       statusPendencias[item.id] = { texto: "processando" };
       renderPendencias(pendencias);
 
