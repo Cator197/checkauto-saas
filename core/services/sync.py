@@ -119,7 +119,6 @@ class SyncService:
             "aberta": True,
         }
 
-        if payload.get("etapa_atual") is None:
         return payload
 
     def _salvar_os(self, payload: dict) -> Tuple[Optional[OS], str, Optional[dict]]:
@@ -199,6 +198,10 @@ class SyncService:
         )
 
         if etapa_checkin:
+            logger.info(
+                "[SYNC] aplicando etapa inicial da oficina",
+                extra={"oficina_id": self.oficina.id, "etapa_id": etapa_checkin.id},
+            )
             return etapa_checkin, None
 
         return None, {"etapa_atual": ["Etapa de check-in não configurada para esta oficina."]}
