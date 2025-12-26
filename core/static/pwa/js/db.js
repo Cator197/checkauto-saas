@@ -109,6 +109,71 @@ window.checkautoBuscarOSPendentes = async function () {
   }
 };
 
+// Atualiza campos de uma OS pendente
+window.checkautoAtualizarOSPendente = async function (id, patch) {
+  try {
+    const db = await checkautoOpenDB();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(OS_STORE_NAME, "readwrite");
+      const store = tx.objectStore(OS_STORE_NAME);
+      const request = store.get(id);
+
+      request.onsuccess = () => {
+        const atual = request.result;
+        if (!atual) {
+          resolve(null);
+          return;
+        }
+
+        const atualizado = { ...atual, ...patch };
+        store.put(atualizado);
+      };
+
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    console.error("Falha em checkautoAtualizarOSPendente:", e);
+    return null;
+  }
+};
+
+// Remove uma OS pendente específica
+window.checkautoRemoverOSPendente = async function (id) {
+  try {
+    const db = await checkautoOpenDB();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(OS_STORE_NAME, "readwrite");
+      const store = tx.objectStore(OS_STORE_NAME);
+      store.delete(id);
+
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    console.error("Falha em checkautoRemoverOSPendente:", e);
+    return false;
+  }
+};
+
+// Remove todas as OS pendentes
+window.checkautoLimparOSPendentes = async function () {
+  try {
+    const db = await checkautoOpenDB();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(OS_STORE_NAME, "readwrite");
+      const store = tx.objectStore(OS_STORE_NAME);
+      store.clear();
+
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    console.error("Falha em checkautoLimparOSPendentes:", e);
+    return false;
+  }
+};
+
 function normalizarItemFila(item) {
   return {
     id: item.id || `sync-${Date.now()}-${Math.random()}`,

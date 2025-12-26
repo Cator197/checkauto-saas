@@ -6,6 +6,8 @@ let statusPendencias = {};
 
 function formatarTipo(tipo) {
   switch (tipo) {
+    case "SYNC_OS":
+      return "Check-in offline";
     case "PATCH_OS":
       return "Alteração de etapa";
     case "POST_FOTO_OS":
@@ -24,6 +26,82 @@ function statusInicial(item) {
     return { texto: "erro", detalhe: item.last_error };
   }
   return { texto: "pendente", detalhe: null };
+}
+
+function extrairExtensaoFoto(foto) {
+  if (!foto) return null;
+
+  if (foto.extensao) return foto.extensao;
+
+  if (foto.nome && foto.nome.includes(".")) {
+    return foto.nome.split(".").pop();
+  }
+
+  const match = (foto.dataUrl || "").match(/data:image\/(.*?);/);
+  if (match && match[1]) {
+    return match[1];
+  }
+
+  return null;
+}
+
+function normalizarFotoOSPendente(foto) {
+  if (!foto) return null;
+
+  const dataUrl = foto.dataUrl || foto.arquivo;
+  if (!dataUrl) return null;
+
+  const extensao = (extrairExtensaoFoto(foto) || "jpg").toLowerCase();
+
+  const normalizada = {
+    local_id: foto.id,
+    nome: foto.nome || undefined,
+    dataUrl,
+    arquivo: foto.arquivo,
+    extensao,
+  };
+
+  if (foto.config_foto_id || foto.config_foto) {
+    normalizada.config_foto_id = foto.config_foto_id || foto.config_foto;
+  }
+
+  return normalizada;
+}
+
+function normalizarOSPendente(os) {
+  const fotosOrigem = os?.fotos || {};
+  const fotosPadrao = Array.isArray(fotosOrigem.padrao) ? fotosOrigem.padrao : [];
+  const fotosLivres = Array.isArray(fotosOrigem.livres) ? fotosOrigem.livres : [];
+
+  return {
+    local_id: os?.id || os?.local_id,
+    os: os?.os || {},
+    veiculo: os?.veiculo || {},
+    cliente: os?.cliente || {},
+    fotos: {
+      padrao: fotosPadrao.map(normalizarFotoOSPendente).filter(Boolean),
+      livres: fotosLivres.map(normalizarFotoOSPendente).filter(Boolean),
+    },
+  };
+}
+
+async function registrarErroOSPendente(localId, mensagem) {
+  if (!window.checkautoAtualizarOSPendente) return null;
+
+  try {
+    const pendentes = (await window.checkautoBuscarOSPendentes()) || [];
+    const alvo = pendentes.find((item) => item.id === localId);
+    if (!alvo) return null;
+
+    const tentativas = typeof alvo.tries === "number" ? alvo.tries : 0;
+    return window.checkautoAtualizarOSPendente(localId, {
+      tries: tentativas + 1,
+      last_error: mensagem || "Erro desconhecido",
+    });
+  } catch (err) {
+    console.warn("Não foi possível registrar erro da OS pendente", err);
+    return null;
+  }
 }
 
 function dataUrlParaArquivo(dataUrl, filename) {
@@ -198,6 +276,14 @@ async function sincronizarItem(item) {
         method: "POST",
         body,
       });
+    } else if (item.type === "SYNC_OS") {
+      const payloadOs = normalizarOSPendente(item.os_payload || {});
+      payloadOs.local_id = payloadOs.local_id || item.os_local_id;
+
+      resp = await apiFetch(`/api/sync/`, {
+        method: "POST",
+        body: { osPendentes: [payloadOs] },
+      });
     }
 
     if (!resp) {
@@ -206,7 +292,11 @@ async function sincronizarItem(item) {
 
     if (!resp.ok) {
       const texto = `Erro ${resp.status || "desconhecido"}`;
-      await window.checkautoRegistrarErroFilaSync(item.id, texto);
+      if (item.type === "SYNC_OS") {
+        await registrarErroOSPendente(item.os_local_id, texto);
+      } else {
+        await window.checkautoRegistrarErroFilaSync(item.id, texto);
+      }
       return { ok: false, mensagem: texto };
     }
 
@@ -216,9 +306,15 @@ async function sincronizarItem(item) {
       data = null;
     }
 
-    await window.checkautoRemoverItemFilaSync(item.id);
-    if (window.checkautoRemoverOperacaoProducao) {
-      await window.checkautoRemoverOperacaoProducao(item.os_id, item.id);
+    if (item.type === "SYNC_OS") {
+      if (window.checkautoRemoverOSPendente) {
+        await window.checkautoRemoverOSPendente(item.os_local_id);
+      }
+    } else {
+      await window.checkautoRemoverItemFilaSync(item.id);
+      if (window.checkautoRemoverOperacaoProducao) {
+        await window.checkautoRemoverOperacaoProducao(item.os_id, item.id);
+      }
     }
 
     if (item.type === "AVANCAR_ETAPA") {
@@ -253,7 +349,11 @@ async function sincronizarItem(item) {
     return { ok: true, mensagem: "Sincronizado", data };
   } catch (err) {
     const mensagem = err?.message || "Falha ao sincronizar";
-    await window.checkautoRegistrarErroFilaSync(item.id, mensagem);
+    if (item.type === "SYNC_OS") {
+      await registrarErroOSPendente(item.os_local_id, mensagem);
+    } else {
+      await window.checkautoRegistrarErroFilaSync(item.id, mensagem);
+    }
     return { ok: false, mensagem };
   }
 }
@@ -277,6 +377,13 @@ function renderPendencias(lista) {
 
   lista.forEach((item) => {
     const status = statusPendencias[item.id] || statusInicial(item);
+    const osLabel =
+      item.type === "SYNC_OS"
+        ? item.os_payload?.os?.numeroInterno ||
+          item.os_payload?.veiculo?.placa ||
+          item.os_local_id ||
+          "—"
+        : item.os_id || "—";
     const div = document.createElement("div");
     div.className = "os-item";
     div.innerHTML = `
@@ -292,7 +399,7 @@ function renderPendencias(lista) {
                 : "Sincronizado"
         }</span>
       </div>
-      <div class="os-meta">OS ${item.os_id || "—"}</div>
+      <div class="os-meta">OS ${osLabel}</div>
       <div class="os-meta">Criado em: ${
         item.created_at ? new Date(item.created_at).toLocaleString() : "—"
       }</div>
@@ -307,8 +414,23 @@ async function carregarPendencias() {
   const fila = window.checkautoListarFilaSync
     ? await window.checkautoListarFilaSync()
     : [];
-  renderPendencias(fila);
-  return fila;
+  const osPendentes = window.checkautoBuscarOSPendentes
+    ? await window.checkautoBuscarOSPendentes()
+    : [];
+
+  const itensOsPendentes = osPendentes.map((os) => ({
+    id: `osp-${os.id}`,
+    type: "SYNC_OS",
+    os_local_id: os.id,
+    os_payload: os,
+    created_at: os.criadoEm || os.created_at,
+    tries: os.tries || 0,
+    last_error: os.last_error || null,
+  }));
+
+  const itens = [...itensOsPendentes, ...fila];
+  renderPendencias(itens);
+  return itens;
 }
 
 async function processarFilaSync() {
