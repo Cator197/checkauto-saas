@@ -145,15 +145,26 @@ class ObservacaoEtapaOSSerializer(serializers.ModelSerializer):
         os_obj = self.context.get('os')
         etapa = attrs.get('etapa')
 
+        if not os_obj:
+            raise serializers.ValidationError({'detail': 'OS é obrigatória para a observação.'})
+
         if etapa is None:
             if self.instance:
-                attrs['etapa'] = getattr(self.instance, 'etapa', None)
+                etapa = getattr(self.instance, 'etapa', None)
             elif os_obj and os_obj.etapa_atual:
-                attrs['etapa'] = os_obj.etapa_atual
-            elif os_obj:
-                raise serializers.ValidationError(
-                    {'etapa': 'OS não possui etapa atual configurada.'}
-                )
+                etapa = os_obj.etapa_atual
+
+        if etapa is None:
+            raise serializers.ValidationError(
+                {'detail': 'OS não possui etapa atual para associar a observação.'}
+            )
+
+        if etapa.oficina_id != os_obj.oficina_id:
+            raise serializers.ValidationError(
+                {'etapa': 'Etapa não encontrada para esta oficina.'}
+            )
+
+        attrs['etapa'] = etapa
 
         return attrs
 
@@ -275,17 +286,17 @@ class OSSerializer(serializers.ModelSerializer):
         request = self.context.get('request') if self.context else None
         user = getattr(request, "user", None)
 
-        if not user or not user.is_authenticated:
-            return value
-
-        oficina_usuario = None if user.is_superuser else get_oficina_do_usuario(user)
         oficina_os = getattr(self.instance, "oficina", None)
+        alvo_oficina_id = getattr(oficina_os, "id", None)
 
-        alvo_oficina_id = None
-        if oficina_os:
-            alvo_oficina_id = oficina_os.id
-        elif oficina_usuario:
-            alvo_oficina_id = oficina_usuario.id
+        if alvo_oficina_id is None and self.context:
+            oficina_contexto = self.context.get("oficina")
+            if oficina_contexto:
+                alvo_oficina_id = getattr(oficina_contexto, "id", oficina_contexto)
+
+        if alvo_oficina_id is None and user and user.is_authenticated and not user.is_superuser:
+            oficina_usuario = get_oficina_do_usuario(user)
+            alvo_oficina_id = getattr(oficina_usuario, "id", None)
 
         if alvo_oficina_id is not None and value.oficina_id != alvo_oficina_id:
             raise serializers.ValidationError("Etapa não encontrada para esta oficina.")
@@ -443,6 +454,18 @@ class FotoOSSerializer(serializers.ModelSerializer):
         if not os_obj:
             raise serializers.ValidationError({'os': 'OS é obrigatória.'})
 
+        if etapa is None:
+            if self.instance:
+                etapa = getattr(self.instance, 'etapa', None)
+
+            if etapa is None and os_obj.etapa_atual:
+                etapa = os_obj.etapa_atual
+
+        if etapa is None:
+            raise serializers.ValidationError(
+                {'detail': 'OS não possui etapa atual para associar a foto.'}
+            )
+
         if user and user.is_authenticated and not user.is_superuser:
             oficina_usuario = get_oficina_do_usuario(user)
             if not oficina_usuario or os_obj.oficina_id != oficina_usuario.id:
@@ -452,6 +475,7 @@ class FotoOSSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'etapa': 'Etapa não encontrada para esta oficina.'})
 
         attrs['tipo'] = tipo
+        attrs['etapa'] = etapa
 
         if tipo == 'PADRAO':
             if not etapa:
