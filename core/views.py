@@ -446,19 +446,22 @@ class OSViewSet(viewsets.ModelViewSet):
         os_obj = self.get_object()
 
         etapa_id = request.data.get("etapa")
-        if not etapa_id:
-            return Response(
-                {"detail": "Campo 'etapa' é obrigatório."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        if etapa_id:
+            try:
+                etapa = Etapa.objects.get(id=etapa_id, oficina=os_obj.oficina)
+            except Etapa.DoesNotExist:
+                return Response(
+                    {"detail": "Etapa não encontrada para esta oficina."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+        else:
+            if not os_obj.etapa_atual:
+                return Response(
+                    {"detail": "OS não possui etapa atual para associar a observação."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
-        try:
-            etapa = Etapa.objects.get(id=etapa_id, oficina=os_obj.oficina)
-        except Etapa.DoesNotExist:
-            return Response(
-                {"detail": "Etapa não encontrada para esta oficina."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+            etapa = os_obj.etapa_atual
 
         payload = {
             "etapa": etapa.id,
