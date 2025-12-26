@@ -39,6 +39,13 @@ from .serializers import (
     PwaVeiculoEmProducaoSerializer,
     UsuarioOficinaSerializer,
 )
+from .permissions import (
+    IsFotoOSPermission,
+    IsOficinaAdmin,
+    IsOficinaAdminOrReadOnly,
+    IsOficinaUser,
+    IsOSPermission,
+)
 from .utils import get_oficina_do_usuario, get_papel_do_usuario
 
 logger = logging.getLogger(__name__)
@@ -88,7 +95,7 @@ class OficinaViewSet(viewsets.ModelViewSet):
 class UsuarioOficinaViewSet(viewsets.ModelViewSet):
     queryset = UsuarioOficina.objects.select_related('user', 'oficina').all()
     serializer_class = UsuarioOficinaSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsOficinaAdminOrReadOnly]
 
     def get_queryset(self):
         user = self.request.user
@@ -106,16 +113,7 @@ class UsuarioOficinaViewSet(viewsets.ModelViewSet):
 class EtapaViewSet(viewsets.ModelViewSet):
     queryset = Etapa.objects.select_related('oficina').all()
     serializer_class = EtapaSerializer
-    permission_classes = [IsAuthenticated]
-
-    def create(self, request, *args, **kwargs):
-        if self._is_operador(request):
-            return Response(
-                {"detail": "Operador não tem permissão para criar etapas."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        return super().create(request, *args, **kwargs)
+    permission_classes = [IsAuthenticated, IsOficinaAdminOrReadOnly]
 
     def get_queryset(self):
         user = self.request.user
@@ -149,36 +147,11 @@ class EtapaViewSet(viewsets.ModelViewSet):
         # Para superuser, se quiser, poderia aceitar oficina vinda no payload.
         serializer.save(oficina=oficina)
 
-    def update(self, request, *args, **kwargs):
-        if self._is_operador(request):
-            return Response(
-                {"detail": "Operador não pode alterar etapas."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+    def get_permissions(self):
+        if self.action in {"list", "retrieve"}:
+            return [IsAuthenticated(), IsOficinaUser()]
 
-        return super().update(request, *args, **kwargs)
-
-    def partial_update(self, request, *args, **kwargs):
-        if self._is_operador(request):
-            return Response(
-                {"detail": "Operador não pode alterar etapas."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        return super().partial_update(request, *args, **kwargs)
-
-    def destroy(self, request, *args, **kwargs):
-        if self._is_operador(request):
-            return Response(
-                {"detail": "Operador não pode excluir etapas."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        return super().destroy(request, *args, **kwargs)
-
-    def _is_operador(self, request):
-        papel = get_papel_do_usuario(request.user, getattr(request, "auth", None))
-        return (papel or "").upper() == "FUNC"
+        return [IsAuthenticated(), IsOficinaAdminOrReadOnly()]
 
 
 from rest_framework import serializers  # garantir que está importado
@@ -186,7 +159,7 @@ from rest_framework import serializers  # garantir que está importado
 class ConfigFotoViewSet(viewsets.ModelViewSet):
     queryset = ConfigFoto.objects.select_related('oficina', 'etapa').all()
     serializer_class = ConfigFotoSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsOficinaAdminOrReadOnly]
 
     def get_queryset(self):
         user = self.request.user
@@ -221,7 +194,7 @@ class OSViewSet(viewsets.ModelViewSet):
         'observacoes_etapas__etapa', 'observacoes_etapas__criado_por__user'
     )
     serializer_class = OSSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsOSPermission]
 
     def get_queryset(self):
         """
@@ -308,43 +281,6 @@ class OSViewSet(viewsets.ModelViewSet):
                 "Erro ao criar pasta no Drive para OS",
                 extra={"oficina_id": oficina.id, "os_id": os_obj.id},
             )
-
-    def create(self, request, *args, **kwargs):
-        if self._is_operador(request):
-            return Response(
-                {"detail": "Operador não pode criar ou editar dados da OS."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        return super().create(request, *args, **kwargs)
-
-    def update(self, request, *args, **kwargs):
-        if self._is_operador(request):
-            return Response(
-                {"detail": "Operador não pode alterar dados da OS."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        return super().update(request, *args, **kwargs)
-
-    def partial_update(self, request, *args, **kwargs):
-        if self._is_operador(request):
-            if not self._operator_patch_is_allowed(request):
-                return Response(
-                    {"detail": "Operador só pode editar observações da etapa."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-
-        return super().partial_update(request, *args, **kwargs)
-
-    def destroy(self, request, *args, **kwargs):
-        if self._is_operador(request):
-            return Response(
-                {"detail": "Operador não pode remover OS."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        return super().destroy(request, *args, **kwargs)
 
     def _get_usuario_oficina(self, os_obj):
         return UsuarioOficina.objects.filter(
@@ -740,26 +676,10 @@ class OSViewSet(viewsets.ModelViewSet):
         serializer = OSSerializer(os_obj, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-    def _is_operador(self, request):
-        papel = get_papel_do_usuario(request.user, getattr(request, "auth", None))
-        return (papel or "").upper() == "FUNC"
-
-    def _operator_patch_is_allowed(self, request):
-        if request.method.lower() != "patch":
-            return False
-
-        allowed_fields = {"observacoes"}
-        data_keys = set(request.data.keys())
-
-        # Aceita PATCH vazio ou apenas com observacoes
-        return not data_keys or data_keys.issubset(allowed_fields)
-
-
-
 class FotoOSViewSet(viewsets.ModelViewSet):
     queryset = FotoOS.objects.select_related('os', 'etapa', 'config_foto', 'tirada_por').all()
     serializer_class = FotoOSSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsFotoOSPermission]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get_queryset(self):
@@ -830,18 +750,8 @@ class FotoOSViewSet(viewsets.ModelViewSet):
             )
 
     def destroy(self, request, *args, **kwargs):
-        if self._is_operador(request):
-            return Response(
-                {"detail": "Operador não tem permissão para excluir fotos."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
         # Futuro: remover também do Drive quando integrado (S7-6 / melhorias futuras)
         return super().destroy(request, *args, **kwargs)
-
-    def _is_operador(self, request):
-        papel = get_papel_do_usuario(request.user, getattr(request, "auth", None))
-        return (papel or "").upper() == "FUNC"
 
 
 from django.utils import timezone
