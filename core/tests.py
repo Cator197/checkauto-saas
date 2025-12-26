@@ -283,6 +283,19 @@ class AvancarEtapaTests(APITestCase):
         self.assertEqual(self.os.etapa_atual, self.proxima_etapa)
         self.assertIn("Tudo certo", self.os.observacoes)
 
+    def test_repetir_chamada_na_ultima_etapa_retorna_200(self):
+        self._criar_foto_obrigatoria()
+
+        primeiro = self.client.post(self.url, {})
+        self.assertEqual(primeiro.status_code, 200)
+
+        # Repetir com a OS já na última etapa não deve gerar erro
+        segundo = self.client.post(self.url, {})
+        self.assertEqual(segundo.status_code, 200)
+        self.os.refresh_from_db()
+        self.assertEqual(self.os.etapa_atual, self.proxima_etapa)
+        self.assertTrue(segundo.data.get("ultima_etapa"))
+
     def test_multi_tenant_bloqueia_os_de_outra_oficina(self):
         outra_oficina = Oficina.objects.create(nome="Outra")
         outra_etapa = Etapa.objects.create(oficina=outra_oficina, nome="E1", ordem=1, ativa=True)
@@ -292,3 +305,10 @@ class AvancarEtapaTests(APITestCase):
         response = self.client.post(url, {})
 
         self.assertEqual(response.status_code, 404)
+
+    def test_nao_avanca_quando_etapa_origem_diverge(self):
+        response = self.client.post(self.url, {"etapa_origem": 999})
+
+        self.assertEqual(response.status_code, 200)
+        self.os.refresh_from_db()
+        self.assertEqual(self.os.etapa_atual, self.etapa_atual)
