@@ -293,6 +293,35 @@ class OSSerializer(serializers.ModelSerializer):
         return value
 
 
+class SyncFotoSerializer(serializers.Serializer):
+    local_id = serializers.CharField(required=False, allow_blank=True)
+    arquivo = serializers.CharField(required=False, allow_blank=True)
+    dataUrl = serializers.CharField(required=False, allow_blank=True)
+    extensao = serializers.CharField(required=False, allow_blank=True)
+    nome = serializers.CharField(required=False, allow_blank=True)
+    config_foto = serializers.PrimaryKeyRelatedField(
+        queryset=ConfigFoto.objects.all(), required=False, allow_null=True
+    )
+    config_foto_id = serializers.IntegerField(required=False, allow_null=True)
+
+    def validate(self, attrs):
+        if not attrs.get('arquivo') and not attrs.get('dataUrl'):
+            raise serializers.ValidationError('Foto deve conter arquivo em base64.')
+        return attrs
+
+
+class SyncOSPayloadSerializer(serializers.Serializer):
+    local_id = serializers.CharField(required=False, allow_blank=True)
+    os = serializers.DictField(required=False, allow_null=True)
+    veiculo = serializers.DictField(required=False, allow_null=True)
+    cliente = serializers.DictField(required=False, allow_null=True)
+    fotos = serializers.DictField(required=False, allow_null=True)
+
+
+class SyncRequestSerializer(serializers.Serializer):
+    osPendentes = SyncOSPayloadSerializer(many=True, required=False, default=list)
+
+
 class PwaEtapaAtualSerializer(serializers.Serializer):
     id = serializers.IntegerField(allow_null=True)
     nome = serializers.CharField(allow_null=True, allow_blank=True)

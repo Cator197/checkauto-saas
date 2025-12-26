@@ -287,6 +287,10 @@ class OSViewSet(viewsets.ModelViewSet):
             user=self.request.user, oficina=os_obj.oficina, ativo=True
         ).first()
 
+    def _is_operador(self, request):
+        papel = get_papel_do_usuario(request.user, getattr(request, "auth", None))
+        return papel == "OPERADOR"
+
     def _montar_timeline(self, os_obj):
         etapas = (
             Etapa.objects.filter(oficina=os_obj.oficina, ativa=True)
@@ -758,6 +762,7 @@ from django.utils import timezone
 
 from .models import Etapa, UsuarioOficina, Oficina  # garante esses imports
 from .services.fotos import criar_foto_os
+from .services.sync import SyncService
 
 
 class SyncView(APIView):
@@ -768,235 +773,13 @@ class SyncView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        user = request.user
-        oficina = get_oficina_do_usuario(user)
+        service = SyncService(request.user)
+        resultados, erro = service.processar(request.data)
 
-        # Se NÃO achou oficina pelo vínculo e o usuário for superuser,
-        # usamos a primeira oficina (para ambiente de desenvolvimento / MVP).
-        if oficina is None and user.is_superuser:
-            oficina = Oficina.objects.first()
+        if erro:
+            return Response(erro, status=status.HTTP_400_BAD_REQUEST)
 
-        # Se ainda assim não tiver oficina, aí sim é erro.
-        if oficina is None:
-            return Response(
-                {"detail": "Usuário não está vinculado a nenhuma oficina ativa e nenhuma oficina padrão foi encontrada."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        dados = request.data
-        lista_os = dados.get("osPendentes", [])
-
-        resultados = []
-
-        for item in lista_os:
-            # ID local do PWA não serve para o backend
-            item.pop("id", None)
-
-            # força SEMPRE a oficina do usuário logado
-            item["oficina"] = oficina.id
-
-            # converte para o formato do serializer de OS
-            item_convertido = self.converter_payload_pwa(item, oficina)
-
-            if not item_convertido.get("modelo_veiculo"):
-                return Response(
-                    {"detail": "Modelo do veículo não pode ser vazio."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            serializer = OSSerializer(
-                data=item_convertido,
-                context={"request": request},
-            )
-
-            if serializer.is_valid():
-                with transaction.atomic():
-                    os_obj = serializer.save(oficina=oficina)
-
-                    # 1) Garante a pasta da OS no Drive durante o sync
-                    try:
-                        criar_pasta_os(os_obj)
-                    except Exception as e:
-                        # não quebra o sync se o Drive falhar
-                        logger.warning(
-                            "[SYNC] Erro ao criar pasta da OS %s no Drive: %s",
-                            os_obj.id,
-                            e,
-                        )
-
-                    # 2) Salva fotos (padrão + livres) como FotoOS tipo LIVRE
-                    photo_errors = self.salvar_fotos(os_obj, item, user)
-
-                resultados.append({
-                    "saved": True,
-                    "os_id": os_obj.id,
-                    "os_codigo": os_obj.codigo,
-                    "errors": [],
-                    "photo_errors": photo_errors,
-                })
-            else:
-                resultados.append({
-                    "saved": False,
-                    "os_id": None,
-                    "os_codigo": item.get("codigo"),
-                    "errors": serializer.errors,
-                    "photo_errors": [],
-                })
-
-        return Response({"os": resultados}, status=status.HTTP_200_OK)
-
-    def converter_payload_pwa(self, item, oficina):
-        """
-        Transforma a OS recebida do PWA no formato que o model/serializer OS espera.
-        """
-        veiculo = item.get("veiculo", {}) or {}
-        os_data = item.get("os", {}) or {}
-        cliente = item.get("cliente", {}) or {}
-
-        modelo_veiculo = veiculo.get("modelo")
-        if modelo_veiculo:
-            modelo_veiculo = modelo_veiculo.strip()
-
-        # Código da OS:
-        numero_interno = os_data.get("numeroInterno") or veiculo.get("placa")
-        if not numero_interno:
-            numero_interno = f"PWA-{timezone.now().strftime('%Y%m%d%H%M%S')}"
-
-        numero_interno = numero_interno.strip() if numero_interno else numero_interno
-
-        etapa_atual = os_data.get("etapa_atual") or os_data.get("etapaAtual")
-
-        payload = {
-            "oficina": item.get("oficina"),
-            "codigo": numero_interno,
-            "placa": veiculo.get("placa"),
-            "modelo_veiculo": modelo_veiculo,
-            "cor_veiculo": veiculo.get("cor"),
-            "nome_cliente": cliente.get("nome"),
-            "telefone_cliente": cliente.get("telefone"),
-            "observacoes": os_data.get("observacoes"),
-            "etapa_atual": etapa_atual,
-            "data_entrada": timezone.now(),
-            "aberta": True,
-        }
-
-        if payload.get("etapa_atual") is None:
-            etapa_padrao = self._buscar_primeira_etapa_ativa(oficina)
-            if etapa_padrao:
-                payload["etapa_atual"] = etapa_padrao.id
-                logger.info(
-                    "[SYNC] etapa_atual ausente; aplicando etapa inicial da oficina.",
-                    extra={
-                        "oficina_id": oficina.id,
-                        "os_codigo": numero_interno,
-                        "etapa_id": etapa_padrao.id,
-                    },
-                )
-            else:
-                logger.warning(
-                    "[SYNC] etapa_atual ausente e nenhuma etapa ativa encontrada na oficina.",
-                    extra={"oficina_id": oficina.id, "os_codigo": numero_interno},
-                )
-
-        return payload
-
-    def _buscar_primeira_etapa_ativa(self, oficina):
-        return (
-            Etapa.objects.filter(oficina=oficina, ativa=True)
-            .order_by("ordem")
-            .first()
-        )
-
-    def salvar_fotos(self, os_obj, item, user):
-        """
-        Salva fotos padrão e livres enviadas como base64 pelo PWA.
-
-        Neste momento, todas as fotos são salvas como:
-        - tipo = 'LIVRE'
-        - etapa = etapa de check-in da oficina (ou etapa_atual da OS)
-        - sem config_foto (regra de negócio das fotos LIVRES).
-        """
-        photo_errors = []
-
-        fotos = item.get("fotos", {}) or {}
-        todas_fotos = []
-        todas_fotos.extend(fotos.get("padrao", []) or [])
-        todas_fotos.extend(fotos.get("livres", []) or [])
-
-        if not todas_fotos:
-            return photo_errors
-
-        # Descobre etapa para associar as fotos
-        etapa = os_obj.etapa_atual
-
-        if etapa is None:
-            etapa = Etapa.objects.filter(oficina=os_obj.oficina, is_checkin=True).first()
-
-        # NOVO fallback: se ainda não tiver, pega a primeira etapa da oficina
-        if etapa is None:
-            etapa = Etapa.objects.filter(oficina=os_obj.oficina).order_by("ordem", "id").first()
-
-        if etapa is None:
-            message = "[SYNC] Sem etapas cadastradas para oficina. Fotos ignoradas."
-            logger.warning(
-                message,
-                extra={
-                    "user_id": user.id,
-                    "oficina_id": os_obj.oficina_id,
-                    "os_codigo": os_obj.codigo,
-                },
-            )
-            photo_errors.append(message)
-            return photo_errors
-
-        # Descobre o UsuarioOficina (se existir) para preencher tirada_por
-        usuario_oficina = None
-        try:
-            usuario_oficina = UsuarioOficina.objects.get(
-                user=user,
-                oficina=os_obj.oficina,
-                ativo=True,
-            )
-        except UsuarioOficina.DoesNotExist:
-            usuario_oficina = None
-
-        for idx, foto in enumerate(todas_fotos):
-            extra_log = {
-                "user_id": user.id,
-                "oficina_id": os_obj.oficina_id,
-                "os_codigo": os_obj.codigo,
-                "foto_idx": idx,
-            }
-
-            foto_obj, error_message = criar_foto_os(
-                foto=foto,
-                os_obj=os_obj,
-                etapa=etapa,
-                usuario_oficina=usuario_oficina,
-                extra_log=extra_log,
-            )
-
-            if error_message:
-                photo_errors.append(error_message)
-                continue
-
-            # Envia essa foto para o Drive (na pasta da OS + subpasta da etapa)
-            try:
-                upload_foto_para_drive(foto_obj)
-            except Exception as e:
-                message = f"[SYNC] Erro ao enviar foto {foto_obj.id} para o Drive: {e}"
-                logger.warning(
-                    message,
-                    extra={
-                        "user_id": user.id,
-                        "oficina_id": os_obj.oficina_id,
-                        "os_codigo": os_obj.codigo,
-                        "foto_idx": idx,
-                    },
-                )
-                photo_errors.append(message)
-
-        return photo_errors
+        return Response({"results": resultados, "os": resultados}, status=status.HTTP_200_OK)
 
 
 class PwaVeiculosEmProducaoView(APIView):
