@@ -19,9 +19,8 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.shortcuts import render
-from django.views.generic import TemplateView
+from django.views.generic import RedirectView, TemplateView
 from core.authentication import CustomTokenObtainPairView
-from core.views import integracao_drive_view
 
 from rest_framework_simplejwt.views import TokenRefreshView
 
@@ -102,12 +101,26 @@ urlpatterns = [
     path("painel/os/", painel_os_lista, name="painel_os_lista"),
     path("painel/os/<int:os_id>/", painel_os_detalhe, name="painel_os_detalhe"),
     path("painel/etapas/", painel_etapas, name="painel_etapas"),
-    path("painel/config_fotos/", painel_config_fotos, name="painel_config_fotos"),
+    path("painel/fotos/", painel_config_fotos, name="painel_config_fotos"),
     path("painel/usuarios/", painel_usuarios, name="painel_usuarios"),
-    path("painel/integracao_drive/", painel_integracao_drive, name="painel_integracao_drive"),
-    path("painel/integracoes/drive/", painel_integracao_drive, name="painel_integracao_drive_legacy"),
-    path("painel/fotos/", painel_config_fotos, name="painel_config_fotos_legacy"),
-    path("integracao-drive/", integracao_drive_view, name="integracao-drive"),
+    path("painel/integracoes/drive/", painel_integracao_drive, name="painel_integracao_drive"),
+    path(
+        "painel/integracao_drive/",
+        RedirectView.as_view(url="/painel/integracoes/drive/", permanent=True),
+        name="painel_integracao_drive_legacy",
+    ),
+    path(
+        "painel/config_fotos/",
+        RedirectView.as_view(url="/painel/fotos/", permanent=True),
+        name="painel_config_fotos_legacy",
+    ),
+    path(
+        "integracao-drive/",
+        RedirectView.as_view(
+            url="/api/drive/oauth2/callback/", permanent=True, query_string=True
+        ),
+        name="integracao-drive-legacy",
+    ),
 ]
 
 if settings.DEBUG:

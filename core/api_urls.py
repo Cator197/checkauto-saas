@@ -1,4 +1,5 @@
 from django.urls import path
+from django.views.generic import RedirectView
 from rest_framework import routers
 
 from core.views import DashboardResumoView
@@ -43,9 +44,16 @@ urlpatterns = [
     path("drive/status/", OficinaDriveStatusView.as_view(), name="drive-status"),
     path("drive/auth-url/", GoogleDriveAuthURLView.as_view(), name="drive-auth-url"),
     path(
-        "google/oauth2/callback/",
+        "drive/oauth2/callback/",
         GoogleDriveOAuth2CallbackView.as_view(),
         name="google-oauth2-callback",
+    ),
+    path(
+        "google/oauth2/callback/",
+        RedirectView.as_view(
+            url="/api/drive/oauth2/callback/", permanent=True, query_string=True
+        ),
+        name="google-oauth2-callback-legacy",
     ),
 
     # PWA e fluxo de etapas

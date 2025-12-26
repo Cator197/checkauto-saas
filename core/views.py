@@ -778,7 +778,16 @@ class SyncView(APIView):
         if erro:
             return Response(erro, status=status.HTTP_400_BAD_REQUEST)
 
-        return Response({"results": resultados, "os": resultados}, status=status.HTTP_200_OK)
+        payload = {
+            "results": resultados,
+            # Compatibilidade temporária: alias legado usado pelo PWA
+            "os": resultados,
+            "deprecated_fields": {
+                "os": "Use 'results'; este alias será removido em uma versão futura.",
+            },
+        }
+
+        return Response(payload, status=status.HTTP_200_OK)
 
 
 class PwaVeiculosEmProducaoView(APIView):
@@ -1159,7 +1168,7 @@ class GoogleDriveOAuth2CallbackView(APIView):
         if error:
             # Erro vindo do Google (usuário cancelou, etc.)
             return redirect(
-                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracao_drive/')}"
+                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracoes/drive/')}"
                 f"?status=error&msg={error}"
             )
 
@@ -1168,7 +1177,7 @@ class GoogleDriveOAuth2CallbackView(APIView):
 
         if not code or not state:
             return redirect(
-                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracao_drive/')}"
+                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracoes/drive/')}"
                 "?status=error&msg=missing_code_or_state"
             )
 
@@ -1179,7 +1188,7 @@ class GoogleDriveOAuth2CallbackView(APIView):
 
         if not oficina_id:
             return redirect(
-                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracao_drive/')}"
+                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracoes/drive/')}"
                 "?status=error&msg=invalid_state"
             )
 
@@ -1187,7 +1196,7 @@ class GoogleDriveOAuth2CallbackView(APIView):
             oficina = Oficina.objects.get(id=oficina_id)
         except Oficina.DoesNotExist:
             return redirect(
-                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracao_drive/')}"
+                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracoes/drive/')}"
                 "?status=error&msg=oficina_not_found"
             )
 
@@ -1202,7 +1211,7 @@ class GoogleDriveOAuth2CallbackView(APIView):
             flow.fetch_token(code=code)
         except Exception:
             return redirect(
-                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracao_drive/')}"
+                f"{getattr(settings, 'GOOGLE_DRIVE_POST_CONNECT_REDIRECT', '/painel/integracoes/drive/')}"
                 "?status=error&msg=token_fetch_failed"
             )
 
@@ -1260,14 +1269,7 @@ class GoogleDriveOAuth2CallbackView(APIView):
         redirect_url = getattr(
             settings,
             "GOOGLE_DRIVE_POST_CONNECT_REDIRECT",
-            "/painel/integracao_drive/",
+            "/painel/integracoes/drive/",
         )
 
         return redirect(f"{redirect_url}?status=ok")
-
-# core/views.py
-from django.shortcuts import render
-
-
-def integracao_drive_view(request):
-    return render(request, "integracao_drive.html")
