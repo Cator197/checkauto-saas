@@ -125,6 +125,7 @@ class ObservacaoEtapaOSSerializer(serializers.ModelSerializer):
         read_only_fields = ('os', 'criado_por', 'criado_em', 'atualizado_em')
         extra_kwargs = {
             'texto': {'allow_blank': True},
+            'etapa': {'required': False, 'allow_null': True},
         }
 
     def validate_etapa(self, value):
@@ -137,6 +138,24 @@ class ObservacaoEtapaOSSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Etapa não encontrada para esta oficina.')
 
         return value
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+
+        os_obj = self.context.get('os')
+        etapa = attrs.get('etapa')
+
+        if etapa is None:
+            if self.instance:
+                attrs['etapa'] = getattr(self.instance, 'etapa', None)
+            elif os_obj and os_obj.etapa_atual:
+                attrs['etapa'] = os_obj.etapa_atual
+            elif os_obj:
+                raise serializers.ValidationError(
+                    {'etapa': 'OS não possui etapa atual configurada.'}
+                )
+
+        return attrs
 
 
 class OSEtapaStatusSerializer(serializers.ModelSerializer):
