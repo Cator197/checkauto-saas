@@ -287,9 +287,17 @@ class OSViewSet(viewsets.ModelViewSet):
             user=self.request.user, oficina=os_obj.oficina, ativo=True
         ).first()
 
-    def _is_operador(self, request):
-        papel = get_papel_do_usuario(request.user, getattr(request, "auth", None))
-        return papel == "OPERADOR"
+    def _is_operador(self, request, oficina=None):
+        papel = get_papel_do_usuario(
+            request.user, getattr(request, "auth", None), oficina=oficina
+        )
+        return (papel or "").upper() == "FUNC"
+
+    def _forbidden_response(self):
+        return Response(
+            {"detail": "Sem permissão para esta ação."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
 
     def _montar_timeline(self, os_obj):
         etapas = (
@@ -493,13 +501,10 @@ class OSViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="timeline/marcar-concluida")
     def marcar_etapa_concluida(self, request, pk=None):
-        if self._is_operador(request):
-            return Response(
-                {"detail": "Operador não pode alterar etapas."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
         os_obj = self.get_object()
+
+        if self._is_operador(request, oficina=os_obj.oficina):
+            return self._forbidden_response()
         etapa_id = request.data.get("etapa")
 
         if not etapa_id:
@@ -547,13 +552,10 @@ class OSViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="timeline/reabrir")
     def reabrir_etapa(self, request, pk=None):
-        if self._is_operador(request):
-            return Response(
-                {"detail": "Operador não pode alterar etapas."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
         os_obj = self.get_object()
+
+        if self._is_operador(request, oficina=os_obj.oficina):
+            return self._forbidden_response()
         etapa_id = request.data.get("etapa")
 
         if not etapa_id:
@@ -592,13 +594,10 @@ class OSViewSet(viewsets.ModelViewSet):
         Avança a OS para a próxima etapa ativa, validando fotos obrigatórias.
         """
 
-        if self._is_operador(request):
-            return Response(
-                {"detail": "Operador não pode alterar a etapa manualmente."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
         os_obj = self.get_object()
+
+        if self._is_operador(request, oficina=os_obj.oficina):
+            return self._forbidden_response()
 
         etapa_atual = os_obj.etapa_atual
         if etapa_atual is None:
