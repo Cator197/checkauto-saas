@@ -881,7 +881,7 @@ class SyncView(APIView):
             item["oficina"] = oficina.id
 
             # converte para o formato do serializer de OS
-            item_convertido = self.converter_payload_pwa(item)
+            item_convertido = self.converter_payload_pwa(item, oficina)
 
             if not item_convertido.get("modelo_veiculo"):
                 return Response(
@@ -930,7 +930,7 @@ class SyncView(APIView):
 
         return Response({"os": resultados}, status=status.HTTP_200_OK)
 
-    def converter_payload_pwa(self, item):
+    def converter_payload_pwa(self, item, oficina):
         """
         Transforma a OS recebida do PWA no formato que o model/serializer OS espera.
         """
@@ -947,7 +947,11 @@ class SyncView(APIView):
         if not numero_interno:
             numero_interno = f"PWA-{timezone.now().strftime('%Y%m%d%H%M%S')}"
 
-        return {
+        numero_interno = numero_interno.strip() if numero_interno else numero_interno
+
+        etapa_atual = os_data.get("etapa_atual") or os_data.get("etapaAtual")
+
+        payload = {
             "oficina": item.get("oficina"),
             "codigo": numero_interno,
             "placa": veiculo.get("placa"),
@@ -956,11 +960,37 @@ class SyncView(APIView):
             "nome_cliente": cliente.get("nome"),
             "telefone_cliente": cliente.get("telefone"),
             "observacoes": os_data.get("observacoes"),
-            # por enquanto NÃO setamos etapa_atual (evita erro de tipo)
-            "etapa_atual": None,
+            "etapa_atual": etapa_atual,
             "data_entrada": timezone.now(),
             "aberta": True,
         }
+
+        if payload.get("etapa_atual") is None:
+            etapa_padrao = self._buscar_primeira_etapa_ativa(oficina)
+            if etapa_padrao:
+                payload["etapa_atual"] = etapa_padrao.id
+                logger.info(
+                    "[SYNC] etapa_atual ausente; aplicando etapa inicial da oficina.",
+                    extra={
+                        "oficina_id": oficina.id,
+                        "os_codigo": numero_interno,
+                        "etapa_id": etapa_padrao.id,
+                    },
+                )
+            else:
+                logger.warning(
+                    "[SYNC] etapa_atual ausente e nenhuma etapa ativa encontrada na oficina.",
+                    extra={"oficina_id": oficina.id, "os_codigo": numero_interno},
+                )
+
+        return payload
+
+    def _buscar_primeira_etapa_ativa(self, oficina):
+        return (
+            Etapa.objects.filter(oficina=oficina, ativa=True)
+            .order_by("ordem")
+            .first()
+        )
 
     def salvar_fotos(self, os_obj, item, user):
         """

@@ -168,6 +168,39 @@ class SyncViewTests(APITestCase):
         photo_errors = response.data["os"][0]["photo_errors"]
         self.assertTrue(photo_errors)
 
+    def test_sync_define_etapa_inicial_quando_ausente(self):
+        Etapa.objects.create(
+            oficina=self.oficina,
+            nome="Inativa",
+            ordem=0,
+            ativa=False,
+        )
+
+        payload = self._build_payload(numero_interno="600")
+
+        with self.assertLogs("core.views", level="INFO") as logs:
+            response = self.client.post(self.url, payload, format="json")
+
+        self.assertEqual(response.status_code, 200)
+
+        os_obj = OS.objects.get(codigo="600")
+        self.assertEqual(os_obj.etapa_atual, self.etapa)
+        self.assertTrue(
+            any("aplicando etapa inicial da oficina" in message for message in logs.output)
+        )
+
+    def test_patch_os_nao_altera_etapa_atual_quando_nao_enviada(self):
+        os_obj = OS.objects.create(
+            oficina=self.oficina, codigo="OS-ETAPA", etapa_atual=self.etapa
+        )
+
+        url = reverse("os-detail", args=[os_obj.id])
+        response = self.client.patch(url, {"observacoes": "Nova observação"}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        os_obj.refresh_from_db()
+        self.assertEqual(os_obj.etapa_atual, self.etapa)
+
 
 class AvancarEtapaTests(APITestCase):
     @classmethod
