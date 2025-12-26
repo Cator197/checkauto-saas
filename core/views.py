@@ -676,6 +676,33 @@ class OSViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        etapa_origem = request.data.get("etapa_origem")
+        if etapa_origem is not None:
+            try:
+                etapa_origem = int(etapa_origem)
+            except (TypeError, ValueError):
+                etapa_origem = None
+
+        if etapa_origem and etapa_atual.id != etapa_origem:
+            serializer = OSSerializer(os_obj, context={"request": request})
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        proxima_etapa = (
+            Etapa.objects.filter(
+                oficina=os_obj.oficina,
+                ativa=True,
+                ordem__gt=etapa_atual.ordem,
+            )
+            .order_by("ordem")
+            .first()
+        )
+
+        if proxima_etapa is None:
+            serializer = OSSerializer(os_obj, context={"request": request})
+            data = serializer.data
+            data["ultima_etapa"] = True
+            return Response(data, status=status.HTTP_200_OK)
+
         configs_obrigatorias = list(
             ConfigFoto.objects.filter(
                 oficina=os_obj.oficina,
@@ -699,22 +726,6 @@ class OSViewSet(viewsets.ModelViewSet):
                     "detail": "Fotos obrigatórias pendentes na etapa atual.",
                     "configs_pendentes": [cfg.id for cfg in pendentes],
                 },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        proxima_etapa = (
-            Etapa.objects.filter(
-                oficina=os_obj.oficina,
-                ativa=True,
-                ordem__gt=etapa_atual.ordem,
-            )
-            .order_by("ordem")
-            .first()
-        )
-
-        if proxima_etapa is None:
-            return Response(
-                {"detail": "A OS já está na última etapa ativa."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
