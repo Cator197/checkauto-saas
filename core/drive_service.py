@@ -67,15 +67,20 @@ def criar_pasta_os(os_obj: OS) -> Optional[str]:
     Salva o ID em os_obj.drive_folder_id.
     """
     oficina = os_obj.oficina
-    logger.info("Iniciando criar_pasta_os para OS id=%s codigo=%s oficina_id=%s",
-                os_obj.id, os_obj.codigo, oficina.id)
+    extra_log = {
+        "oficina_id": oficina.id,
+        "os_id": os_obj.id,
+    }
+    logger.info(
+        "Drive criar_pasta_os iniciado",
+        extra={**extra_log, "os_codigo": os_obj.codigo},
+    )
 
     # Se já tiver pasta, não recria
     if os_obj.drive_folder_id:
         logger.info(
-            "OS id=%s já possui drive_folder_id=%s, não será recriada.",
-            os_obj.id,
-            os_obj.drive_folder_id,
+            "Drive criar_pasta_os existente",
+            extra={**extra_log, "drive_folder_id": os_obj.drive_folder_id},
         )
         return os_obj.drive_folder_id
 
@@ -83,22 +88,19 @@ def criar_pasta_os(os_obj: OS) -> Optional[str]:
     try:
         config = _get_oficina_drive_config(oficina)
         logger.debug(
-            "Config Drive encontrada para oficina_id=%s: root_folder_id=%s ativo=%s",
-            oficina.id,
-            config.root_folder_id,
-            config.ativo,
+            "Drive criar_pasta_os config encontrada",
+            extra={**extra_log, "root_folder_id": config.root_folder_id},
         )
     except DriveNaoConfigurado as e:
         logger.warning(
-            "DriveNaoConfigurado para oficina_id=%s: %s",
-            oficina.id,
-            e,
+            "Drive criar_pasta_os sem configuracao",
+            extra={**extra_log, "erro": str(e)},
         )
         return None
     except Exception:
         logger.exception(
-            "Erro inesperado ao obter config do Drive para oficina_id=%s",
-            oficina.id,
+            "Drive criar_pasta_os erro ao obter config",
+            extra=extra_log,
         )
         return None
 
@@ -106,22 +108,61 @@ def criar_pasta_os(os_obj: OS) -> Optional[str]:
     service = get_drive_service(oficina)
     if not service:
         logger.warning(
-            "Serviço do Drive indisponível para oficina_id=%s",
-            oficina.id,
+            "Drive criar_pasta_os sem servico",
+            extra=extra_log,
         )
         return None
 
     # Monta os dados da pasta
     nome_pasta = f"OS-{os_obj.codigo} - {os_obj.placa or ''} - {os_obj.modelo_veiculo or ''}".strip()
+
+    # Busca pasta existente para idempotência
+    try:
+        query = (
+            f"mimeType='application/vnd.google-apps.folder' "
+            f"and name='{nome_pasta}' "
+            f"and '{config.root_folder_id}' in parents "
+            f"and trashed=false"
+        )
+        response = service.files().list(
+            q=query,
+            fields="files(id, name, createdTime)",
+            orderBy="createdTime",
+            pageSize=10,
+        ).execute()
+        encontrados = response.get("files", [])
+        if encontrados:
+            folder_escolhida = encontrados[0]
+            if len(encontrados) > 1:
+                logger.warning(
+                    "Drive criar_pasta_os encontrou duplicatas",
+                    extra={
+                        **extra_log,
+                        "root_folder_id": config.root_folder_id,
+                        "duplicatas": [f.get("id") for f in encontrados],
+                    },
+                )
+            os_obj.drive_folder_id = folder_escolhida.get("id")
+            os_obj.save(update_fields=["drive_folder_id"])
+            logger.info(
+                "Drive criar_pasta_os reutilizada",
+                extra={**extra_log, "drive_folder_id": os_obj.drive_folder_id},
+            )
+            return os_obj.drive_folder_id
+    except Exception:
+        logger.exception(
+            "Drive criar_pasta_os falha ao buscar existente",
+            extra={**extra_log, "root_folder_id": config.root_folder_id},
+        )
+
     folder_metadata = {
         "name": nome_pasta,
         "mimeType": "application/vnd.google-apps.folder",
         "parents": [config.root_folder_id],
     }
     logger.debug(
-        "Criando pasta no Drive para OS id=%s com metadata=%s",
-        os_obj.id,
-        folder_metadata,
+        "Drive criar_pasta_os criando",
+        extra={**extra_log, "metadata": folder_metadata},
     )
 
     # Chama API do Drive
@@ -129,9 +170,8 @@ def criar_pasta_os(os_obj: OS) -> Optional[str]:
         folder = service.files().create(body=folder_metadata, fields="id").execute()
         folder_id = folder.get("id")
         logger.info(
-            "Pasta criada no Drive para OS id=%s: folder_id=%s",
-            os_obj.id,
-            folder_id,
+            "Drive criar_pasta_os criada",
+            extra={**extra_log, "drive_folder_id": folder_id},
         )
         os_obj.drive_folder_id = folder_id
         os_obj.save(update_fields=["drive_folder_id"])
@@ -140,11 +180,11 @@ def criar_pasta_os(os_obj: OS) -> Optional[str]:
         try:
             criar_subpastas_etapas(os_obj, service)
             criar_pasta_livres(os_obj, service)
-            logger.info("Subpastas de etapas criadas para OS id=%s", os_obj.id)
+            logger.info("Drive criar_pasta_os subpastas criadas", extra=extra_log)
         except Exception:
             logger.exception(
-                "Erro ao criar subpastas da OS id=%s",
-                os_obj.id,
+                "Drive criar_pasta_os erro subpastas",
+                extra=extra_log,
             )
 
         return folder_id
@@ -152,8 +192,8 @@ def criar_pasta_os(os_obj: OS) -> Optional[str]:
 
     except Exception:
         logger.exception(
-            "Erro ao criar pasta da OS id=%s no Drive.",
-            os_obj.id,
+            "Drive criar_pasta_os erro ao criar",
+            extra=extra_log,
         )
         return None
 
@@ -165,6 +205,11 @@ def _get_or_create_subpasta_etapa(os_obj: OS, etapa: Etapa) -> Optional[str]:
     Retorna o ID da subpasta.
     """
     oficina = os_obj.oficina
+    extra_log = {
+        "oficina_id": oficina.id,
+        "os_id": os_obj.id,
+        "etapa_id": etapa.id,
+    }
 
     # Garante pasta principal da OS
     pasta_os_id = criar_pasta_os(os_obj)
@@ -174,7 +219,8 @@ def _get_or_create_subpasta_etapa(os_obj: OS, etapa: Etapa) -> Optional[str]:
     service = get_drive_service(oficina)
     if not service:
         logger.warning(
-            "Serviço do Drive indisponível para oficina_id=%s", oficina.id,
+            "Drive subpasta etapa sem servico",
+            extra=extra_log,
         )
         return None
 
@@ -190,8 +236,11 @@ def _get_or_create_subpasta_etapa(os_obj: OS, etapa: Etapa) -> Optional[str]:
         files = response.get('files', [])
         if files:
             return files[0]['id']
-    except Exception as e:
-        logger.exception(f"Erro ao procurar subpasta da etapa '{etapa.nome}' na OS {os_obj.id}: {e}")
+    except Exception:
+        logger.exception(
+            "Drive subpasta etapa falha ao listar",
+            extra=extra_log,
+        )
 
     # 2) Se não encontrou, cria
     folder_metadata = {
@@ -202,8 +251,11 @@ def _get_or_create_subpasta_etapa(os_obj: OS, etapa: Etapa) -> Optional[str]:
     try:
         folder = service.files().create(body=folder_metadata, fields='id').execute()
         return folder.get('id')
-    except Exception as e:
-        logger.exception(f"Erro ao criar subpasta da etapa '{etapa.nome}' na OS {os_obj.id}: {e}")
+    except Exception:
+        logger.exception(
+            "Drive subpasta etapa falha ao criar",
+            extra=extra_log,
+        )
         return None
 
 
@@ -280,26 +332,51 @@ def criar_subpastas_etapas(os_obj: OS, service):
     for etapa in etapas:
         ordem = int(etapa.ordem or 0)
         nome_pasta = f"{ordem:02d} - {etapa.nome}"
-        _get_or_create_subpasta(
+        subpasta_id = _get_or_create_subpasta(
             service=service,
             parent_id=os_obj.drive_folder_id,
             nome=nome_pasta,
+            os_obj=os_obj,
+            etapa_id=etapa.id,
         )
+        if not subpasta_id:
+            logger.warning(
+                "Drive subpasta etapa indisponivel",
+                extra={
+                    "oficina_id": os_obj.oficina_id,
+                    "os_id": os_obj.id,
+                    "etapa_id": etapa.id,
+                },
+            )
 
 def criar_pasta_livres(os_obj: OS, service):
-    _get_or_create_subpasta(
+    subpasta_id = _get_or_create_subpasta(
         service=service,
         parent_id=os_obj.drive_folder_id,
         nome="00 - Livres",
+        os_obj=os_obj,
     )
+    if not subpasta_id:
+        logger.warning(
+            "Drive subpasta livres indisponivel",
+            extra={"oficina_id": os_obj.oficina_id, "os_id": os_obj.id},
+        )
 
 
-def _get_or_create_subpasta(service, parent_id: str, nome: str) -> str:
+def _get_or_create_subpasta(service, parent_id: str, nome: str, *, os_obj: OS = None, etapa_id=None) -> Optional[str]:
     """
     Busca uma subpasta pelo nome dentro de parent_id.
     Se não existir, cria.
     Retorna o folder_id.
     """
+    extra_log = {
+        "drive_folder_id": parent_id,
+    }
+    if os_obj:
+        extra_log.update({"os_id": os_obj.id, "oficina_id": os_obj.oficina_id})
+    if etapa_id:
+        extra_log["etapa_id"] = etapa_id
+
     query = (
         f"mimeType='application/vnd.google-apps.folder' "
         f"and name='{nome}' "
@@ -307,15 +384,22 @@ def _get_or_create_subpasta(service, parent_id: str, nome: str) -> str:
         f"and trashed=false"
     )
 
-    response = service.files().list(
-        q=query,
-        fields="files(id, name)",
-        pageSize=1,
-    ).execute()
+    try:
+        response = service.files().list(
+            q=query,
+            fields="files(id, name)",
+            pageSize=1,
+        ).execute()
 
-    files = response.get("files", [])
-    if files:
-        return files[0]["id"]
+        files = response.get("files", [])
+        if files:
+            return files[0]["id"]
+    except Exception:
+        logger.exception(
+            "Drive subpasta falha ao listar",
+            extra={**extra_log, "nome": nome},
+        )
+        return None
 
     folder_metadata = {
         "name": nome,
@@ -323,14 +407,21 @@ def _get_or_create_subpasta(service, parent_id: str, nome: str) -> str:
         "parents": [parent_id],
     }
 
-    folder = service.files().create(
-        body=folder_metadata,
-        fields="id",
-    ).execute()
+    try:
+        folder = service.files().create(
+            body=folder_metadata,
+            fields="id",
+        ).execute()
+    except Exception:
+        logger.exception(
+            "Drive subpasta falha ao criar",
+            extra={**extra_log, "nome": nome},
+        )
+        return None
 
-    return folder["id"]
+    return folder.get("id")
 
-def obter_pasta_etapa(os_obj: OS, etapa, service) -> str:
+def obter_pasta_etapa(os_obj: OS, etapa, service) -> Optional[str]:
     """
     Retorna o folder_id da subpasta da etapa dentro da OS.
     Cria se não existir.
@@ -342,6 +433,8 @@ def obter_pasta_etapa(os_obj: OS, etapa, service) -> str:
         service=service,
         parent_id=os_obj.drive_folder_id,
         nome=nome_pasta,
+        os_obj=os_obj,
+        etapa_id=getattr(etapa, "id", None),
     )
 
 def upload_foto_os_drive(
@@ -380,6 +473,10 @@ def upload_foto_os_drive(
         pasta_etapa_id = obter_pasta_etapa(os_obj, etapa, service)
     except Exception:
         logger.exception("Erro ao obter pasta da etapa no Drive", extra=extra_log)
+        return None
+
+    if not pasta_etapa_id:
+        logger.warning("Drive pasta etapa indisponivel", extra=extra_log)
         return None
 
     file_metadata = {
