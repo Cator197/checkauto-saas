@@ -21,8 +21,9 @@ logger = logging.getLogger("core.views")
 
 
 class SyncService:
-    def __init__(self, user):
+    def __init__(self, user, request=None):
         self.user = user
+        self.request = request
         self.oficina = self._definir_oficina()
 
     def _definir_oficina(self) -> Optional[Oficina]:
@@ -119,31 +120,7 @@ class SyncService:
         }
 
         if payload.get("etapa_atual") is None:
-            etapa_padrao = self._buscar_primeira_etapa_ativa(self.oficina)
-            if etapa_padrao:
-                payload["etapa_atual"] = etapa_padrao.id
-                logger.info(
-                    "[SYNC] etapa_atual ausente; aplicando etapa inicial da oficina.",
-                    extra={
-                        "oficina_id": self.oficina.id,
-                        "os_codigo": numero_interno,
-                        "etapa_id": etapa_padrao.id,
-                    },
-                )
-            else:
-                logger.warning(
-                    "[SYNC] etapa_atual ausente e nenhuma etapa ativa encontrada na oficina.",
-                    extra={"oficina_id": self.oficina.id, "os_codigo": numero_interno},
-                )
-
         return payload
-
-    def _buscar_primeira_etapa_ativa(self, oficina: Oficina) -> Optional[Etapa]:
-        return (
-            Etapa.objects.filter(oficina=oficina, ativa=True)
-            .order_by("ordem")
-            .first()
-        )
 
     def _salvar_os(self, payload: dict) -> Tuple[Optional[OS], str, Optional[dict]]:
         os_existente = (
@@ -152,11 +129,18 @@ class SyncService:
             .first()
         )
 
+        etapa_obj, etapa_error = self._resolver_etapa_para_payload(payload, os_existente)
+        if etapa_error:
+            return None, "error", etapa_error
+
+        if etapa_obj:
+            payload["etapa_atual"] = etapa_obj.id
+
         if os_existente:
             serializer = OSSerializer(
                 instance=os_existente,
                 data=payload,
-                context={"request": None},
+                context={"oficina": self.oficina, "request": self.request},
                 partial=True,
             )
             if not serializer.is_valid():
@@ -172,7 +156,7 @@ class SyncService:
         else:
             serializer = OSSerializer(
                 data=payload,
-                context={"request": None},
+                context={"oficina": self.oficina, "request": self.request},
             )
             if not serializer.is_valid():
                 return None, "error", serializer.errors
@@ -192,6 +176,33 @@ class SyncService:
 
         return os_obj, status_item, None
 
+    def _resolver_etapa_para_payload(
+        self, payload: dict, os_existente: Optional[OS]
+    ) -> Tuple[Optional[Etapa], Optional[dict]]:
+        etapa_valor = payload.get("etapa_atual")
+        etapa_id = getattr(etapa_valor, "id", etapa_valor)
+
+        if etapa_id is not None:
+            etapa_obj = Etapa.objects.filter(id=etapa_id, oficina=self.oficina).first()
+            if not etapa_obj:
+                return None, {"etapa_atual": ["Etapa não encontrada para esta oficina."]}
+
+            return etapa_obj, None
+
+        if os_existente and os_existente.etapa_atual_id:
+            return os_existente.etapa_atual, None
+
+        etapa_checkin = (
+            Etapa.objects.filter(oficina=self.oficina, is_checkin=True, ativa=True)
+            .order_by("ordem", "id")
+            .first()
+        )
+
+        if etapa_checkin:
+            return etapa_checkin, None
+
+        return None, {"etapa_atual": ["Etapa de check-in não configurada para esta oficina."]}
+
     def _salvar_fotos(self, os_obj: OS, item: dict) -> List[str]:
         photo_errors: List[str] = []
 
@@ -205,11 +216,13 @@ class SyncService:
 
         etapa = os_obj.etapa_atual
         if etapa is None:
-            etapa = Etapa.objects.filter(oficina=os_obj.oficina, is_checkin=True).first()
+            etapa = (
+                Etapa.objects.filter(oficina=os_obj.oficina, is_checkin=True, ativa=True)
+                .order_by("ordem", "id")
+                .first()
+            )
         if etapa is None:
-            etapa = Etapa.objects.filter(oficina=os_obj.oficina).order_by("ordem", "id").first()
-        if etapa is None:
-            message = "[SYNC] Sem etapas cadastradas para oficina. Fotos ignoradas."
+            message = "[SYNC] OS sem etapa para associar fotos. Fotos ignoradas."
             logger.warning(
                 message,
                 extra={
