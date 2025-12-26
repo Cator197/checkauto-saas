@@ -134,6 +134,17 @@ function normalizarEtapaLocal(etapa) {
   };
 }
 
+function normalizarIdEtapa(etapa) {
+  if (etapa === undefined) return null;
+
+  const valor = etapa?.id ?? etapa?.etapa_atual ?? etapa;
+  const numero = parseInt(valor, 10);
+
+  if (Number.isNaN(numero)) return null;
+
+  return numero;
+}
+
 // Adiciona ou sobrescreve um item na fila de sincronização
 window.checkautoAdicionarFilaSync = async function (item) {
   try {
@@ -437,6 +448,22 @@ window.checkautoEnfileirarAvancoEtapaOS = async function (osId, payload = {}, ex
     (item) => item.type === ACAO_AVANCAR_ETAPA && item.os_id === osId
   );
 
+  const cacheProducao = window.checkautoBuscarOSProducao
+    ? await window.checkautoBuscarOSProducao(osId)
+    : null;
+  const etapaOrigem =
+    normalizarIdEtapa(payload.etapa_origem) ??
+    normalizarIdEtapa(extra.etapa_atual) ??
+    normalizarIdEtapa(cacheProducao?.etapa_atual) ??
+    null;
+
+  if (!etapaOrigem) {
+    console.warn(
+      `Enfileirando avanço de etapa sem etapa_atual conhecida para OS ${osId}.`,
+      "O backend fará fallback, mas é recomendável atualizar o estado local."
+    );
+  }
+
   const fotosNormalizadas = Array.isArray(payload.fotos) ? payload.fotos : [];
 
   const operacao = await window.checkautoAdicionarFilaSync({
@@ -448,6 +475,7 @@ window.checkautoEnfileirarAvancoEtapaOS = async function (osId, payload = {}, ex
       timestamp: new Date().toISOString(),
       observacao: payload.observacao || "",
       fotos: fotosNormalizadas,
+      etapa_origem: etapaOrigem,
     },
   });
 
