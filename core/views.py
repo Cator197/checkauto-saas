@@ -773,7 +773,7 @@ class SyncView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        service = SyncService(request.user)
+        service = SyncService(request.user, request=request)
         resultados, erro = service.processar(request.data)
 
         if erro:

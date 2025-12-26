@@ -87,6 +87,16 @@ def criar_foto_os(
             logger.warning(message, extra=extra_log)
             return None, message
 
+        if config_foto_obj.oficina_id != os_obj.oficina_id:
+            message = "[SYNC] Foto PADRÃO ignorada: config_foto de outra oficina."
+            logger.warning(message, extra=extra_log)
+            return None, message
+
+        if config_foto_obj.etapa_id and config_foto_obj.etapa_id != getattr(etapa, "id", None):
+            message = "[SYNC] Foto PADRÃO ignorada: config_foto não corresponde à etapa da foto."
+            logger.warning(message, extra=extra_log)
+            return None, message
+
     try:
         foto_obj = FotoOS.objects.create(
             os=os_obj,
