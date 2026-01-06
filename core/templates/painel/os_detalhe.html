@@ -12,6 +12,7 @@ Timeline do veículo e fotos por etapa.
 {% endblock %}
 
 {% block content %}
+{% with 'os-detalhe-v20240607' as os_view_version %}
 <style>
     .os-card {
         background: linear-gradient(135deg, rgba(17, 24, 39, 0.92), rgba(30, 41, 59, 0.8));
@@ -58,6 +59,12 @@ Timeline do veículo e fotos por etapa.
         gap: 12px;
     }
 </style>
+
+<div class="mb-3">
+    <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-300/40 text-amber-100 text-[10px] font-semibold tracking-wide">
+        DEBUG · painel/os_detalhe.html · {{ os_view_version }}
+    </span>
+</div>
 
 <div id="os-erro" class="hidden mb-4 bg-rose-900/40 border border-rose-700/70 text-rose-100 text-xs rounded-xl px-3 py-2">
     Ocorreu um erro ao carregar os dados desta OS. Verifique o console ou tente novamente.
@@ -189,13 +196,15 @@ Timeline do veículo e fotos por etapa.
     </div>
 </div>
 
-<script src="{% static 'painel/js/auth.js' %}"></script>
-<script src="{% static 'painel/js/api.js' %}"></script>
+<script src="{% static 'painel/js/auth.js' %}?v={{ os_view_version }}"></script>
+<script src="{% static 'painel/js/api.js' %}?v={{ os_view_version }}"></script>
 <script>
     document.addEventListener("DOMContentLoaded", () => {
         (async () => {
             const autenticado = await verificarAutenticacao();
             if (!autenticado) return;
+
+            console.log("painel/os_detalhe.html carregado", "{{ os_view_version }}");
 
             const erroBox = document.getElementById("os-erro");
 
@@ -1050,4 +1059,5 @@ Timeline do veículo e fotos por etapa.
     });
 </script>
 
+{% endwith %}
 {% endblock %}

@@ -1,5 +1,5 @@
 // Nome do cache (mude a versão quando fizer mudanças grandes no front)
-const CACHE_NAME = "checkauto-pwa-v1";
+const CACHE_NAME = "checkauto-pwa-v2";
 
 // Lista de arquivos essenciais para o app abrir (app shell)
 const URLS_TO_CACHE = [
@@ -35,18 +35,23 @@ self.addEventListener("activate", event => {
 // Evento de fetch: responde com cache quando possível
 self.addEventListener("fetch", event => {
   const request = event.request;
+  const url = new URL(request.url);
+
+  // Ignora qualquer rota que não esteja dentro do escopo do PWA, evitando interferir no painel/admin
+  const isPwaRoute = url.pathname.startsWith("/pwa") || url.pathname.startsWith("/static/pwa/");
+  if (!isPwaRoute) {
+    return;
+  }
 
   // Para chamadas de navegação (HTML), tenta rede primeiro, fallback para cache
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request).catch(() => {
-        return caches.match("/pwa/");
-      })
+      fetch(request).catch(() => caches.match("/pwa/"))
     );
     return;
   }
 
-  // Para assets estáticos (CSS, JS, ícones): Cache First
+  // Para assets estáticos (CSS, JS, ícones) do PWA: Cache First
   event.respondWith(
     caches.match(request).then(response => {
       return (
