@@ -381,7 +381,7 @@ Timeline do veículo e fotos por etapa.
                     checkbox.className = "rounded border-slate-700 bg-slate-950 text-indigo-500 focus:ring-indigo-500";
                     checkbox.value = foto.id || "";
                     const img = document.createElement("img");
-                    img.src = foto.drive_thumb_url || foto.drive_url;
+                    img.src = getFotoThumbUrl(foto);
                     img.alt = foto.titulo || foto.observacao || "Foto";
                     img.className = "w-full aspect-[4/3] object-cover rounded-md";
                     const caption = document.createElement("span");
@@ -593,6 +593,28 @@ Timeline do veículo e fotos por etapa.
                 return badge;
             }
 
+            function getFotoThumbUrl(foto) {
+                return (
+                    foto?.drive_thumb_url ||
+                    foto?.drive_url ||
+                    foto?.arquivo ||
+                    foto?.url ||
+                    foto?.imagem_url ||
+                    ""
+                );
+            }
+
+            function getFotoFullUrl(foto) {
+                return (
+                    foto?.drive_url ||
+                    foto?.drive_thumb_url ||
+                    foto?.arquivo ||
+                    foto?.url ||
+                    foto?.imagem_url ||
+                    ""
+                );
+            }
+
             function renderizarFotosMini(etapaId) {
                 const fotosEtapa = fotosCache.filter((f) => Number(f.etapa) === Number(etapaId)).slice(0, 3);
                 const wrapper = document.createElement("div");
@@ -611,12 +633,12 @@ Timeline do veículo e fotos por etapa.
                     thumb.type = "button";
                     thumb.className = "relative w-full aspect-[4/3] rounded-lg overflow-hidden border border-slate-800 bg-slate-900";
                     const img = document.createElement("img");
-                    img.src = f.drive_thumb_url || f.drive_url;
+                    img.src = getFotoThumbUrl(f);
                     img.alt = f.titulo || f.observacao || "Foto";
                     img.className = "w-full h-full object-cover hover:scale-105 transition";
                     thumb.appendChild(img);
                     thumb.addEventListener("click", () => {
-                        const fullUrl = f.drive_url || f.arquivo || f.url || f.imagem_url || f.drive_thumb_url;
+                        const fullUrl = getFotoFullUrl(f);
                         abrirModalImagem(fullUrl, img.alt);
                     });
                     wrapper.appendChild(thumb);

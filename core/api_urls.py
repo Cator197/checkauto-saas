@@ -11,6 +11,8 @@ from .views import (
     FotoOSViewSet,
     GoogleDriveAuthURLView,
     GoogleDriveOAuth2CallbackView,
+    DriveFileProxyView,
+    DriveThumbProxyView,
     OSViewSet,
     OficinaDriveStatusView,
     OficinaViewSet,
@@ -43,6 +45,8 @@ urlpatterns = [
     # Integração Google Drive
     path("drive/status/", OficinaDriveStatusView.as_view(), name="drive-status"),
     path("drive/auth-url/", GoogleDriveAuthURLView.as_view(), name="drive-auth-url"),
+    path("drive/thumb/<str:drive_file_id>/", DriveThumbProxyView.as_view(), name="drive-thumb"),
+    path("drive/file/<str:drive_file_id>/", DriveFileProxyView.as_view(), name="drive-file"),
     path(
         "drive/oauth2/callback/",
         GoogleDriveOAuth2CallbackView.as_view(),

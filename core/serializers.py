@@ -402,12 +402,18 @@ class FotoOSSerializer(serializers.ModelSerializer):
             return path
 
     def get_drive_thumb_url(self, obj):
-        return self.get_drive_url(obj)
+        request = self.context.get("request")
+        if obj.drive_file_id:
+            path = reverse("drive-thumb", kwargs={"drive_file_id": obj.drive_file_id})
+            return self._abs(request, path)
+        if obj.arquivo:
+            return request.build_absolute_uri(obj.arquivo.url) if request else obj.arquivo.url
+        return None
 
     def get_drive_url(self, obj):
         request = self.context.get("request")
         if obj.drive_file_id:
-            path = reverse("fotos-os-arquivo", kwargs={"pk": obj.pk})
+            path = reverse("drive-file", kwargs={"drive_file_id": obj.drive_file_id})
             return self._abs(request, path)
         if obj.arquivo:
             return request.build_absolute_uri(obj.arquivo.url) if request else obj.arquivo.url

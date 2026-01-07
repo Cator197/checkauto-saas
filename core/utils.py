@@ -13,11 +13,12 @@ def get_oficina_do_usuario(user):
     if user.is_superuser:
         return None
 
-    try:
-        usuario_oficina = UsuarioOficina.objects.get(user=user, ativo=True)
-        return usuario_oficina.oficina
-    except UsuarioOficina.DoesNotExist:
-        return None
+    usuario_oficina = (
+        UsuarioOficina.objects.select_related("oficina")
+        .filter(user=user, ativo=True)
+        .first()
+    )
+    return usuario_oficina.oficina if usuario_oficina else None
 
 
 def get_papel_do_usuario(user, token=None, oficina=None):
