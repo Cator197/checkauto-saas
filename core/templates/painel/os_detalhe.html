@@ -588,20 +588,107 @@ Timeline do veículo e fotos por etapa.
                         const id = typeof obs.etapa === "object" ? obs.etapa?.id : obs.etapa;
                         return Number(id) === Number(etapaId);
                     })
-                    .sort((a, b) => new Date(b?.criada_em || 0) - new Date(a?.criada_em || 0));
+                    .sort((a, b) => new Date(obterDataObservacao(b) || 0) - new Date(obterDataObservacao(a) || 0));
             }
 
             function obterNomeUsuario(obs) {
-                return obs?.usuario_nome || obs?.tirada_por_nome || "Usuário";
+                return obs?.criado_por_nome || obs?.usuario_nome || obs?.tirada_por_nome || "Sistema";
             }
 
             function obterDataObservacao(obs) {
-                return obs?.criada_em || obs?.data || null;
+                return obs?.criada_em || obs?.atualizado_em || obs?.data || null;
             }
 
-            function adicionarObservacaoCache(item) {
+            function atualizarObservacaoCache(item) {
                 if (!item) return;
-                observacoesCache.push(item);
+                const lista = Array.isArray(observacoesCache) ? observacoesCache : [];
+                const indice = lista.findIndex((obs) => Number(obs?.id) === Number(item?.id));
+                if (indice >= 0) {
+                    lista[indice] = { ...lista[indice], ...item };
+                } else {
+                    lista.push(item);
+                }
+                observacoesCache = lista;
+            }
+
+            function criarCardObservacao(obs) {
+                const card = document.createElement("div");
+                card.className = "bg-slate-900/80 border border-slate-800 rounded-lg px-3 py-2 space-y-1";
+                const meta = document.createElement("div");
+                meta.className = "text-[10px] text-slate-400 flex items-center gap-2";
+                const nome = document.createElement("span");
+                nome.className = "text-slate-200 font-semibold";
+                nome.textContent = obterNomeUsuario(obs);
+                const data = document.createElement("span");
+                data.textContent = formatarDataHora(obterDataObservacao(obs));
+                meta.appendChild(nome);
+                meta.appendChild(document.createTextNode("•"));
+                meta.appendChild(data);
+                const texto = document.createElement("p");
+                texto.className = "text-[12px] text-slate-100 whitespace-pre-line";
+                texto.textContent = obs?.texto || "";
+                card.appendChild(meta);
+                card.appendChild(texto);
+                return card;
+            }
+
+            function renderizarListaObservacoes(container, etapaId) {
+                if (!container) return;
+                container.innerHTML = "";
+                const observacoesEtapa = obterObservacoesDaEtapa(etapaId);
+                if (!observacoesEtapa.length) {
+                    const vazio = document.createElement("p");
+                    vazio.className = "text-[11px] text-slate-500";
+                    vazio.textContent = "Nenhuma observação registrada";
+                    container.appendChild(vazio);
+                    return;
+                }
+                observacoesEtapa.forEach((obs) => {
+                    container.appendChild(criarCardObservacao(obs));
+                });
+            }
+
+            async function enviarObservacaoEtapa({ etapaId, textarea, feedback, botao, lista }) {
+                feedback.classList.add("hidden");
+                const textoObservacao = textarea.value.trim();
+                if (!textoObservacao) {
+                    feedback.textContent = "Digite uma observação antes de salvar.";
+                    feedback.className = "text-rose-300 text-[11px]";
+                    feedback.classList.remove("hidden");
+                    return;
+                }
+                botao.disabled = true;
+                botao.textContent = "Salvando...";
+                try {
+                    const payload = { etapa: etapaId, texto: textoObservacao };
+                    const resp = await apiFetch(ENDPOINTS.observacoes, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload),
+                    });
+                    if (!resp.ok) {
+                        const texto = await resp.text();
+                        feedback.textContent = `Erro ${resp.status}: ${texto}`;
+                        feedback.className = "text-rose-300 text-[11px]";
+                        feedback.classList.remove("hidden");
+                        return;
+                    }
+                    const salvo = await resp.json();
+                    atualizarObservacaoCache(salvo);
+                    textarea.value = "";
+                    renderizarListaObservacoes(lista, etapaId);
+                    feedback.textContent = "Observação salva";
+                    feedback.className = "text-emerald-300 text-[11px]";
+                    feedback.classList.remove("hidden");
+                } catch (err) {
+                    console.error("Erro ao salvar observação:", err);
+                    feedback.textContent = "Erro ao salvar";
+                    feedback.className = "text-rose-300 text-[11px]";
+                    feedback.classList.remove("hidden");
+                } finally {
+                    botao.disabled = false;
+                    botao.textContent = "Adicionar observação";
+                }
             }
 
             function criarBadgeEstado(item) {
@@ -752,80 +839,23 @@ Timeline do veículo e fotos por etapa.
                     obsLabel.appendChild(obsFeedback);
                     const obsLista = document.createElement("div");
                     obsLista.className = "space-y-2";
-                    const observacoesEtapa = obterObservacoesDaEtapa(item.etapa);
-                    if (!observacoesEtapa.length) {
-                        const vazio = document.createElement("p");
-                        vazio.className = "text-[11px] text-slate-500";
-                        vazio.textContent = "Nenhuma observação registrada nesta etapa.";
-                        obsLista.appendChild(vazio);
-                    } else {
-                        observacoesEtapa.forEach((obs) => {
-                            const card = document.createElement("div");
-                            card.className = "bg-slate-900/80 border border-slate-800 rounded-lg px-3 py-2 space-y-1";
-                            const meta = document.createElement("div");
-                            meta.className = "text-[10px] text-slate-400 flex items-center gap-2";
-                            const nome = document.createElement("span");
-                            nome.className = "text-slate-200 font-semibold";
-                            nome.textContent = obterNomeUsuario(obs);
-                            const data = document.createElement("span");
-                            data.textContent = formatarDataHora(obterDataObservacao(obs));
-                            meta.appendChild(nome);
-                            meta.appendChild(document.createTextNode("•"));
-                            meta.appendChild(data);
-                            const texto = document.createElement("p");
-                            texto.className = "text-[12px] text-slate-100 whitespace-pre-line";
-                            texto.textContent = obs?.texto || "";
-                            card.appendChild(meta);
-                            card.appendChild(texto);
-                            obsLista.appendChild(card);
-                        });
-                    }
+                    renderizarListaObservacoes(obsLista, item.etapa);
                     const textarea = document.createElement("textarea");
                     textarea.className = "w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-[12px] focus:outline-none focus:ring-1 focus:ring-emerald-500";
                     textarea.rows = 3;
                     textarea.placeholder = "Adicionar nova observação...";
-                    const btnSalvarObs = criarBotaoAcao("Adicionar observação", "bg-emerald-600 text-white hover:bg-emerald-500", async () => {
-                        obsFeedback.classList.add("hidden");
-                        const textoObservacao = textarea.value.trim();
-                        if (!textoObservacao) {
-                            obsFeedback.textContent = "Digite uma observação antes de salvar.";
-                            obsFeedback.className = "text-rose-300 text-[11px]";
-                            obsFeedback.classList.remove("hidden");
-                            return;
-                        }
-                        btnSalvarObs.disabled = true;
-                        btnSalvarObs.textContent = "Salvando...";
-                        try {
-                            const payload = { etapa: item.etapa, texto: textoObservacao };
-                            const resp = await apiFetch(ENDPOINTS.observacoes, {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify(payload),
-                            });
-                            if (!resp.ok) {
-                                const texto = await resp.text();
-                                obsFeedback.textContent = `Erro ${resp.status}: ${texto}`;
-                                obsFeedback.className = "text-rose-300 text-[11px]";
-                                obsFeedback.classList.remove("hidden");
-                                return;
-                            }
-                            const salvo = await resp.json();
-                            adicionarObservacaoCache(salvo);
-                            textarea.value = "";
-                            renderizarTimeline();
-                            obsFeedback.textContent = "Observação adicionada";
-                            obsFeedback.className = "text-emerald-300 text-[11px]";
-                            obsFeedback.classList.remove("hidden");
-                        } catch (err) {
-                            console.error("Erro ao salvar observação:", err);
-                            obsFeedback.textContent = "Erro ao salvar";
-                            obsFeedback.className = "text-rose-300 text-[11px]";
-                            obsFeedback.classList.remove("hidden");
-                        } finally {
-                            btnSalvarObs.disabled = false;
-                            btnSalvarObs.textContent = "Adicionar observação";
-                        }
-                    });
+                    const btnSalvarObs = criarBotaoAcao(
+                        "Adicionar observação",
+                        "bg-emerald-600 text-white hover:bg-emerald-500",
+                        () =>
+                            enviarObservacaoEtapa({
+                                etapaId: item.etapa,
+                                textarea,
+                                feedback: obsFeedback,
+                                botao: btnSalvarObs,
+                                lista: obsLista,
+                            })
+                    );
                     obsArea.appendChild(obsLabel);
                     obsArea.appendChild(obsLista);
                     obsArea.appendChild(textarea);
