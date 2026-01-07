@@ -77,20 +77,24 @@ Timeline do veículo e fotos por etapa.
                 <p id="os-codigo" class="text-[11px] text-slate-400 uppercase tracking-wide mb-1">OS —</p>
                 <h2 id="os-placa-modelo" class="text-lg font-semibold">—</h2>
                 <p id="os-cliente" class="text-[11px] text-slate-400">—</p>
+                <p id="os-cor" class="text-[11px] text-slate-400">Cor: —</p>
             </div>
             <span class="text-slate-500 text-sm" aria-hidden="true">✎</span>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 md:justify-end">
+            <span id="os-status-badge" class="px-3 py-1 rounded-full text-[10px] font-semibold border">—</span>
             <button id="os-header-cancel" type="button" class="hidden px-3 py-2 rounded-full bg-slate-800 text-slate-200 text-xs font-semibold border border-slate-700 hover:bg-slate-700 transition disabled:opacity-60 disabled:cursor-not-allowed">Cancelar</button>
             <button id="os-header-save" type="button" class="hidden px-4 py-2 rounded-full bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-500 transition disabled:opacity-60 disabled:cursor-not-allowed">Salvar</button>
         </div>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mt-4">
-        <label class="flex flex-col gap-1 text-[11px] text-slate-300">
+        <div class="flex flex-col gap-1 text-[11px] text-slate-300">
             <span class="text-slate-400 uppercase tracking-wide text-[10px]">Etapa atual</span>
-            <select id="os-header-etapa" class="w-full bg-slate-950/70 border border-slate-800 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-[12px]"></select>
-        </label>
+            <div id="os-header-etapa-label" class="w-full bg-slate-950/40 border border-slate-800 rounded-lg px-3 py-2 text-[12px] text-slate-100">
+                —
+            </div>
+        </div>
         <label class="flex flex-col gap-1 text-[11px] text-slate-300">
             <span class="text-slate-400 uppercase tracking-wide text-[10px]">Status</span>
             <select id="os-header-status" class="w-full bg-slate-950/70 border border-slate-800 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-[12px]">
@@ -252,13 +256,15 @@ Timeline do veículo e fotos por etapa.
             const elCodigo = document.getElementById("os-codigo");
             const elPlacaModelo = document.getElementById("os-placa-modelo");
             const elCliente = document.getElementById("os-cliente");
-            const elHeaderEtapa = document.getElementById("os-header-etapa");
+            const elHeaderEtapaLabel = document.getElementById("os-header-etapa-label");
             const elHeaderStatus = document.getElementById("os-header-status");
             const elHeaderEntrada = document.getElementById("os-header-entrada");
             const elHeaderPrevista = document.getElementById("os-header-prevista");
             const elHeaderSaida = document.getElementById("os-header-saida");
             const elHeaderSave = document.getElementById("os-header-save");
             const elHeaderCancel = document.getElementById("os-header-cancel");
+            const elStatusBadge = document.getElementById("os-status-badge");
+            const elCor = document.getElementById("os-cor");
 
             // Timeline
             const elTimelineList = document.getElementById("timeline-list");
@@ -440,23 +446,20 @@ Timeline do veículo e fotos por etapa.
             }
 
             function preencherSelectEtapas(etapas) {
-                const selects = [elHeaderEtapa, elUploadStage];
-                selects.forEach((sel) => {
-                    if (!sel) return;
-                    const manter = sel.value;
-                    sel.innerHTML = "";
-                    const padrao = document.createElement("option");
-                    padrao.value = "";
-                    padrao.textContent = sel === elUploadStage ? "Sem etapa" : "Selecione";
-                    sel.appendChild(padrao);
-                    (etapas || []).forEach((etapa) => {
-                        const opt = document.createElement("option");
-                        opt.value = etapa.id;
-                        opt.textContent = etapa.nome || `Etapa ${etapa.id}`;
-                        sel.appendChild(opt);
-                    });
-                    sel.value = manter || "";
+                if (!elUploadStage) return;
+                const manter = elUploadStage.value;
+                elUploadStage.innerHTML = "";
+                const padrao = document.createElement("option");
+                padrao.value = "";
+                padrao.textContent = "Sem etapa";
+                elUploadStage.appendChild(padrao);
+                (etapas || []).forEach((etapa) => {
+                    const opt = document.createElement("option");
+                    opt.value = etapa.id;
+                    opt.textContent = etapa.nome || `Etapa ${etapa.id}`;
+                    elUploadStage.appendChild(opt);
                 });
+                elUploadStage.value = manter || "";
             }
 
             function getEtapaAtualId(os) {
@@ -472,17 +475,24 @@ Timeline do veículo e fotos por etapa.
                 elCodigo.textContent = `OS ${os.codigo || os.id || ""}`.trim();
                 elPlacaModelo.textContent = `${os.placa || "-"} • ${os.modelo_veiculo || ""}`.trim();
                 elCliente.textContent = `${os.nome_cliente || "-"}  •  ${os.telefone_cliente || ""}`.trim();
+                if (elCor) {
+                    const corVeiculo = os.cor_veiculo || os.cor || "-";
+                    elCor.textContent = `Cor: ${corVeiculo}`;
+                }
             }
 
             function preencherHeaderForm(os) {
                 const etapaId = getEtapaAtualId(os);
-                elHeaderEtapa.value = etapaId !== null && etapaId !== undefined ? String(etapaId) : "";
                 elHeaderStatus.value = os.aberta ? "aberta" : "fechada";
                 elHeaderEntrada.value = dataParaInput(os.data_entrada);
                 elHeaderPrevista.value = dataParaInput(os.data_prevista_entrega);
                 elHeaderSaida.value = dataParaInput(os.data_saida);
+                const etapaObj = etapasCache.find((etapa) => Number(etapa.id) === Number(etapaId));
+                if (elHeaderEtapaLabel) {
+                    elHeaderEtapaLabel.textContent = etapaObj?.nome || os.etapa_atual?.nome || "—";
+                }
+                atualizarStatusBadge(elHeaderStatus.value);
                 headerSnapshot = {
-                    etapa: elHeaderEtapa.value,
                     status: elHeaderStatus.value,
                     entrada: elHeaderEntrada.value,
                     prevista: elHeaderPrevista.value,
@@ -494,7 +504,6 @@ Timeline do veículo e fotos por etapa.
             function headerAlterado() {
                 if (!headerSnapshot) return false;
                 return (
-                    elHeaderEtapa.value !== headerSnapshot.etapa ||
                     elHeaderStatus.value !== headerSnapshot.status ||
                     elHeaderEntrada.value !== headerSnapshot.entrada ||
                     elHeaderPrevista.value !== headerSnapshot.prevista ||
@@ -524,11 +533,11 @@ Timeline do veículo e fotos por etapa.
 
             function restaurarHeader() {
                 if (!headerSnapshot) return;
-                elHeaderEtapa.value = headerSnapshot.etapa;
                 elHeaderStatus.value = headerSnapshot.status;
                 elHeaderEntrada.value = headerSnapshot.entrada;
                 elHeaderPrevista.value = headerSnapshot.prevista;
                 elHeaderSaida.value = headerSnapshot.saida;
+                atualizarStatusBadge(elHeaderStatus.value);
                 ocultarAcoesHeader();
             }
 
@@ -606,7 +615,10 @@ Timeline do veículo e fotos por etapa.
                     img.alt = f.titulo || f.observacao || "Foto";
                     img.className = "w-full h-full object-cover hover:scale-105 transition";
                     thumb.appendChild(img);
-                    thumb.addEventListener("click", () => abrirModalImagem(f.drive_url, img.alt));
+                    thumb.addEventListener("click", () => {
+                        const fullUrl = f.drive_url || f.arquivo || f.url || f.imagem_url || f.drive_thumb_url;
+                        abrirModalImagem(fullUrl, img.alt);
+                    });
                     wrapper.appendChild(thumb);
                 });
 
@@ -810,7 +822,7 @@ Timeline do veículo e fotos por etapa.
                     }
                     if (!item.is_atual) {
                         actions.appendChild(
-                            criarBotaoAcao("Definir como Atual", "bg-slate-800 text-slate-100 border border-slate-700 hover:bg-slate-700", () => atualizarEtapaAtual(item.etapa))
+                            criarBotaoAcao("Definir como Atual", "bg-slate-800 text-slate-100 border border-slate-700 hover:bg-slate-700", () => definirEtapaAtual(item.etapa))
                         );
                     }
                     actions.appendChild(btnPularEtapa);
@@ -880,9 +892,6 @@ Timeline do veículo e fotos por etapa.
 
             async function salvarHeader() {
                 const payload = {};
-                if (elHeaderEtapa && elHeaderEtapa.value !== headerSnapshot?.etapa) {
-                    payload.etapa_atual = elHeaderEtapa.value ? Number(elHeaderEtapa.value) : null;
-                }
                 if (elHeaderStatus && elHeaderStatus.value !== headerSnapshot?.status) {
                     payload.aberta = elHeaderStatus.value === "aberta";
                 }
@@ -929,10 +938,28 @@ Timeline do veículo e fotos por etapa.
                 }
             }
 
-            async function atualizarEtapaAtual(etapaId) {
-                if (!elHeaderEtapa) return;
-                elHeaderEtapa.value = etapaId;
-                await salvarHeader();
+            async function definirEtapaAtual(etapaId) {
+                const payload = { etapa_atual: etapaId ? Number(etapaId) : null };
+                try {
+                    const resp = await apiFetch(ENDPOINTS.os, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload),
+                    });
+                    if (!resp.ok) {
+                        const texto = await resp.text();
+                        alert(`Erro ao alterar etapa (${resp.status}): ${texto}`);
+                        return;
+                    }
+                    const atualizado = await resp.json();
+                    osDadosAtuais = atualizado;
+                    preencherCabecalho(atualizado);
+                    preencherHeaderForm(atualizado);
+                    await carregarTimeline();
+                } catch (err) {
+                    console.error("Erro ao atualizar etapa atual:", err);
+                    alert("Erro ao atualizar etapa. Tente novamente.");
+                }
             }
 
             async function carregarEtapas() {
@@ -946,6 +973,7 @@ Timeline do veículo e fotos por etapa.
                     const lista = data && Array.isArray(data.results) ? data.results : Array.isArray(data) ? data : [];
                     etapasCache = lista;
                     preencherSelectEtapas(lista);
+                    if (osDadosAtuais) preencherHeaderForm(osDadosAtuais);
                     return lista;
                 } catch (err) {
                     console.error("Erro ao carregar etapas:", err);
@@ -1040,6 +1068,25 @@ Timeline do veículo e fotos por etapa.
                 }
             }
 
+            function atualizarStatusBadge(statusValor) {
+                if (!elStatusBadge) return;
+                const aberta = statusValor === "aberta" || statusValor === true;
+                elStatusBadge.textContent = aberta ? "ABERTA" : "FECHADA";
+                elStatusBadge.classList.remove(
+                    "bg-emerald-500/20",
+                    "border-emerald-500/50",
+                    "text-emerald-200",
+                    "bg-rose-500/20",
+                    "border-rose-500/50",
+                    "text-rose-200"
+                );
+                if (aberta) {
+                    elStatusBadge.classList.add("bg-emerald-500/20", "border-emerald-500/50", "text-emerald-200");
+                } else {
+                    elStatusBadge.classList.add("bg-rose-500/20", "border-rose-500/50", "text-rose-200");
+                }
+            }
+
             async function recarregarFotos() {
                 try {
                     const resp = await apiFetch(ENDPOINTS.fotos);
@@ -1099,9 +1146,12 @@ Timeline do veículo e fotos por etapa.
                 }
             }
 
-            [elHeaderEtapa, elHeaderStatus, elHeaderEntrada, elHeaderPrevista, elHeaderSaida].forEach((el) => {
+            [elHeaderStatus, elHeaderEntrada, elHeaderPrevista, elHeaderSaida].forEach((el) => {
                 if (el) el.addEventListener("input", verificarAlteracoesHeader);
             });
+            if (elHeaderStatus) {
+                elHeaderStatus.addEventListener("change", () => atualizarStatusBadge(elHeaderStatus.value));
+            }
 
             if (elHeaderSave) elHeaderSave.addEventListener("click", salvarHeader);
             if (elHeaderCancel) elHeaderCancel.addEventListener("click", restaurarHeader);
