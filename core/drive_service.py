@@ -6,6 +6,7 @@ from typing import Optional
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 
 
 from core.models import Etapa
@@ -45,12 +46,39 @@ def _get_credentials(oficina) -> Credentials:
     return creds
 
 
+def get_drive_credentials(oficina) -> Optional[Credentials]:
+    try:
+        creds = _get_credentials(oficina)
+    except DriveNaoConfigurado:
+        raise
+    except Exception:
+        logger.exception(
+            "Erro ao carregar credenciais do Drive",
+            extra={"oficina_id": getattr(oficina, "id", None)},
+        )
+        return None
+
+    if creds and creds.expired and creds.refresh_token:
+        try:
+            creds.refresh(Request())
+        except Exception:
+            logger.exception(
+                "Erro ao atualizar credenciais do Drive",
+                extra={"oficina_id": getattr(oficina, "id", None)},
+            )
+            return None
+
+    return creds
+
+
 def get_drive_service(oficina):
     """
     Retorna o client do Google Drive autenticado para a oficina.
     """
     try:
-        creds = _get_credentials(oficina)
+        creds = get_drive_credentials(oficina)
+        if not creds:
+            return None
         service = build('drive', 'v3', credentials=creds)
         return service
     except Exception:
@@ -59,6 +87,52 @@ def get_drive_service(oficina):
             extra={"oficina_id": getattr(oficina, "id", None)},
         )
         return None
+
+
+def baixar_arquivo_drive(oficina, drive_file_id):
+    service = get_drive_service(oficina)
+    if not service:
+        return None, None
+
+    meta = (
+        service.files()
+        .get(fileId=drive_file_id, fields="mimeType,name,size")
+        .execute()
+    )
+    request_drive = service.files().get_media(fileId=drive_file_id)
+    bytes_data = request_drive.execute()
+    return bytes_data, meta
+
+
+def baixar_thumbnail_drive(oficina, drive_file_id):
+    service = get_drive_service(oficina)
+    if not service:
+        return None, None
+
+    meta = (
+        service.files()
+        .get(fileId=drive_file_id, fields="thumbnailLink,mimeType,name")
+        .execute()
+    )
+    thumb_url = meta.get("thumbnailLink")
+    if not thumb_url:
+        return None, meta
+
+    resp, content = service._http.request(thumb_url)
+    if int(resp.status) >= 400:
+        logger.warning(
+            "Drive thumbnail response inválida",
+            extra={
+                "oficina_id": getattr(oficina, "id", None),
+                "drive_file_id": drive_file_id,
+                "status": resp.status,
+            },
+        )
+        return None, meta
+
+    content_type = resp.get("content-type") or "image/jpeg"
+    meta["content_type"] = content_type
+    return content, meta
 
 
 def criar_pasta_os(os_obj: OS) -> Optional[str]:

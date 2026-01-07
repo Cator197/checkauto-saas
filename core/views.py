@@ -19,6 +19,9 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from .drive_service import (
+    DriveNaoConfigurado,
+    baixar_arquivo_drive,
+    baixar_thumbnail_drive,
     criar_pasta_os,
     get_drive_service,
     upload_foto_os_drive,
@@ -693,25 +696,31 @@ class FotoOSViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-
-        qs = FotoOS.objects.select_related('os', 'etapa', 'config_foto', 'tirada_por').all()
-
-        # Filtra por oficina do usuário (exceto superuser)
-        if not user.is_superuser:
-            oficina = get_oficina_do_usuario(user)
-            if oficina is None:
-                return FotoOS.objects.none()
-            qs = qs.filter(os__oficina=oficina)
-
-        # 🔹 Filtro por OS específica (?os=ID)
         os_id = self.request.query_params.get("os")
-        if os_id:
-            qs = qs.filter(os_id=os_id)
+        try:
+            qs = FotoOS.objects.select_related('os', 'etapa', 'config_foto', 'tirada_por').all()
 
-        # 🔹 Ordenação padrão: etapa, data da foto
-        qs = qs.order_by("etapa__ordem", "tirada_em", "id")
+            # Filtra por oficina do usuário (exceto superuser)
+            if not user.is_superuser:
+                oficina = get_oficina_do_usuario(user)
+                if oficina is None:
+                    return FotoOS.objects.none()
+                qs = qs.filter(os__oficina=oficina)
 
-        return qs
+            # 🔹 Filtro por OS específica (?os=ID)
+            if os_id:
+                qs = qs.filter(os_id=os_id)
+
+            # 🔹 Ordenação padrão: etapa, data da foto
+            qs = qs.order_by("etapa__ordem", "tirada_em", "id")
+
+            return qs
+        except Exception:
+            logger.exception(
+                "Erro ao obter fotos da OS",
+                extra={"user_id": getattr(user, "id", None), "os_id": os_id},
+            )
+            return FotoOS.objects.none()
 
     def perform_create(self, serializer):
         from .models import UsuarioOficina
@@ -791,6 +800,87 @@ class FotoOSViewSet(viewsets.ModelViewSet):
             )
 
         raise Http404("Arquivo não encontrado.")
+
+
+class DriveProxyBase(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_foto(self, request, drive_file_id):
+        qs = FotoOS.objects.select_related("os__oficina").filter(drive_file_id=drive_file_id)
+
+        if not request.user.is_superuser:
+            oficina = get_oficina_do_usuario(request.user)
+            if oficina is None:
+                return None
+            qs = qs.filter(os__oficina=oficina)
+
+        return qs.first()
+
+
+class DriveThumbProxyView(DriveProxyBase):
+    def get(self, request, drive_file_id):
+        foto = self.get_foto(request, drive_file_id)
+        if not foto:
+            raise Http404("Arquivo não encontrado.")
+
+        try:
+            conteudo, meta = baixar_thumbnail_drive(foto.os.oficina, drive_file_id)
+            if not conteudo:
+                conteudo, meta = baixar_arquivo_drive(foto.os.oficina, drive_file_id)
+        except DriveNaoConfigurado:
+            raise Http404("Integração com Drive não configurada.")
+        except Exception:
+            logger.exception(
+                "Erro ao buscar thumbnail do Drive",
+                extra={
+                    "oficina_id": foto.os.oficina_id,
+                    "drive_file_id": drive_file_id,
+                    "foto_id": foto.id,
+                },
+            )
+            raise Http404("Arquivo não encontrado.")
+
+        if not conteudo or not meta:
+            raise Http404("Arquivo não encontrado.")
+
+        content_type = meta.get("content_type") or meta.get("mimeType") or "image/jpeg"
+        response = HttpResponse(conteudo, content_type=content_type)
+        response["Content-Disposition"] = f'inline; filename="{meta.get("name", "")}"'
+        response["Cache-Control"] = "private, max-age=300"
+        return response
+
+
+class DriveFileProxyView(DriveProxyBase):
+    def get(self, request, drive_file_id):
+        foto = self.get_foto(request, drive_file_id)
+        if not foto:
+            raise Http404("Arquivo não encontrado.")
+
+        try:
+            conteudo, meta = baixar_arquivo_drive(foto.os.oficina, drive_file_id)
+        except DriveNaoConfigurado:
+            raise Http404("Integração com Drive não configurada.")
+        except Exception:
+            logger.exception(
+                "Erro ao buscar arquivo do Drive",
+                extra={
+                    "oficina_id": foto.os.oficina_id,
+                    "drive_file_id": drive_file_id,
+                    "foto_id": foto.id,
+                },
+            )
+            raise Http404("Arquivo não encontrado.")
+
+        if not conteudo or not meta:
+            raise Http404("Arquivo não encontrado.")
+
+        response = HttpResponse(
+            conteudo,
+            content_type=meta.get("mimeType", "application/octet-stream"),
+        )
+        response["Content-Disposition"] = f'inline; filename="{meta.get("name", "")}"'
+        response["Cache-Control"] = "private, max-age=3600"
+        return response
 
 
 from django.utils import timezone
