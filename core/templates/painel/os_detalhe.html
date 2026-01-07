@@ -12,19 +12,6 @@ Timeline do veículo e fotos por etapa.
 {% endblock %}
 
 {% block content %}
-<div style="
-  margin-bottom: 12px;
-  padding: 6px 12px;
-  display: inline-block;
-  background: linear-gradient(135deg, #22c55e, #16a34a);
-  color: #ffffff;
-  font-size: 11px;
-  font-weight: 700;
-  border-radius: 9999px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-">
-  DEBUG · TEMPLATE os_detalhe.html · DEPLOY TEST
-</div>
 {% with 'os-detalhe-v20240607' as os_view_version %}
 <style>
     .os-card {
@@ -72,12 +59,6 @@ Timeline do veículo e fotos por etapa.
         gap: 12px;
     }
 </style>
-
-<div class="mb-3">
-    <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-300/40 text-amber-100 text-[10px] font-semibold tracking-wide">
-        DEBUG · painel/os_detalhe.html · {{ os_view_version }}
-    </span>
-</div>
 
 <div id="os-erro" class="hidden mb-4 bg-rose-900/40 border border-rose-700/70 text-rose-100 text-xs rounded-xl px-3 py-2">
     Ocorreu um erro ao carregar os dados desta OS. Verifique o console ou tente novamente.
@@ -127,9 +108,9 @@ Timeline do veículo e fotos por etapa.
     </div>
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+<div class="mt-4">
     <!-- Timeline -->
-    <section class="lg:col-span-2 os-card rounded-2xl p-4 relative overflow-hidden">
+    <section class="os-card rounded-2xl p-4 relative overflow-hidden">
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
             <div>
                 <h3 class="text-xs font-semibold text-slate-200 uppercase tracking-wide">Linha do tempo</h3>
@@ -143,14 +124,13 @@ Timeline do veículo e fotos por etapa.
             <p id="timeline-empty" class="hidden text-[11px] text-slate-500">Nenhuma etapa registrada.</p>
         </div>
     </section>
-
 </div>
 
 <!-- Modal de visualização -->
 <div id="foto-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
     <div id="foto-modal-backdrop" class="absolute inset-0 bg-slate-900/80"></div>
     <div class="relative bg-slate-950 border border-slate-800 rounded-2xl max-w-4xl w-[90%] max-h-[90vh] p-3 flex flex-col shadow-xl shadow-black/40">
-        <button id="foto-modal-close" type="button" class="absolute top-2 right-2 text-slate-200 hover:text-white bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/70 rounded-full w-8 h-8 flex items-center justify-center text-sm">
+        <button id="foto-modal-close" type="button" aria-label="Fechar imagem" class="absolute top-2 right-2 text-slate-200 hover:text-white bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/70 rounded-full w-8 h-8 flex items-center justify-center text-sm">
             ✕
         </button>
         <div class="flex-1 overflow-auto flex items-center justify-center mt-4">
@@ -168,7 +148,7 @@ Timeline do veículo e fotos por etapa.
                 <h3 class="text-sm font-semibold text-slate-100">Adicionar foto</h3>
                 <p class="text-[11px] text-slate-400">Envie uma imagem para esta OS.</p>
             </div>
-            <button id="upload-close" type="button" class="text-slate-300 hover:text-white">✕</button>
+            <button id="upload-close" type="button" aria-label="Fechar modal de upload" class="text-slate-300 hover:text-white">✕</button>
         </div>
         <div class="space-y-3 text-[12px] text-slate-200">
             <label class="flex flex-col gap-1">
@@ -198,12 +178,25 @@ Timeline do veículo e fotos por etapa.
             const autenticado = await verificarAutenticacao();
             if (!autenticado) return;
 
-            console.log("painel/os_detalhe.html carregado", "{{ os_view_version }}");
-
             const erroBox = document.getElementById("os-erro");
 
             const parts = window.location.pathname.split("/").filter(Boolean);
-            const osId = parts[parts.length - 1];
+            const osIdRaw = parts[parts.length - 1];
+            const osId = Number(osIdRaw);
+            if (!osId) {
+                console.error("OS inválida na URL", osIdRaw);
+                if (erroBox) erroBox.classList.remove("hidden");
+                return;
+            }
+
+            const ENDPOINTS = {
+                os: `/api/os/${osId}/`,
+                fotos: `/api/fotos-os/?os=${osId}`,
+                observacoes: `/api/os/${osId}/observacoes/`,
+                timeline: `/api/os/${osId}/timeline/`,
+                marcarConcluida: `/api/os/${osId}/timeline/marcar-concluida/`,
+                reabrir: `/api/os/${osId}/timeline/reabrir/`,
+            };
 
             // Header elements
             const elCodigo = document.getElementById("os-codigo");
@@ -259,8 +252,8 @@ Timeline do veículo e fotos por etapa.
                 document.body.classList.remove("overflow-hidden");
             }
 
-            elFotoModalBackdrop.addEventListener("click", fecharModalImagem);
-            elFotoModalClose.addEventListener("click", fecharModalImagem);
+            if (elFotoModalBackdrop) elFotoModalBackdrop.addEventListener("click", fecharModalImagem);
+            if (elFotoModalClose) elFotoModalClose.addEventListener("click", fecharModalImagem);
 
             function abrirUploadModal(etapaId = "") {
                 elUploadModal.classList.remove("hidden");
@@ -563,7 +556,7 @@ Timeline do veículo e fotos por etapa.
                         btnSalvarObs.textContent = "Salvando...";
                         try {
                             const payload = { etapa: item.etapa, texto: textarea.value };
-                            const resp = await apiFetch(`/api/os/${osId}/observacoes/`, {
+                            const resp = await apiFetch(ENDPOINTS.observacoes, {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify(payload),
@@ -722,7 +715,7 @@ Timeline do veículo e fotos por etapa.
                 elHeaderSave.textContent = "Salvando...";
 
                 try {
-                    const resp = await apiFetch(`/api/os/${osId}/`, {
+                    const resp = await apiFetch(ENDPOINTS.os, {
                         method: "PATCH",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify(payload),
@@ -773,7 +766,7 @@ Timeline do veículo e fotos por etapa.
 
             async function carregarTimeline() {
                 try {
-                    const resp = await apiFetch(`/api/os/${osId}/timeline/`);
+                    const resp = await apiFetch(ENDPOINTS.timeline);
                     if (!resp.ok) {
                         timelineCache = [];
                         renderizarTimeline();
@@ -798,7 +791,7 @@ Timeline do veículo e fotos por etapa.
 
             async function marcarEtapa(etapaId) {
                 try {
-                    const resp = await apiFetch(`/api/os/${osId}/timeline/marcar-concluida/`, {
+                    const resp = await apiFetch(ENDPOINTS.marcarConcluida, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ etapa: etapaId }),
@@ -820,7 +813,7 @@ Timeline do veículo e fotos por etapa.
 
             async function reabrirEtapa(etapaId) {
                 try {
-                    const resp = await apiFetch(`/api/os/${osId}/timeline/reabrir/`, {
+                    const resp = await apiFetch(ENDPOINTS.reabrir, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ etapa: etapaId }),
@@ -842,7 +835,7 @@ Timeline do veículo e fotos por etapa.
 
             async function recarregarOsBasico() {
                 try {
-                    const resp = await apiFetch(`/api/os/${osId}/`);
+                    const resp = await apiFetch(ENDPOINTS.os);
                     if (!resp.ok) return;
                     const osData = await resp.json();
                     osDadosAtuais = osData;
@@ -854,9 +847,8 @@ Timeline do veículo e fotos por etapa.
             }
 
             async function recarregarFotos() {
-                const fotosUrl = `/api/fotos-os/?os=${osId}`;
                 try {
-                    const resp = await apiFetch(fotosUrl);
+                    const resp = await apiFetch(ENDPOINTS.fotos);
                     if (!resp.ok) {
                         const texto = await resp.text();
                         console.error("Erro ao recarregar fotos:", resp.status, texto);
@@ -874,15 +866,11 @@ Timeline do veículo e fotos por etapa.
             }
 
             async function carregarDados() {
-                const osUrl = `/api/os/${osId}/`;
-                const fotosUrl = `/api/fotos-os/?os=${osId}`;
-                const observacoesUrl = `/api/os/${osId}/observacoes/`;
-
                 try {
                     const [osResp, fotosResp, observacoesResp] = await Promise.all([
-                        apiFetch(osUrl),
-                        apiFetch(fotosUrl),
-                        apiFetch(observacoesUrl),
+                        apiFetch(ENDPOINTS.os),
+                        apiFetch(ENDPOINTS.fotos),
+                        apiFetch(ENDPOINTS.observacoes),
                         carregarEtapas(),
                     ]);
 
@@ -921,8 +909,8 @@ Timeline do veículo e fotos por etapa.
                 if (el) el.addEventListener("input", verificarAlteracoesHeader);
             });
 
-            elHeaderSave.addEventListener("click", salvarHeader);
-            elHeaderCancel.addEventListener("click", restaurarHeader);
+            if (elHeaderSave) elHeaderSave.addEventListener("click", salvarHeader);
+            if (elHeaderCancel) elHeaderCancel.addEventListener("click", restaurarHeader);
 
             if (elUploadSubmit) elUploadSubmit.addEventListener("click", enviarFoto);
 
