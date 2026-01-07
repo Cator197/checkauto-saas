@@ -15,6 +15,7 @@ from .models import (
     ConfigFoto,
     OS,
     FotoOS,
+    MensagemPadraoEtapa,
     ObservacaoEtapaOS,
     OSEtapaStatus,
 )
@@ -83,6 +84,31 @@ class EtapaSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'oficina': {'read_only': True},
         }
+
+
+class MensagemPadraoEtapaSerializer(serializers.ModelSerializer):
+    etapa_nome = serializers.CharField(source="etapa.nome", read_only=True)
+    updated_by_nome = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MensagemPadraoEtapa
+        fields = [
+            "id",
+            "etapa",
+            "etapa_nome",
+            "texto",
+            "updated_at",
+            "updated_by_nome",
+        ]
+
+    def get_updated_by_nome(self, obj):
+        usuario = getattr(obj, "updated_by", None)
+        if not usuario or not getattr(usuario, "user", None):
+            return None
+        nome = usuario.user.get_full_name()
+        if nome:
+            return nome
+        return usuario.user.username
 
 
 class ConfigFotoSerializer(serializers.ModelSerializer):

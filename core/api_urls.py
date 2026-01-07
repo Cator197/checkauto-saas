@@ -9,6 +9,7 @@ from .views import (
     ConfigFotoViewSet,
     EtapaViewSet,
     FotoOSViewSet,
+    MensagemPadraoEtapaViewSet,
     GoogleDriveAuthURLView,
     GoogleDriveOAuth2CallbackView,
     DriveFileProxyView,
@@ -33,6 +34,7 @@ router.register(r"etapas", EtapaViewSet)
 router.register(r"config-fotos", ConfigFotoViewSet)
 router.register(r"os", OSViewSet)
 router.register(r"fotos-os", FotoOSViewSet)
+router.register(r"mensagens-etapa", MensagemPadraoEtapaViewSet, basename="mensagens-etapa")
 
 urlpatterns = [
     # Operações gerais

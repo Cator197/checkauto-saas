@@ -1,0 +1,191 @@
+{% extends "painel/base.html" %}
+{% load static %}
+
+{% block title %}CheckAuto - Configurar Mensagens{% endblock %}
+
+{% block page_title %}
+Configurar Mensagens
+{% endblock %}
+
+{% block page_subtitle %}
+Defina mensagens padrão por etapa para informar clientes.
+{% endblock %}
+
+{% block content %}
+<script src="{% static 'painel/js/auth.js' %}"></script>
+<script src="{% static 'painel/js/api.js' %}"></script>
+
+<div id="cfgmsg-erro" class="hidden mb-4 bg-rose-900/40 border border-rose-700/70 text-rose-100 text-xs rounded-xl px-3 py-2">
+    Ocorreu um erro ao carregar as mensagens. Tente novamente.
+</div>
+
+<div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
+    <div class="flex items-center justify-between gap-3">
+        <div>
+            <h2 class="text-xs font-semibold text-slate-200 uppercase tracking-wide">Mensagens padrão por etapa</h2>
+            <p class="text-[11px] text-slate-400">Edite e salve a mensagem que será carregada no painel da OS.</p>
+        </div>
+        <span id="cfgmsg-loading" class="text-[11px] text-slate-400">Carregando...</span>
+    </div>
+
+    <div id="cfgmsg-list" class="mt-4 space-y-3"></div>
+    <p id="cfgmsg-empty" class="hidden text-[11px] text-slate-500 mt-3">Nenhuma etapa cadastrada.</p>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", async () => {
+    const erroBox = document.getElementById("cfgmsg-erro");
+    const loading = document.getElementById("cfgmsg-loading");
+    const list = document.getElementById("cfgmsg-list");
+    const empty = document.getElementById("cfgmsg-empty");
+
+    const ok = await verificarAutenticacao();
+    if (!ok) return;
+
+    function setLoading(texto) {
+        if (!loading) return;
+        loading.textContent = texto;
+        loading.classList.remove("hidden");
+    }
+
+    function hideLoading() {
+        if (!loading) return;
+        loading.classList.add("hidden");
+    }
+
+    function mostrarErro() {
+        if (erroBox) erroBox.classList.remove("hidden");
+    }
+
+    function normalizarLista(data) {
+        if (!data) return [];
+        if (Array.isArray(data.results)) return data.results;
+        if (Array.isArray(data)) return data;
+        return [];
+    }
+
+    function criarCard(etapa, mensagem) {
+        const card = document.createElement("div");
+        card.className = "border border-slate-800 rounded-xl p-4 bg-slate-950/50";
+
+        const header = document.createElement("div");
+        header.className = "flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-3";
+
+        const title = document.createElement("div");
+        title.className = "text-[12px] font-semibold text-slate-100";
+        title.textContent = etapa.nome || `Etapa ${etapa.id}`;
+
+        const feedback = document.createElement("span");
+        feedback.className = "hidden text-[11px]";
+
+        header.appendChild(title);
+        header.appendChild(feedback);
+
+        const textarea = document.createElement("textarea");
+        textarea.rows = 3;
+        textarea.className = "w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-[12px] focus:outline-none focus:ring-1 focus:ring-indigo-500";
+        textarea.placeholder = "Digite a mensagem padrão...";
+        textarea.value = mensagem?.texto ?? "";
+
+        const actions = document.createElement("div");
+        actions.className = "flex items-center justify-end gap-2 mt-3";
+
+        const btnSave = document.createElement("button");
+        btnSave.type = "button";
+        btnSave.className = "px-4 py-2 rounded-full bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed";
+        btnSave.textContent = "Salvar";
+
+        btnSave.addEventListener("click", async () => {
+            feedback.classList.add("hidden");
+            btnSave.disabled = true;
+            btnSave.textContent = "Salvando...";
+
+            try {
+                const resp = await apiFetch("/api/mensagens-etapa/", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        etapa: etapa.id,
+                        texto: textarea.value || "",
+                    }),
+                });
+
+                if (!resp.ok) {
+                    const texto = await resp.text();
+                    console.error("Erro ao salvar mensagem:", resp.status, texto);
+                    feedback.textContent = "Erro ao salvar";
+                    feedback.className = "text-[11px] text-rose-300";
+                    feedback.classList.remove("hidden");
+                    return;
+                }
+
+                feedback.textContent = "Salvo!";
+                feedback.className = "text-[11px] text-emerald-300";
+                feedback.classList.remove("hidden");
+            } catch (err) {
+                console.error("Erro ao salvar mensagem:", err);
+                feedback.textContent = "Erro ao salvar";
+                feedback.className = "text-[11px] text-rose-300";
+                feedback.classList.remove("hidden");
+            } finally {
+                btnSave.disabled = false;
+                btnSave.textContent = "Salvar";
+            }
+        });
+
+        actions.appendChild(btnSave);
+
+        card.appendChild(header);
+        card.appendChild(textarea);
+        card.appendChild(actions);
+
+        return card;
+    }
+
+    setLoading("Carregando...");
+
+    try {
+        const [etapasResp, mensagensResp] = await Promise.all([
+            apiFetch("/api/etapas/", { method: "GET" }),
+            apiFetch("/api/mensagens-etapa/", { method: "GET" }),
+        ]);
+
+        if (!etapasResp.ok || !mensagensResp.ok) {
+            mostrarErro();
+            hideLoading();
+            return;
+        }
+
+        const etapasData = await etapasResp.json();
+        const mensagensData = await mensagensResp.json();
+        const etapas = normalizarLista(etapasData);
+        const mensagens = normalizarLista(mensagensData);
+
+        const mensagensMap = new Map();
+        mensagens.forEach((msg) => {
+            if (msg?.etapa) {
+                mensagensMap.set(Number(msg.etapa), msg);
+            }
+        });
+
+        list.innerHTML = "";
+        if (!etapas.length) {
+            empty.classList.remove("hidden");
+            hideLoading();
+            return;
+        }
+
+        etapas.forEach((etapa) => {
+            const card = criarCard(etapa, mensagensMap.get(Number(etapa.id)));
+            list.appendChild(card);
+        });
+
+        hideLoading();
+    } catch (err) {
+        console.error("Erro ao carregar mensagens:", err);
+        mostrarErro();
+        hideLoading();
+    }
+});
+</script>
+{% endblock %}

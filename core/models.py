@@ -76,6 +76,33 @@ class Etapa(models.Model):
         return f"{prefixo}{self.nome}"
 
 
+class MensagemPadraoEtapa(models.Model):
+    oficina = models.ForeignKey(Oficina, on_delete=models.CASCADE, related_name='mensagens_padrao')
+    etapa = models.ForeignKey(Etapa, on_delete=models.CASCADE, related_name='mensagens_padrao')
+    texto = models.TextField(blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        UsuarioOficina,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='mensagens_padrao_atualizadas',
+    )
+
+    class Meta:
+        verbose_name = "Mensagem padrão da etapa"
+        verbose_name_plural = "Mensagens padrão das etapas"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["oficina", "etapa"],
+                name="uniq_msg_oficina_etapa",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.oficina.nome} - {self.etapa.nome}"
+
+
 class ConfigFoto(models.Model):
     """
     Configura as fotos PADRÃO que devem ser tiradas na etapa de CHECK-IN.

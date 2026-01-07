@@ -35,6 +35,7 @@ from .models import (
     ConfigFoto,
     Etapa,
     FotoOS,
+    MensagemPadraoEtapa,
     OS,
     OSEtapaStatus,
     ObservacaoEtapaOS,
@@ -46,6 +47,7 @@ from .serializers import (
     ConfigFotoSerializer,
     EtapaSerializer,
     FotoOSSerializer,
+    MensagemPadraoEtapaSerializer,
     ObservacaoEtapaOSSerializer,
     OSSerializer,
     OficinaSerializer,
@@ -167,7 +169,83 @@ class EtapaViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated(), IsOficinaAdminOrReadOnly()]
 
 
-from rest_framework import serializers  # garantir que está importado
+class MensagemPadraoEtapaViewSet(viewsets.ModelViewSet):
+    queryset = MensagemPadraoEtapa.objects.select_related(
+        "oficina",
+        "etapa",
+        "updated_by",
+        "updated_by__user",
+    ).all()
+    serializer_class = MensagemPadraoEtapaSerializer
+    permission_classes = [IsAuthenticated, IsOficinaAdminOrReadOnly]
+
+    def get_queryset(self):
+        user = self.request.user
+
+        if user.is_superuser:
+            qs = MensagemPadraoEtapa.objects.select_related(
+                "oficina",
+                "etapa",
+                "updated_by",
+                "updated_by__user",
+            ).all()
+        else:
+            oficina = get_oficina_do_usuario(user)
+            if oficina is None:
+                return MensagemPadraoEtapa.objects.none()
+            qs = MensagemPadraoEtapa.objects.select_related(
+                "oficina",
+                "etapa",
+                "updated_by",
+                "updated_by__user",
+            ).filter(oficina=oficina)
+
+        etapa_id = self.request.query_params.get("etapa")
+        if etapa_id:
+            qs = qs.filter(etapa_id=etapa_id)
+
+        return qs.order_by("etapa__ordem", "id")
+
+    def create(self, request, *args, **kwargs):
+        user = request.user
+        etapa_id = request.data.get("etapa")
+
+        if not etapa_id:
+            return Response({"etapa": "Etapa é obrigatória."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            etapa = Etapa.objects.select_related("oficina").get(id=etapa_id)
+        except Etapa.DoesNotExist:
+            return Response({"etapa": "Etapa não encontrada."}, status=status.HTTP_400_BAD_REQUEST)
+
+        oficina = get_oficina_do_usuario(user)
+        if not user.is_superuser:
+            if oficina is None or etapa.oficina_id != oficina.id:
+                return Response({"etapa": "Etapa não encontrada para esta oficina."}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            if oficina is None:
+                oficina = etapa.oficina
+        if oficina is None:
+            return Response({"oficina": "Oficina não encontrada para o usuário."}, status=status.HTTP_400_BAD_REQUEST)
+
+        usuario_oficina = None
+        if oficina is not None:
+            usuario_oficina = UsuarioOficina.objects.filter(user=user, oficina=oficina).first()
+
+        texto = request.data.get("texto", "")
+
+        mensagem, created = MensagemPadraoEtapa.objects.update_or_create(
+            oficina=oficina,
+            etapa=etapa,
+            defaults={
+                "texto": texto,
+                "updated_by": usuario_oficina,
+            },
+        )
+
+        serializer = self.get_serializer(mensagem)
+        return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
 
 class ConfigFotoViewSet(viewsets.ModelViewSet):
     queryset = ConfigFoto.objects.select_related('oficina', 'etapa').all()
