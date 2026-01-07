@@ -142,8 +142,9 @@ Timeline do veículo e fotos por etapa.
         <button id="foto-modal-close" type="button" aria-label="Fechar imagem" class="absolute top-2 right-2 text-slate-200 hover:text-white bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/70 rounded-full w-8 h-8 flex items-center justify-center text-sm">
             ✕
         </button>
-        <div class="flex-1 overflow-auto flex items-center justify-center mt-4">
+        <div class="flex-1 overflow-auto flex flex-col items-center justify-center mt-4 gap-3">
             <img id="foto-modal-img" src="" alt="" class="max-h-[80vh] max-w-full object-contain" />
+            <p id="foto-modal-erro" class="hidden text-xs text-rose-200 text-center"></p>
         </div>
     </div>
 </div>
@@ -285,6 +286,7 @@ Timeline do veículo e fotos por etapa.
             const elFotoModalBackdrop = document.getElementById("foto-modal-backdrop");
             const elFotoModalClose = document.getElementById("foto-modal-close");
             const elFotoModalImg = document.getElementById("foto-modal-img");
+            const elFotoModalErro = document.getElementById("foto-modal-erro");
 
             // Notify modal
             const elNotifyModal = document.getElementById("notify-modal");
@@ -309,18 +311,56 @@ Timeline do veículo e fotos por etapa.
             let notifyEtapaId = null;
             let notifyEtapaNome = "";
 
-            function abrirModalImagem(url, altTexto) {
+            async function carregarImagemComoBlobUrl(url) {
+                const resp = await apiFetch(url, { method: "GET" });
+                if (!resp.ok) {
+                    throw new Error(`HTTP ${resp.status}`);
+                }
+                const blob = await resp.blob();
+                return URL.createObjectURL(blob);
+            }
+
+            function limparBlobUrlModal() {
+                const blobUrl = elFotoModal?.dataset?.blobUrl;
+                if (blobUrl) {
+                    URL.revokeObjectURL(blobUrl);
+                    delete elFotoModal.dataset.blobUrl;
+                }
+            }
+
+            async function abrirModalImagem(url, altTexto) {
                 if (!url) return;
-                elFotoModalImg.src = url;
+                limparBlobUrlModal();
+                elFotoModalImg.src = "";
                 elFotoModalImg.alt = altTexto || "";
+                if (elFotoModalErro) {
+                    elFotoModalErro.classList.add("hidden");
+                    elFotoModalErro.textContent = "";
+                }
                 elFotoModal.classList.remove("hidden");
                 document.body.classList.add("overflow-hidden");
+                try {
+                    const blobUrl = await carregarImagemComoBlobUrl(url);
+                    elFotoModalImg.src = blobUrl;
+                    elFotoModal.dataset.blobUrl = blobUrl;
+                } catch (err) {
+                    console.error("Erro ao carregar imagem:", err);
+                    if (elFotoModalErro) {
+                        elFotoModalErro.textContent = "Falha ao carregar imagem (sem permissão).";
+                        elFotoModalErro.classList.remove("hidden");
+                    }
+                }
             }
 
             function fecharModalImagem() {
+                limparBlobUrlModal();
                 elFotoModal.classList.add("hidden");
                 elFotoModalImg.src = "";
                 elFotoModalImg.alt = "";
+                if (elFotoModalErro) {
+                    elFotoModalErro.classList.add("hidden");
+                    elFotoModalErro.textContent = "";
+                }
                 document.body.classList.remove("overflow-hidden");
             }
 
