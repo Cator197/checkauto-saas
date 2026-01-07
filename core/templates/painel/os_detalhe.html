@@ -532,25 +532,36 @@ Timeline do veículo e fotos por etapa.
                 ocultarAcoesHeader();
             }
 
-            function obterObservacaoEtapa(etapaId) {
-                const encontrado = observacoesCache.find((obs) => {
+            function obterObservacoesDaEtapa(etapaId) {
+                return observacoesCache.filter((obs) => {
                     const id = typeof obs.etapa === "object" ? obs.etapa?.id : obs.etapa;
                     return Number(id) === Number(etapaId);
                 });
-                return encontrado ? encontrado.texto || "" : "";
             }
 
-            function atualizarObservacoesCache(item) {
-                const etapaId = Number(typeof item.etapa === "object" ? item.etapa?.id : item.etapa);
-                const idx = observacoesCache.findIndex((obs) => {
-                    const id = typeof obs.etapa === "object" ? obs.etapa?.id : obs.etapa;
-                    return Number(id) === etapaId;
-                });
-                if (idx >= 0) {
-                    observacoesCache[idx] = item;
-                } else {
-                    observacoesCache.push(item);
+            function obterNomeUsuarioObservacao(obs) {
+                if (!obs) return "Usuário";
+                if (obs.usuario && typeof obs.usuario === "object") {
+                    return obs.usuario.nome || obs.usuario.username || obs.usuario.email || "Usuário";
                 }
+                return obs.usuario_nome || obs.tirada_por_nome || obs.usuario || "Usuário";
+            }
+
+            function obterDataObservacao(obs) {
+                return obs?.criada_em || obs?.data || null;
+            }
+
+            function ordenarObservacoesPorDataDesc(lista) {
+                return [...lista].sort((a, b) => {
+                    const dataA = obterDataObservacao(a);
+                    const dataB = obterDataObservacao(b);
+                    return new Date(dataB || 0) - new Date(dataA || 0);
+                });
+            }
+
+            function adicionarObservacaoCache(item) {
+                if (!item) return;
+                observacoesCache.push(item);
             }
 
             function criarBadgeEstado(item) {
@@ -669,20 +680,50 @@ Timeline do veículo e fotos por etapa.
                     const blocoDetalhes = document.createElement("div");
                     blocoDetalhes.className = "hidden mt-3 space-y-3 bg-slate-950/60 border border-slate-900 rounded-lg p-3";
 
-                    // Observação
+                    // Observações
                     const obsArea = document.createElement("div");
                     obsArea.className = "space-y-2";
                     const obsLabel = document.createElement("div");
                     obsLabel.className = "flex items-center justify-between text-[11px] text-slate-300";
-                    obsLabel.innerHTML = "<span>Observação da etapa</span>";
+                    obsLabel.innerHTML = "<span>Observações da etapa</span>";
                     const obsFeedback = document.createElement("span");
                     obsFeedback.className = "hidden";
                     obsLabel.appendChild(obsFeedback);
+                    const obsLista = document.createElement("div");
+                    obsLista.className = "space-y-2";
+                    const observacoesEtapa = ordenarObservacoesPorDataDesc(obterObservacoesDaEtapa(item.etapa));
+                    if (!observacoesEtapa.length) {
+                        const vazio = document.createElement("p");
+                        vazio.className = "text-[11px] text-slate-500";
+                        vazio.textContent = "Nenhuma observação registrada nesta etapa.";
+                        obsLista.appendChild(vazio);
+                    } else {
+                        observacoesEtapa.forEach((obs) => {
+                            const card = document.createElement("div");
+                            card.className = "bg-slate-900/80 border border-slate-800 rounded-lg px-3 py-2 space-y-1";
+                            const meta = document.createElement("div");
+                            meta.className = "text-[10px] text-slate-400 flex items-center gap-2";
+                            const nome = document.createElement("span");
+                            nome.className = "text-slate-200 font-semibold";
+                            nome.textContent = obterNomeUsuarioObservacao(obs);
+                            const data = document.createElement("span");
+                            data.textContent = formatarDataHora(obterDataObservacao(obs));
+                            meta.appendChild(nome);
+                            meta.appendChild(document.createTextNode("•"));
+                            meta.appendChild(data);
+                            const texto = document.createElement("p");
+                            texto.className = "text-[12px] text-slate-100 whitespace-pre-line";
+                            texto.textContent = obs?.texto || "";
+                            card.appendChild(meta);
+                            card.appendChild(texto);
+                            obsLista.appendChild(card);
+                        });
+                    }
                     const textarea = document.createElement("textarea");
                     textarea.className = "w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-[12px] focus:outline-none focus:ring-1 focus:ring-emerald-500";
                     textarea.rows = 3;
-                    textarea.value = obterObservacaoEtapa(item.etapa) || "";
-                    const btnSalvarObs = criarBotaoAcao("Salvar", "bg-emerald-600 text-white hover:bg-emerald-500", async () => {
+                    textarea.placeholder = "Adicionar nova observação...";
+                    const btnSalvarObs = criarBotaoAcao("Adicionar observação", "bg-emerald-600 text-white hover:bg-emerald-500", async () => {
                         obsFeedback.classList.add("hidden");
                         btnSalvarObs.disabled = true;
                         btnSalvarObs.textContent = "Salvando...";
@@ -701,8 +742,10 @@ Timeline do veículo e fotos por etapa.
                                 return;
                             }
                             const salvo = await resp.json();
-                            atualizarObservacoesCache(salvo);
-                            obsFeedback.textContent = "Observação salva";
+                            adicionarObservacaoCache(salvo);
+                            textarea.value = "";
+                            renderizarTimeline();
+                            obsFeedback.textContent = "Observação adicionada";
                             obsFeedback.className = "text-emerald-300 text-[11px]";
                             obsFeedback.classList.remove("hidden");
                         } catch (err) {
@@ -712,10 +755,11 @@ Timeline do veículo e fotos por etapa.
                             obsFeedback.classList.remove("hidden");
                         } finally {
                             btnSalvarObs.disabled = false;
-                            btnSalvarObs.textContent = "Salvar";
+                            btnSalvarObs.textContent = "Adicionar observação";
                         }
                     });
                     obsArea.appendChild(obsLabel);
+                    obsArea.appendChild(obsLista);
                     obsArea.appendChild(textarea);
                     obsArea.appendChild(btnSalvarObs);
                     blocoDetalhes.appendChild(obsArea);
