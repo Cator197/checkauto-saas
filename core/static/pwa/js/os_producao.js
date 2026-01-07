@@ -321,7 +321,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const fotosServidor = fotosNaEtapa.map((f) => ({
         id: f.id,
         origem: "servidor",
-        thumb_url: f.drive_thumb_url || f.drive_url,
+        thumb_url: f.thumb_url || f.drive_thumb_url || f.drive_url,
         etapa_id: f.etapa || f.etapa_id,
         config_foto: f.config_foto,
         config_foto_id: f.config_foto_id,
@@ -517,4 +517,3 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   })();
 });
-

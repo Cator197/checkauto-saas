@@ -635,11 +635,7 @@ Timeline do veículo e fotos por etapa.
 
             function getFotoThumbUrl(foto) {
                 return (
-                    foto?.drive_thumb_url ||
-                    foto?.drive_url ||
-                    foto?.arquivo ||
-                    foto?.url ||
-                    foto?.imagem_url ||
+                    foto?.thumb_url ||
                     ""
                 );
             }

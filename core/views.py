@@ -1,12 +1,14 @@
 import json
 import logging
-from datetime import date
+import hmac
+from datetime import date, timedelta
 
 from django.conf import settings
 from django.db import transaction
 from django.http import FileResponse, Http404, HttpResponse
 from django.db.models import Q
 from django.shortcuts import redirect
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from google_auth_oauthlib.flow import Flow
@@ -23,6 +25,7 @@ from .drive_service import (
     baixar_arquivo_drive,
     baixar_thumbnail_drive,
     criar_pasta_os,
+    gerar_assinatura_thumb,
     get_drive_service,
     upload_foto_os_drive,
     upload_foto_para_drive,
@@ -818,7 +821,33 @@ class DriveProxyBase(APIView):
 
 
 class DriveThumbProxyView(DriveProxyBase):
+    permission_classes = []
+    authentication_classes = []
+
+    def get_foto(self, request, drive_file_id):
+        return (
+            FotoOS.objects.select_related("os__oficina")
+            .filter(drive_file_id=drive_file_id)
+            .first()
+        )
+
     def get(self, request, drive_file_id):
+        sig = request.query_params.get("sig")
+        exp = request.query_params.get("exp")
+        if not sig or not exp:
+            return HttpResponse("Assinatura inválida.", status=403)
+        try:
+            exp_int = int(exp)
+        except (TypeError, ValueError):
+            return HttpResponse("Assinatura inválida.", status=403)
+
+        if exp_int < int(timezone.now().timestamp()):
+            return HttpResponse("Assinatura expirada.", status=403)
+
+        expected_sig = gerar_assinatura_thumb(drive_file_id, exp_int)
+        if not hmac.compare_digest(expected_sig, sig):
+            return HttpResponse("Assinatura inválida.", status=403)
+
         foto = self.get_foto(request, drive_file_id)
         if not foto:
             raise Http404("Arquivo não encontrado.")
@@ -981,7 +1010,14 @@ class PwaVeiculosEmProducaoView(APIView):
         def build_drive_thumb(drive_file_id):
             if not drive_file_id:
                 return None
-            return f"https://drive.google.com/thumbnail?id={drive_file_id}&sz=w800"
+            exp = int((timezone.now() + timedelta(minutes=10)).timestamp())
+            sig = gerar_assinatura_thumb(drive_file_id, exp)
+            path = reverse("drive-thumb", kwargs={"drive_file_id": drive_file_id})
+            url = f"{path}?sig={sig}&exp={exp}"
+            try:
+                return request.build_absolute_uri(url)
+            except Exception:
+                return url
 
         resposta = []
 

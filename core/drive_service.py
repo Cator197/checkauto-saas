@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -133,6 +135,12 @@ def baixar_thumbnail_drive(oficina, drive_file_id):
     content_type = resp.get("content-type") or "image/jpeg"
     meta["content_type"] = content_type
     return content, meta
+
+
+def gerar_assinatura_thumb(drive_file_id, exp):
+    payload = f"{drive_file_id}:{exp}".encode("utf-8")
+    secret = settings.SECRET_KEY.encode("utf-8")
+    return hmac.new(secret, payload, hashlib.sha256).hexdigest()
 
 
 def criar_pasta_os(os_obj: OS) -> Optional[str]:
