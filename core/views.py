@@ -4,6 +4,7 @@ from datetime import date
 
 from django.conf import settings
 from django.db import transaction
+from django.http import FileResponse, Http404, HttpResponse
 from django.db.models import Q
 from django.shortcuts import redirect
 from django.utils import timezone
@@ -17,7 +18,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from .drive_service import criar_pasta_os, upload_foto_os_drive, upload_foto_para_drive
+from .drive_service import (
+    criar_pasta_os,
+    get_drive_service,
+    upload_foto_os_drive,
+    upload_foto_para_drive,
+)
 from .models import (
     ConfigFoto,
     Etapa,
@@ -755,6 +761,36 @@ class FotoOSViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         # Futuro: remover também do Drive quando integrado (S7-6 / melhorias futuras)
         return super().destroy(request, *args, **kwargs)
+
+    @action(detail=True, methods=["GET"], url_path="arquivo")
+    def arquivo(self, request, pk=None):
+        foto = self.get_object()
+
+        if foto.drive_file_id:
+            service = get_drive_service(foto.os.oficina)
+            meta = (
+                service.files()
+                .get(fileId=foto.drive_file_id, fields="mimeType,name,size")
+                .execute()
+            )
+            request_drive = service.files().get_media(fileId=foto.drive_file_id)
+            bytes_data = request_drive.execute()
+
+            response = HttpResponse(
+                bytes_data,
+                content_type=meta.get("mimeType", "application/octet-stream"),
+            )
+            response["Content-Disposition"] = f'inline; filename="{meta.get("name", "")}"'
+            response["Cache-Control"] = "private, max-age=3600"
+            return response
+
+        if foto.arquivo:
+            return FileResponse(
+                foto.arquivo.open("rb"),
+                content_type="application/octet-stream",
+            )
+
+        raise Http404("Arquivo não encontrado.")
 
 
 from django.utils import timezone
