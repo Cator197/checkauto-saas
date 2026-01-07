@@ -288,17 +288,22 @@ Timeline do veículo e fotos por etapa.
             elFotoModalBackdrop.addEventListener("click", fecharModalImagem);
             elFotoModalClose.addEventListener("click", fecharModalImagem);
 
-            function abrirUploadModal() {
+            function abrirUploadModal(etapaId = "") {
                 elUploadModal.classList.remove("hidden");
                 document.body.classList.add("overflow-hidden");
                 elUploadFeedback.classList.add("hidden");
+                if (elUploadStage) {
+                    elUploadStage.value = etapaId ? String(etapaId) : "";
+                }
             }
 
             function fecharUploadModal() {
                 elUploadModal.classList.add("hidden");
                 document.body.classList.remove("overflow-hidden");
                 if (elUploadFile) elUploadFile.value = "";
-                if (elUploadStage) elUploadStage.value = "";
+                if (elUploadStage) {
+                    elUploadStage.value = "";
+                }
             }
 
             [elUploadBackdrop, elUploadClose, elUploadCancel].forEach((el) => {
@@ -644,7 +649,16 @@ Timeline do veículo e fotos por etapa.
                             document.getElementById("photos-count")?.scrollIntoView({ behavior: "smooth" });
                         }
                     });
-                    fotosHeader.appendChild(btnVerTodas);
+                    const btnAddFoto = criarBotaoAcao(
+                        "+ Adicionar foto",
+                        "bg-emerald-600 text-white hover:bg-emerald-500",
+                        () => abrirUploadModal(item.etapa)
+                    );
+                    const fotosAcoes = document.createElement("div");
+                    fotosAcoes.className = "flex items-center gap-2";
+                    fotosAcoes.appendChild(btnVerTodas);
+                    fotosAcoes.appendChild(btnAddFoto);
+                    fotosHeader.appendChild(fotosAcoes);
                     fotosBox.appendChild(fotosHeader);
                     fotosBox.appendChild(renderizarFotosMini(item.etapa));
                     blocoDetalhes.appendChild(fotosBox);
@@ -1063,7 +1077,7 @@ Timeline do veículo e fotos por etapa.
             elHeaderSave.addEventListener("click", salvarHeader);
             elHeaderCancel.addEventListener("click", restaurarHeader);
 
-            if (elPhotosAdd) elPhotosAdd.addEventListener("click", abrirUploadModal);
+            if (elPhotosAdd) elPhotosAdd.addEventListener("click", () => abrirUploadModal(""));
             if (elPhotosFilter) elPhotosFilter.addEventListener("change", renderizarGaleria);
             if (elUploadSubmit) elUploadSubmit.addEventListener("click", enviarFoto);
 
