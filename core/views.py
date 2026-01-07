@@ -25,6 +25,7 @@ from .drive_service import (
     baixar_arquivo_drive,
     baixar_thumbnail_drive,
     criar_pasta_os,
+    deletar_arquivo_drive,
     gerar_assinatura_thumb,
     get_drive_service,
     upload_foto_os_drive,
@@ -643,7 +644,11 @@ class OSViewSet(viewsets.ModelViewSet):
             cfg
             for cfg in configs_obrigatorias
             if not FotoOS.objects.filter(
-                os=os_obj, config_foto=cfg, tipo="PADRAO"
+                os=os_obj,
+                config_foto=cfg,
+                tipo="PADRAO",
+                is_deleted=False,
+                is_indisponivel=False,
             ).exists()
         ]
 
@@ -677,7 +682,10 @@ class OSViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 class FotoOSViewSet(viewsets.ModelViewSet):
-    queryset = FotoOS.objects.select_related('os', 'etapa', 'config_foto', 'tirada_por').all()
+    queryset = FotoOS.objects.select_related('os', 'etapa', 'config_foto', 'tirada_por').filter(
+        is_deleted=False,
+        is_indisponivel=False,
+    )
     serializer_class = FotoOSSerializer
     permission_classes = [IsAuthenticated, IsFotoOSPermission]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -686,7 +694,10 @@ class FotoOSViewSet(viewsets.ModelViewSet):
         user = self.request.user
         os_id = self.request.query_params.get("os")
         try:
-            qs = FotoOS.objects.select_related('os', 'etapa', 'config_foto', 'tirada_por').all()
+            qs = FotoOS.objects.select_related('os', 'etapa', 'config_foto', 'tirada_por').filter(
+                is_deleted=False,
+                is_indisponivel=False,
+            )
 
             # Filtra por oficina do usuário (exceto superuser)
             if not user.is_superuser:
@@ -756,8 +767,49 @@ class FotoOSViewSet(viewsets.ModelViewSet):
             )
 
     def destroy(self, request, *args, **kwargs):
-        # Futuro: remover também do Drive quando integrado (S7-6 / melhorias futuras)
-        return super().destroy(request, *args, **kwargs)
+        foto = self.get_object()
+
+        if foto.is_deleted:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        if foto.drive_file_id:
+            try:
+                deletar_arquivo_drive(foto.drive_file_id, foto.os.oficina)
+            except DriveNaoConfigurado:
+                return Response(
+                    {"detail": "Integração com Drive não configurada."},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+            except Exception as exc:
+                logger.exception(
+                    "Erro ao deletar arquivo no Drive",
+                    extra={
+                        "oficina_id": foto.os.oficina_id,
+                        "os_id": foto.os_id,
+                        "foto_id": foto.id,
+                    },
+                )
+                return Response(
+                    {"detail": f"Erro ao deletar arquivo no Drive: {exc}"},
+                    status=status.HTTP_502_BAD_GATEWAY,
+                )
+
+        usuario_oficina = None
+        if not request.user.is_superuser:
+            oficina = get_oficina_do_usuario(request.user)
+            if oficina:
+                usuario_oficina = UsuarioOficina.objects.filter(
+                    user=request.user,
+                    oficina=oficina,
+                    ativo=True,
+                ).first()
+
+        foto.is_deleted = True
+        foto.deleted_at = timezone.now()
+        foto.deleted_by = usuario_oficina
+        foto.save(update_fields=["is_deleted", "deleted_at", "deleted_by"])
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=["GET"], url_path="arquivo")
     def arquivo(self, request, pk=None):
@@ -794,7 +846,11 @@ class DriveProxyBase(APIView):
     permission_classes = [IsAuthenticated]
 
     def get_foto(self, request, drive_file_id):
-        qs = FotoOS.objects.select_related("os__oficina").filter(drive_file_id=drive_file_id)
+        qs = FotoOS.objects.select_related("os__oficina").filter(
+            drive_file_id=drive_file_id,
+            is_deleted=False,
+            is_indisponivel=False,
+        )
 
         if not request.user.is_superuser:
             oficina = get_oficina_do_usuario(request.user)
@@ -812,7 +868,11 @@ class DriveThumbProxyView(DriveProxyBase):
     def get_foto(self, request, drive_file_id):
         return (
             FotoOS.objects.select_related("os__oficina")
-            .filter(drive_file_id=drive_file_id)
+            .filter(
+                drive_file_id=drive_file_id,
+                is_deleted=False,
+                is_indisponivel=False,
+            )
             .first()
         )
 
@@ -957,7 +1017,13 @@ class PwaVeiculosEmProducaoView(APIView):
         os_ids = [os_obj.id for os_obj in ordens]
         fotos_por_os = {}
 
-        for foto in FotoOS.objects.filter(os_id__in=os_ids).select_related("etapa"):
+        for foto in (
+            FotoOS.objects.filter(
+                os_id__in=os_ids,
+                is_deleted=False,
+                is_indisponivel=False,
+            ).select_related("etapa")
+        ):
             fotos_por_os.setdefault(foto.os_id, []).append(foto)
 
         primeira_etapa_cache = {}

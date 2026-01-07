@@ -379,6 +379,8 @@ class FotoOSSerializer(serializers.ModelSerializer):
     thumb_url = serializers.SerializerMethodField()
     drive_thumb_url = serializers.SerializerMethodField()
     drive_url = serializers.SerializerMethodField()
+    is_deleted = serializers.BooleanField(read_only=True)
+    is_indisponivel = serializers.BooleanField(required=False)
 
     config_foto_nome = serializers.CharField(source='config_foto.nome', read_only=True, default=None)
     tirada_por_nome = serializers.CharField(
@@ -406,6 +408,8 @@ class FotoOSSerializer(serializers.ModelSerializer):
             'drive_url',
             'titulo',
             'observacao',
+            'is_deleted',
+            'is_indisponivel',
             'tirada_por',
             'tirada_por_nome',
             'tirada_em',
@@ -415,6 +419,7 @@ class FotoOSSerializer(serializers.ModelSerializer):
             # Permitem que o viewset injete defaults quando o frontend não envia
             'etapa': {'required': False, 'allow_null': True},
             'tipo': {'required': False},
+            'is_indisponivel': {'required': False},
         }
 
     def get_oficina(self, obj):

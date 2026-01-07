@@ -214,6 +214,17 @@ class FotoOS(models.Model):
         help_text="ID do arquivo correspondente no Google Drive."
     )
 
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.ForeignKey(
+        UsuarioOficina,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="fotos_deletadas",
+    )
+    is_indisponivel = models.BooleanField(default=False)
+
     # Informações adicionais
     titulo = models.CharField(
         max_length=100,
