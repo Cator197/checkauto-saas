@@ -376,25 +376,26 @@ class OSViewSet(viewsets.ModelViewSet):
             criado_por=criado_por,
         )
 
-    @action(detail=True, methods=["get"], url_path="observacoes")
-    def listar_observacoes(self, request, pk=None):
+    @action(detail=True, methods=["get", "post"], url_path="observacoes")
+    def observacoes(self, request, pk=None):
         os_obj = self.get_object()
 
-        observacoes = (
-            ObservacaoEtapaOS.objects.filter(os=os_obj)
-            .select_related("etapa")
-            .order_by("etapa__ordem", "etapa_id")
-        )
+        if request.method == "GET":
+            etapa_id = request.query_params.get("etapa")
+            observacoes = ObservacaoEtapaOS.objects.filter(os=os_obj)
+            if etapa_id:
+                observacoes = observacoes.filter(
+                    etapa_id=etapa_id, etapa__oficina=os_obj.oficina
+                )
+            observacoes = observacoes.select_related("etapa", "criado_por__user").order_by(
+                "-criado_em", "-id"
+            )
 
-        serializer = ObservacaoEtapaOSSerializer(
-            observacoes, many=True, context={"request": request, "os": os_obj}
-        )
+            serializer = ObservacaoEtapaOSSerializer(
+                observacoes, many=True, context={"request": request, "os": os_obj}
+            )
 
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-    @action(detail=True, methods=["post"], url_path="observacoes")
-    def criar_ou_atualizar_observacao(self, request, pk=None):
-        os_obj = self.get_object()
+            return Response(serializer.data, status=status.HTTP_200_OK)
 
         etapa_id = request.data.get("etapa")
         if etapa_id:
@@ -419,32 +420,31 @@ class OSViewSet(viewsets.ModelViewSet):
             "texto": request.data.get("texto", ""),
         }
 
-        instance = ObservacaoEtapaOS.objects.filter(os=os_obj, etapa=etapa).first()
-
         observacao = self._salvar_observacao_etapa(
             os_obj=os_obj,
             etapa=etapa,
-            instance=instance,
             payload=payload,
-            partial=instance is not None,
+            partial=False,
         )
 
         return Response(
             ObservacaoEtapaOSSerializer(
                 observacao, context={"request": request, "os": os_obj}
             ).data,
-            status=status.HTTP_200_OK,
+            status=status.HTTP_201_CREATED,
         )
 
     @action(detail=True, methods=["patch"], url_path=r"observacoes/(?P<etapa_id>[^/.]+)")
     def atualizar_observacao(self, request, pk=None, etapa_id=None):
         os_obj = self.get_object()
 
-        try:
-            instance = ObservacaoEtapaOS.objects.select_related("etapa").get(
-                os=os_obj, etapa_id=etapa_id, etapa__oficina=os_obj.oficina
-            )
-        except ObservacaoEtapaOS.DoesNotExist:
+        instance = (
+            ObservacaoEtapaOS.objects.select_related("etapa")
+            .filter(os=os_obj, etapa_id=etapa_id, etapa__oficina=os_obj.oficina)
+            .order_by("-criado_em", "-id")
+            .first()
+        )
+        if not instance:
             return Response(
                 {"detail": "Observação não encontrada para esta OS/etapa."},
                 status=status.HTTP_404_NOT_FOUND,
@@ -477,28 +477,13 @@ class OSViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        payload = {"texto": request.data.get("texto", "")}
+        payload = {"texto": request.data.get("texto", ""), "etapa": etapa.id}
 
-        observacao = ObservacaoEtapaOS.objects.filter(os=os_obj, etapa=etapa).first()
-
-        serializer = ObservacaoEtapaOSSerializer(
-            instance=observacao,
-            data=payload,
-            partial=True,
-            context={"request": request, "os": os_obj},
-        )
-        serializer.is_valid(raise_exception=True)
-
-        usuario_oficina = UsuarioOficina.objects.filter(
-            user=request.user, oficina=os_obj.oficina, ativo=True
-        ).first()
-
-        criado_por = serializer.instance.criado_por if serializer.instance else None
-
-        observacao = serializer.save(
-            os=os_obj,
+        observacao = self._salvar_observacao_etapa(
+            os_obj=os_obj,
             etapa=etapa,
-            criado_por=criado_por or usuario_oficina,
+            payload=payload,
+            partial=False,
         )
 
         return Response(

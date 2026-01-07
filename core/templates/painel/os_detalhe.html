@@ -596,7 +596,7 @@ Timeline do veículo e fotos por etapa.
             }
 
             function obterDataObservacao(obs) {
-                return obs?.criada_em || obs?.atualizado_em || obs?.data || null;
+                return obs?.criado_em || obs?.atualizado_em || obs?.data || null;
             }
 
             function atualizarObservacaoCache(item) {

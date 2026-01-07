@@ -1,7 +1,7 @@
 import base64
 import uuid
 import imghdr
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.utils import timezone
 from django.core.files.base import ContentFile
@@ -110,9 +110,7 @@ class ConfigFotoSerializer(serializers.ModelSerializer):
 
 class ObservacaoEtapaOSSerializer(serializers.ModelSerializer):
     etapa_nome = serializers.CharField(source='etapa.nome', read_only=True)
-    criado_por_nome = serializers.CharField(
-        source='criado_por.user.get_full_name', read_only=True, default=None
-    )
+    criado_por_nome = serializers.SerializerMethodField()
 
     class Meta:
         model = ObservacaoEtapaOS
@@ -129,9 +127,18 @@ class ObservacaoEtapaOSSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ('os', 'criado_por', 'criado_em', 'atualizado_em')
         extra_kwargs = {
-            'texto': {'allow_blank': True},
+            'texto': {'allow_blank': False},
             'etapa': {'required': False, 'allow_null': True},
         }
+
+    def get_criado_por_nome(self, obj):
+        usuario = getattr(obj, "criado_por", None)
+        if not usuario or not getattr(usuario, "user", None):
+            return None
+        nome = usuario.user.get_full_name()
+        if nome:
+            return nome
+        return usuario.user.username
 
     def validate_etapa(self, value):
         os_obj = self.context.get('os')
@@ -280,7 +287,19 @@ class OSSerializer(serializers.ModelSerializer):
         qs = getattr(obj, 'observacoes_etapas', None) or []
         itens = qs.all() if hasattr(qs, 'all') else qs
 
-        obs = next((item for item in itens if item.etapa_id == obj.etapa_atual_id), None)
+        observacoes = [item for item in itens if item.etapa_id == obj.etapa_atual_id]
+        if observacoes:
+            observacoes.sort(
+                key=lambda item: (
+                    item.criado_em
+                    or item.atualizado_em
+                    or timezone.make_aware(datetime.min)
+                ),
+                reverse=True,
+            )
+            obs = observacoes[0]
+        else:
+            obs = None
 
         return obs.texto if obs else None
 
