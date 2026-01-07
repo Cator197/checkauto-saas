@@ -63,6 +63,46 @@ Timeline do veículo e fotos por etapa.
         grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
         gap: 12px;
     }
+
+    .foto-thumb {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 4 / 3;
+        border-radius: 0.75rem;
+        overflow: hidden;
+        border: 1px solid rgba(30, 41, 59, 0.9);
+        background: rgba(15, 23, 42, 0.8);
+        cursor: pointer;
+    }
+
+    .foto-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.15s ease;
+    }
+
+    .foto-thumb:hover img {
+        transform: scale(1.05);
+    }
+
+    .foto-thumb .btn-excluir {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 600;
+        background: rgba(220, 38, 38, 0.9);
+        color: #fff;
+        border: 1px solid rgba(220, 38, 38, 0.9);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+    }
+
+    .foto-thumb .btn-excluir:hover {
+        background: rgba(239, 68, 68, 0.95);
+    }
 </style>
 
 <div id="os-erro" class="hidden mb-4 bg-rose-900/40 border border-rose-700/70 text-rose-100 text-xs rounded-xl px-3 py-2">
@@ -424,6 +464,10 @@ Timeline do veículo e fotos por etapa.
                     img.src = getFotoThumbUrl(foto);
                     img.alt = foto.titulo || foto.observacao || "Foto";
                     img.className = "w-full aspect-[4/3] object-cover rounded-md";
+                    img.addEventListener("error", () => {
+                        label.classList.add("hidden");
+                        marcarFotoIndisponivel(foto);
+                    });
                     const caption = document.createElement("span");
                     caption.className = "text-[10px] text-slate-400";
                     caption.textContent = foto.titulo || foto.observacao || "Foto da etapa";
@@ -738,6 +782,44 @@ Timeline do veículo e fotos por etapa.
                 );
             }
 
+            function removerFotoDoCache(fotoId) {
+                fotosCache = fotosCache.filter((foto) => Number(foto.id) !== Number(fotoId));
+            }
+
+            async function marcarFotoIndisponivel(foto) {
+                if (!foto?.id) return;
+                removerFotoDoCache(foto.id);
+                renderizarTimeline();
+                try {
+                    await apiFetch(`/api/fotos-os/${foto.id}/`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ is_indisponivel: true }),
+                    });
+                } catch (err) {
+                    console.error("Erro ao marcar foto indisponível:", err);
+                }
+            }
+
+            async function excluirFoto(foto) {
+                if (!foto?.id) return;
+                const confirmado = confirm("Excluir esta foto? Isso removerá também do Drive.");
+                if (!confirmado) return;
+                try {
+                    const resp = await apiFetch(`/api/fotos-os/${foto.id}/`, { method: "DELETE" });
+                    if (!resp.ok) {
+                        const texto = await resp.text();
+                        alert(`Erro ${resp.status}: ${texto}`);
+                        return;
+                    }
+                    removerFotoDoCache(foto.id);
+                    renderizarTimeline();
+                } catch (err) {
+                    console.error("Erro ao excluir foto:", err);
+                    alert("Erro ao excluir foto. Tente novamente.");
+                }
+            }
+
             function renderizarFotosMini(etapaId) {
                 const fotosEtapa = fotosCache.filter((f) => Number(f.etapa) === Number(etapaId)).slice(0, 3);
                 const wrapper = document.createElement("div");
@@ -752,14 +834,25 @@ Timeline do veículo e fotos por etapa.
                 }
 
                 fotosEtapa.forEach((f) => {
-                    const thumb = document.createElement("button");
-                    thumb.type = "button";
-                    thumb.className = "relative w-full aspect-[4/3] rounded-lg overflow-hidden border border-slate-800 bg-slate-900";
+                    const thumb = document.createElement("div");
+                    thumb.className = "foto-thumb";
                     const img = document.createElement("img");
                     img.src = getFotoThumbUrl(f);
                     img.alt = f.titulo || f.observacao || "Foto";
-                    img.className = "w-full h-full object-cover hover:scale-105 transition";
+                    img.addEventListener("error", () => {
+                        thumb.classList.add("hidden");
+                        marcarFotoIndisponivel(f);
+                    });
+                    const btnExcluir = document.createElement("button");
+                    btnExcluir.type = "button";
+                    btnExcluir.textContent = "Excluir";
+                    btnExcluir.className = "btn-excluir";
+                    btnExcluir.addEventListener("click", (event) => {
+                        event.stopPropagation();
+                        excluirFoto(f);
+                    });
                     thumb.appendChild(img);
+                    thumb.appendChild(btnExcluir);
                     thumb.addEventListener("click", () => {
                         const fullUrl = getFotoFullUrl(f);
                         abrirModalImagem(fullUrl, img.alt);

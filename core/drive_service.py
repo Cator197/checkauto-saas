@@ -6,6 +6,7 @@ import os
 from typing import Optional
 
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
@@ -141,6 +142,45 @@ def gerar_assinatura_thumb(drive_file_id, exp):
     payload = f"{drive_file_id}:{exp}".encode("utf-8")
     secret = settings.SECRET_KEY.encode("utf-8")
     return hmac.new(secret, payload, hashlib.sha256).hexdigest()
+
+
+def deletar_arquivo_drive(file_id: str, oficina) -> None:
+    if not file_id:
+        return
+
+    service = get_drive_service(oficina)
+    if not service:
+        logger.warning(
+            "Drive delete sem serviço",
+            extra={"oficina_id": getattr(oficina, "id", None), "drive_file_id": file_id},
+        )
+        raise DriveNaoConfigurado("Integração com Drive não configurada.")
+
+    try:
+        service.files().delete(fileId=file_id).execute()
+        logger.info(
+            "Drive arquivo deletado",
+            extra={"oficina_id": getattr(oficina, "id", None), "drive_file_id": file_id},
+        )
+    except HttpError as exc:
+        status_code = getattr(exc, "status_code", None)
+        if status_code is None and getattr(exc, "resp", None) is not None:
+            status_code = getattr(exc.resp, "status", None)
+        if status_code == 404:
+            logger.info(
+                "Drive arquivo já inexistente",
+                extra={"oficina_id": getattr(oficina, "id", None), "drive_file_id": file_id},
+            )
+            return
+        logger.exception(
+            "Erro ao deletar arquivo no Drive",
+            extra={
+                "oficina_id": getattr(oficina, "id", None),
+                "drive_file_id": file_id,
+                "status": status_code,
+            },
+        )
+        raise
 
 
 def criar_pasta_os(os_obj: OS) -> Optional[str]:
