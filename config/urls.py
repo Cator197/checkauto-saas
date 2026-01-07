@@ -69,6 +69,10 @@ def painel_config_fotos(request):
     return render(request, "painel/config_fotos.html")
 
 
+def painel_config_mensagens(request):
+    return render(request, "painel/config_mensagens.html")
+
+
 def painel_usuarios(request):
     return render(request, "painel/usuarios.html")
 
@@ -102,6 +106,7 @@ urlpatterns = [
     path("painel/os/<int:os_id>/", painel_os_detalhe, name="painel_os_detalhe"),
     path("painel/etapas/", painel_etapas, name="painel_etapas"),
     path("painel/fotos/", painel_config_fotos, name="painel_config_fotos"),
+    path("painel/config-mensagens/", painel_config_mensagens, name="painel_config_mensagens"),
     path("painel/usuarios/", painel_usuarios, name="painel_usuarios"),
     path("painel/integracoes/drive/", painel_integracao_drive, name="painel_integracao_drive"),
     path(

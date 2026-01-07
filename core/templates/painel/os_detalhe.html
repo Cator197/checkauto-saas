@@ -226,7 +226,7 @@ Timeline do veículo e fotos por etapa.
     <div class="relative os-card rounded-2xl p-5 w-[92%] max-w-2xl space-y-4">
         <div class="flex items-start justify-between gap-3">
             <div>
-                <h3 class="text-sm font-semibold text-slate-100">Informar cliente</h3>
+                <h3 id="notify-title" class="text-sm font-semibold text-slate-100">Informar cliente</h3>
                 <p class="text-[11px] text-slate-400">Envie uma atualização sobre esta etapa.</p>
                 <p id="notify-stage-name" class="text-[11px] text-slate-300 mt-1"></p>
             </div>
@@ -234,21 +234,18 @@ Timeline do veículo e fotos por etapa.
         </div>
         <div class="space-y-3 text-[12px] text-slate-200">
             <label class="flex flex-col gap-1">
-                <span class="text-[10px] uppercase tracking-wide text-slate-400">Mensagem padrão (opcional)</span>
-                <select id="notify-template" class="w-full bg-slate-950/70 border border-slate-800 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-[12px]">
-                    <option value="">— Selecionar mensagem padrão —</option>
-                    <option value="Padrão: Check-in">Padrão: Check-in</option>
-                    <option value="Padrão: Desmontagem">Padrão: Desmontagem</option>
-                    <option value="Padrão: Pintura">Padrão: Pintura</option>
-                </select>
-            </label>
-            <label class="flex flex-col gap-1">
                 <span class="text-[10px] uppercase tracking-wide text-slate-400">Mensagem</span>
                 <textarea id="notify-message" rows="4" class="w-full bg-slate-950/70 border border-slate-800 rounded-lg px-3 py-2 text-[12px] focus:outline-none focus:ring-1 focus:ring-indigo-500"></textarea>
             </label>
+            <div class="flex items-center justify-between gap-2">
+                <span class="text-[10px] uppercase tracking-wide text-slate-500">Mensagem padrão</span>
+                <button id="notify-default" type="button" class="px-3 py-1.5 rounded-full bg-slate-800 text-slate-200 border border-slate-700 text-[10px] font-semibold hover:bg-slate-700">
+                    Usar mensagem padrão
+                </button>
+            </div>
             <label class="flex items-center gap-2 text-[11px] text-slate-300">
                 <input id="notify-photos-toggle" type="checkbox" class="rounded border-slate-700 bg-slate-900 text-indigo-500 focus:ring-indigo-500">
-                <span>Enviar fotos desta etapa</span>
+                <span>Enviar fotos junto</span>
             </label>
             <div id="notify-photos-container" class="hidden space-y-2">
                 <p class="text-[11px] text-slate-400">Selecionar fotos da etapa</p>
@@ -334,12 +331,13 @@ Timeline do veículo e fotos por etapa.
             const elNotifyClose = document.getElementById("notify-close");
             const elNotifyCancel = document.getElementById("notify-cancel");
             const elNotifySend = document.getElementById("notify-send");
-            const elNotifyTemplate = document.getElementById("notify-template");
             const elNotifyMessage = document.getElementById("notify-message");
+            const elNotifyDefault = document.getElementById("notify-default");
             const elNotifyPhotosToggle = document.getElementById("notify-photos-toggle");
             const elNotifyPhotosContainer = document.getElementById("notify-photos-container");
             const elNotifyPhotosList = document.getElementById("notify-photos-list");
             const elNotifyStageName = document.getElementById("notify-stage-name");
+            const elNotifyTitle = document.getElementById("notify-title");
             const elNotifyFeedback = document.getElementById("notify-feedback");
 
             let osDadosAtuais = null;
@@ -350,6 +348,7 @@ Timeline do veículo e fotos por etapa.
             let headerSnapshot = null;
             let notifyEtapaId = null;
             let notifyEtapaNome = "";
+            let notifyMensagemPadrao = "";
 
             async function carregarImagemComoBlobUrl(url) {
                 const resp = await apiFetch(url, { method: "GET" });
@@ -430,7 +429,6 @@ Timeline do veículo e fotos por etapa.
             });
 
             function resetarNotifyModal() {
-                if (elNotifyTemplate) elNotifyTemplate.value = "";
                 if (elNotifyMessage) elNotifyMessage.value = "";
                 if (elNotifyPhotosToggle) elNotifyPhotosToggle.checked = false;
                 if (elNotifyPhotosContainer) elNotifyPhotosContainer.classList.add("hidden");
@@ -478,14 +476,58 @@ Timeline do veículo e fotos por etapa.
                 });
             }
 
-            function openNotifyModal({ etapaId, etapaNome }) {
+            function mensagemFallback(etapaNome) {
+                const nome = etapaNome || "da OS";
+                return `Olá! Atualização da sua OS: a etapa ${nome} foi concluída e seguimos para a próxima etapa.`;
+            }
+
+            async function carregarMensagemPadrao(etapaId, etapaNome) {
+                const fallback = mensagemFallback(etapaNome);
+                if (!etapaId) {
+                    return fallback;
+                }
+                try {
+                    const resp = await apiFetch(`/api/mensagens-etapa/?etapa=${etapaId}`, { method: "GET" });
+                    if (!resp.ok) {
+                        return fallback;
+                    }
+                    const data = await resp.json();
+                    let item = null;
+                    if (Array.isArray(data.results)) {
+                        item = data.results[0];
+                    } else if (Array.isArray(data)) {
+                        item = data[0];
+                    } else if (data && data.id) {
+                        item = data;
+                    }
+                    if (item && typeof item.texto !== "undefined") {
+                        return item.texto;
+                    }
+                    return fallback;
+                } catch (err) {
+                    console.error("Erro ao carregar mensagem padrão:", err);
+                    return fallback;
+                }
+            }
+
+            async function openNotifyModal({ etapaId, etapaNome }) {
                 notifyEtapaId = etapaId;
                 notifyEtapaNome = etapaNome || "";
+                notifyMensagemPadrao = "";
                 if (elNotifyStageName) {
                     elNotifyStageName.textContent = notifyEtapaNome ? `Etapa: ${notifyEtapaNome}` : "";
                 }
+                if (elNotifyTitle) {
+                    elNotifyTitle.textContent = notifyEtapaNome
+                        ? `Informar cliente — ${notifyEtapaNome}`
+                        : "Informar cliente";
+                }
                 resetarNotifyModal();
                 renderNotifyPhotos(etapaId);
+                notifyMensagemPadrao = await carregarMensagemPadrao(etapaId, notifyEtapaNome);
+                if (elNotifyMessage) {
+                    elNotifyMessage.value = notifyMensagemPadrao;
+                }
                 if (elNotifyModal) elNotifyModal.classList.remove("hidden");
                 document.body.classList.add("overflow-hidden");
             }
@@ -498,6 +540,43 @@ Timeline do veículo e fotos por etapa.
             [elNotifyBackdrop, elNotifyClose, elNotifyCancel].forEach((el) => {
                 if (el) el.addEventListener("click", closeNotifyModal);
             });
+
+            if (elNotifyPhotosToggle) {
+                elNotifyPhotosToggle.addEventListener("change", () => {
+                    if (!elNotifyPhotosContainer) return;
+                    if (elNotifyPhotosToggle.checked) {
+                        elNotifyPhotosContainer.classList.remove("hidden");
+                        renderNotifyPhotos(notifyEtapaId);
+                    } else {
+                        elNotifyPhotosContainer.classList.add("hidden");
+                        if (elNotifyPhotosList) {
+                            elNotifyPhotosList.querySelectorAll("input[type='checkbox']").forEach((input) => {
+                                input.checked = false;
+                            });
+                        }
+                    }
+                });
+            }
+
+            if (elNotifyDefault) {
+                elNotifyDefault.addEventListener("click", async () => {
+                    notifyMensagemPadrao = await carregarMensagemPadrao(notifyEtapaId, notifyEtapaNome);
+                    if (elNotifyMessage) {
+                        elNotifyMessage.value = notifyMensagemPadrao;
+                    }
+                });
+            }
+
+            if (elNotifySend) {
+                elNotifySend.addEventListener("click", () => {
+                    if (elNotifyFeedback) {
+                        elNotifyFeedback.textContent = "Envio em breve.";
+                        elNotifyFeedback.className = "text-[11px] text-slate-300";
+                        elNotifyFeedback.classList.remove("hidden");
+                    }
+                    setTimeout(closeNotifyModal, 600);
+                });
+            }
 
             function formatarData(dataStr) {
                 if (!dataStr) return "-";
@@ -1338,30 +1417,6 @@ Timeline do veículo e fotos por etapa.
             if (elHeaderCancel) elHeaderCancel.addEventListener("click", restaurarHeader);
 
             if (elUploadSubmit) elUploadSubmit.addEventListener("click", enviarFoto);
-            if (elNotifyTemplate && elNotifyMessage) {
-                elNotifyTemplate.addEventListener("change", () => {
-                    elNotifyMessage.value = elNotifyTemplate.value || "";
-                });
-            }
-            if (elNotifyPhotosToggle) {
-                elNotifyPhotosToggle.addEventListener("change", () => {
-                    const ativo = elNotifyPhotosToggle.checked;
-                    if (elNotifyPhotosContainer) {
-                        elNotifyPhotosContainer.classList.toggle("hidden", !ativo);
-                    }
-                    if (!ativo && elNotifyPhotosList) {
-                        elNotifyPhotosList.querySelectorAll("input[type='checkbox']").forEach((input) => {
-                            input.checked = false;
-                        });
-                    }
-                });
-            }
-            if (elNotifySend) {
-                elNotifySend.addEventListener("click", () => {
-                    alert("Em breve: envio ao cliente");
-                    closeNotifyModal();
-                });
-            }
 
             carregarDados();
         })();
