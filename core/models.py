@@ -300,7 +300,6 @@ class ObservacaoEtapaOS(models.Model):
     atualizado_em = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('os', 'etapa')
         verbose_name = "Observação da Etapa"
         verbose_name_plural = "Observações das Etapas"
 
