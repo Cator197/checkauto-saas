@@ -1,9 +1,13 @@
 import base64
 import uuid
 import imghdr
+from datetime import timedelta
+
+from django.utils import timezone
 from django.core.files.base import ContentFile
 from django.urls import reverse
 from rest_framework import serializers
+from .drive_service import gerar_assinatura_thumb
 from .models import (
     Oficina,
     UsuarioOficina,
@@ -353,6 +357,7 @@ class FotoOSSerializer(serializers.ModelSerializer):
     os_codigo = serializers.CharField(source='os.codigo', read_only=True)
     oficina = serializers.SerializerMethodField()
     etapa_nome = serializers.CharField(source='etapa.nome', read_only=True)
+    thumb_url = serializers.SerializerMethodField()
     drive_thumb_url = serializers.SerializerMethodField()
     drive_url = serializers.SerializerMethodField()
 
@@ -377,6 +382,7 @@ class FotoOSSerializer(serializers.ModelSerializer):
             'config_foto_nome',
             'arquivo',
             'drive_file_id',  # <-- adicionar aqui
+            'thumb_url',
             'drive_thumb_url',
             'drive_url',
             'titulo',
@@ -401,14 +407,22 @@ class FotoOSSerializer(serializers.ModelSerializer):
         except Exception:
             return path
 
-    def get_drive_thumb_url(self, obj):
+    def _build_signed_thumb_url(self, request, drive_file_id):
+        exp = int((timezone.now() + timedelta(minutes=10)).timestamp())
+        sig = gerar_assinatura_thumb(drive_file_id, exp)
+        path = reverse("drive-thumb", kwargs={"drive_file_id": drive_file_id})
+        return self._abs(request, f"{path}?sig={sig}&exp={exp}")
+
+    def get_thumb_url(self, obj):
         request = self.context.get("request")
         if obj.drive_file_id:
-            path = reverse("drive-thumb", kwargs={"drive_file_id": obj.drive_file_id})
-            return self._abs(request, path)
+            return self._build_signed_thumb_url(request, obj.drive_file_id)
         if obj.arquivo:
             return request.build_absolute_uri(obj.arquivo.url) if request else obj.arquivo.url
         return None
+
+    def get_drive_thumb_url(self, obj):
+        return self.get_thumb_url(obj)
 
     def get_drive_url(self, obj):
         request = self.context.get("request")
