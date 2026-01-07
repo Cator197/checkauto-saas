@@ -533,30 +533,21 @@ Timeline do veículo e fotos por etapa.
             }
 
             function obterObservacoesDaEtapa(etapaId) {
-                return observacoesCache.filter((obs) => {
-                    const id = typeof obs.etapa === "object" ? obs.etapa?.id : obs.etapa;
-                    return Number(id) === Number(etapaId);
-                });
+                const lista = Array.isArray(observacoesCache) ? observacoesCache : [];
+                return lista
+                    .filter((obs) => {
+                        const id = typeof obs.etapa === "object" ? obs.etapa?.id : obs.etapa;
+                        return Number(id) === Number(etapaId);
+                    })
+                    .sort((a, b) => new Date(b?.criada_em || 0) - new Date(a?.criada_em || 0));
             }
 
-            function obterNomeUsuarioObservacao(obs) {
-                if (!obs) return "Usuário";
-                if (obs.usuario && typeof obs.usuario === "object") {
-                    return obs.usuario.nome || obs.usuario.username || obs.usuario.email || "Usuário";
-                }
-                return obs.usuario_nome || obs.tirada_por_nome || obs.usuario || "Usuário";
+            function obterNomeUsuario(obs) {
+                return obs?.usuario_nome || obs?.tirada_por_nome || "Usuário";
             }
 
             function obterDataObservacao(obs) {
                 return obs?.criada_em || obs?.data || null;
-            }
-
-            function ordenarObservacoesPorDataDesc(lista) {
-                return [...lista].sort((a, b) => {
-                    const dataA = obterDataObservacao(a);
-                    const dataB = obterDataObservacao(b);
-                    return new Date(dataB || 0) - new Date(dataA || 0);
-                });
             }
 
             function adicionarObservacaoCache(item) {
@@ -691,7 +682,7 @@ Timeline do veículo e fotos por etapa.
                     obsLabel.appendChild(obsFeedback);
                     const obsLista = document.createElement("div");
                     obsLista.className = "space-y-2";
-                    const observacoesEtapa = ordenarObservacoesPorDataDesc(obterObservacoesDaEtapa(item.etapa));
+                    const observacoesEtapa = obterObservacoesDaEtapa(item.etapa);
                     if (!observacoesEtapa.length) {
                         const vazio = document.createElement("p");
                         vazio.className = "text-[11px] text-slate-500";
@@ -705,7 +696,7 @@ Timeline do veículo e fotos por etapa.
                             meta.className = "text-[10px] text-slate-400 flex items-center gap-2";
                             const nome = document.createElement("span");
                             nome.className = "text-slate-200 font-semibold";
-                            nome.textContent = obterNomeUsuarioObservacao(obs);
+                            nome.textContent = obterNomeUsuario(obs);
                             const data = document.createElement("span");
                             data.textContent = formatarDataHora(obterDataObservacao(obs));
                             meta.appendChild(nome);
@@ -725,10 +716,17 @@ Timeline do veículo e fotos por etapa.
                     textarea.placeholder = "Adicionar nova observação...";
                     const btnSalvarObs = criarBotaoAcao("Adicionar observação", "bg-emerald-600 text-white hover:bg-emerald-500", async () => {
                         obsFeedback.classList.add("hidden");
+                        const textoObservacao = textarea.value.trim();
+                        if (!textoObservacao) {
+                            obsFeedback.textContent = "Digite uma observação antes de salvar.";
+                            obsFeedback.className = "text-rose-300 text-[11px]";
+                            obsFeedback.classList.remove("hidden");
+                            return;
+                        }
                         btnSalvarObs.disabled = true;
                         btnSalvarObs.textContent = "Salvando...";
                         try {
-                            const payload = { etapa: item.etapa, texto: textarea.value };
+                            const payload = { etapa: item.etapa, texto: textoObservacao };
                             const resp = await apiFetch(ENDPOINTS.observacoes, {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
