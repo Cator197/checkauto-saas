@@ -2,6 +2,7 @@ import base64
 import uuid
 import imghdr
 from django.core.files.base import ContentFile
+from django.urls import reverse
 from rest_framework import serializers
 from .models import (
     Oficina,
@@ -394,15 +395,23 @@ class FotoOSSerializer(serializers.ModelSerializer):
     def get_oficina(self, obj):
         return obj.os.oficina_id
 
+    def _abs(self, request, path):
+        try:
+            return request.build_absolute_uri(path) if request else path
+        except Exception:
+            return path
+
     def get_drive_thumb_url(self, obj):
-        if not obj.drive_file_id:
-            return None
-        return f"https://drive.google.com/thumbnail?id={obj.drive_file_id}&sz=w800"
+        return self.get_drive_url(obj)
 
     def get_drive_url(self, obj):
-        if not obj.drive_file_id:
-            return None
-        return f"https://drive.google.com/uc?id={obj.drive_file_id}"
+        request = self.context.get("request")
+        if obj.drive_file_id:
+            path = reverse("fotos-os-arquivo", kwargs={"pk": obj.pk})
+            return self._abs(request, path)
+        if obj.arquivo:
+            return request.build_absolute_uri(obj.arquivo.url) if request else obj.arquivo.url
+        return None
 
     def validate_arquivo(self, value):
         """
