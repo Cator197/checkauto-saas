@@ -144,25 +144,6 @@ Timeline do veículo e fotos por etapa.
         </div>
     </section>
 
-    <!-- Fotos -->
-    <section class="os-card rounded-2xl p-4">
-        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-4">
-            <div>
-                <h3 class="text-xs font-semibold text-slate-200 uppercase tracking-wide">Fotos</h3>
-                <p class="text-[11px] text-slate-400">Visualize e gerencie os registros por etapa.</p>
-            </div>
-            <div class="flex items-center gap-2">
-                <label class="text-[11px] text-slate-300 flex items-center gap-2 bg-slate-900/60 border border-slate-800 rounded-full px-3 py-1">
-                    <span class="text-slate-400">Etapa:</span>
-                    <select id="photos-filter" class="bg-transparent focus:outline-none text-slate-100 text-[12px]"></select>
-                </label>
-                <button id="photos-add" type="button" class="px-3 py-2 rounded-full bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-500 transition">+ Adicionar Foto</button>
-            </div>
-        </div>
-        <p id="photos-count" class="text-[11px] text-slate-500 mb-2">—</p>
-        <div id="photos-empty" class="hidden text-[11px] text-slate-500">Nenhuma foto registrada para esta OS até o momento.</div>
-        <div id="photos-grid" class="gallery-grid"></div>
-    </section>
 </div>
 
 <!-- Modal de visualização -->
@@ -239,13 +220,6 @@ Timeline do veículo e fotos por etapa.
             // Timeline
             const elTimelineList = document.getElementById("timeline-list");
             const elTimelineEmpty = document.getElementById("timeline-empty");
-
-            // Photos
-            const elPhotosFilter = document.getElementById("photos-filter");
-            const elPhotosAdd = document.getElementById("photos-add");
-            const elPhotosGrid = document.getElementById("photos-grid");
-            const elPhotosEmpty = document.getElementById("photos-empty");
-            const elPhotosCount = document.getElementById("photos-count");
 
             // Upload modal
             const elUploadModal = document.getElementById("upload-modal");
@@ -358,21 +332,6 @@ Timeline do veículo e fotos por etapa.
                     });
                     sel.value = manter || "";
                 });
-                if (elPhotosFilter) {
-                    const manterFiltro = elPhotosFilter.value;
-                    elPhotosFilter.innerHTML = "";
-                    const todas = document.createElement("option");
-                    todas.value = "";
-                    todas.textContent = "Todas";
-                    elPhotosFilter.appendChild(todas);
-                    (etapas || []).forEach((etapa) => {
-                        const opt = document.createElement("option");
-                        opt.value = etapa.id;
-                        opt.textContent = etapa.nome || `Etapa ${etapa.id}`;
-                        elPhotosFilter.appendChild(opt);
-                    });
-                    elPhotosFilter.value = manterFiltro || "";
-                }
             }
 
             function getEtapaAtualId(os) {
@@ -642,13 +601,6 @@ Timeline do veículo e fotos por etapa.
                     const fotosHeader = document.createElement("div");
                     fotosHeader.className = "flex items-center justify-between text-[11px] text-slate-300";
                     fotosHeader.innerHTML = "<span>Fotos da etapa</span>";
-                    const btnVerTodas = criarBotaoAcao("Ver todas", "bg-slate-800 text-slate-100 border border-slate-700 hover:bg-slate-700", () => {
-                        if (elPhotosFilter) {
-                            elPhotosFilter.value = item.etapa;
-                            renderizarGaleria();
-                            document.getElementById("photos-count")?.scrollIntoView({ behavior: "smooth" });
-                        }
-                    });
                     const btnAddFoto = criarBotaoAcao(
                         "+ Adicionar foto",
                         "bg-emerald-600 text-white hover:bg-emerald-500",
@@ -656,7 +608,6 @@ Timeline do veículo e fotos por etapa.
                     );
                     const fotosAcoes = document.createElement("div");
                     fotosAcoes.className = "flex items-center gap-2";
-                    fotosAcoes.appendChild(btnVerTodas);
                     fotosAcoes.appendChild(btnAddFoto);
                     fotosHeader.appendChild(fotosAcoes);
                     fotosBox.appendChild(fotosHeader);
@@ -685,105 +636,6 @@ Timeline do veículo e fotos por etapa.
 
                     li.appendChild(blocoDetalhes);
                     elTimelineList.appendChild(li);
-                });
-            }
-
-            function criarBotaoExcluirFoto(fotoId) {
-                const btn = document.createElement("button");
-                btn.type = "button";
-                btn.className = "text-[11px] px-2 py-1 rounded-full bg-rose-600/80 text-white hover:bg-rose-500";
-                btn.textContent = "Excluir";
-                btn.addEventListener("click", async () => {
-                    if (!confirm("Excluir esta foto?")) return;
-                    btn.disabled = true;
-                    const original = btn.textContent;
-                    btn.textContent = "Excluindo...";
-                    try {
-                        const resp = await apiFetch(`/api/fotos-os/${fotoId}/`, { method: "DELETE" });
-                        if (resp && resp.ok) {
-                            await recarregarFotos();
-                            return;
-                        }
-                        const erroTexto = resp ? await resp.text() : "Resposta vazia";
-                        alert(`Erro ${resp ? resp.status : ""}: ${erroTexto}`);
-                    } catch (err) {
-                        console.error("Erro ao excluir foto:", err);
-                        alert("Erro ao excluir foto: " + (err?.message || err));
-                    } finally {
-                        btn.disabled = false;
-                        btn.textContent = original;
-                    }
-                });
-                return btn;
-            }
-
-            function renderizarGaleria() {
-                if (!elPhotosGrid) return;
-                elPhotosGrid.innerHTML = "";
-                const filtro = elPhotosFilter ? elPhotosFilter.value : "";
-                const lista = filtro ? fotosCache.filter((f) => String(f.etapa) === String(filtro)) : fotosCache;
-
-                if (!lista.length) {
-                    elPhotosEmpty.classList.remove("hidden");
-                    elPhotosCount.textContent = "0 fotos";
-                    return;
-                }
-
-                elPhotosEmpty.classList.add("hidden");
-                elPhotosCount.textContent = `${lista.length} foto${lista.length > 1 ? "s" : ""}`;
-
-                lista.forEach((f) => {
-                    const card = document.createElement("div");
-                    card.className = "bg-slate-900/80 border border-slate-800 rounded-xl overflow-hidden flex flex-col";
-
-                    const thumb = document.createElement("div");
-                    thumb.className = "relative w-full aspect-[4/3] bg-slate-950";
-                    if (f.drive_thumb_url || f.drive_url) {
-                        const img = document.createElement("img");
-                        img.src = f.drive_thumb_url || f.drive_url;
-                        img.alt = f.titulo || f.observacao || "Foto";
-                        img.className = "absolute inset-0 w-full h-full object-cover cursor-pointer";
-                        img.addEventListener("click", () => abrirModalImagem(f.drive_url, img.alt));
-                        thumb.appendChild(img);
-                    } else {
-                        const vazio = document.createElement("div");
-                        vazio.className = "absolute inset-0 flex items-center justify-center text-[11px] text-slate-400";
-                        vazio.textContent = "Sem imagem";
-                        thumb.appendChild(vazio);
-                    }
-
-                    const body = document.createElement("div");
-                    body.className = "p-3 space-y-1";
-                    const titulo = document.createElement("p");
-                    titulo.className = "text-[12px] font-semibold text-slate-100";
-                    titulo.textContent = f.titulo || f.os_codigo || "Foto";
-                    const meta = document.createElement("p");
-                    meta.className = "text-[11px] text-slate-400";
-                    const quem = f.tirada_por_nome || "Usuário";
-                    meta.textContent = `${quem} • ${formatarDataHora(f.tirada_em)}`;
-                    if (f.etapa_nome) {
-                        const etapa = document.createElement("p");
-                        etapa.className = "text-[11px] text-emerald-200";
-                        etapa.textContent = f.etapa_nome;
-                        body.appendChild(etapa);
-                    }
-                    if (f.observacao) {
-                        const obs = document.createElement("p");
-                        obs.className = "text-[11px] text-slate-500 line-clamp-2";
-                        obs.textContent = f.observacao;
-                        body.appendChild(obs);
-                    }
-                    body.appendChild(titulo);
-                    body.appendChild(meta);
-
-                    const actions = document.createElement("div");
-                    actions.className = "flex justify-end p-3 pt-0";
-                    actions.appendChild(criarBotaoExcluirFoto(f.id));
-
-                    card.appendChild(thumb);
-                    card.appendChild(body);
-                    card.appendChild(actions);
-                    elPhotosGrid.appendChild(card);
                 });
             }
 
@@ -1008,8 +860,6 @@ Timeline do veículo e fotos por etapa.
                     if (!resp.ok) {
                         const texto = await resp.text();
                         console.error("Erro ao recarregar fotos:", resp.status, texto);
-                        elPhotosEmpty.textContent = "Falha ao carregar fotos";
-                        elPhotosEmpty.classList.remove("hidden");
                         return;
                     }
                     const raw = await resp.json();
@@ -1017,11 +867,9 @@ Timeline do veículo e fotos por etapa.
                     if (Array.isArray(raw.results)) fotosData = raw.results;
                     else if (Array.isArray(raw)) fotosData = raw;
                     fotosCache = fotosData;
-                    renderizarGaleria();
+                    renderizarTimeline();
                 } catch (err) {
                     console.error("Erro ao recarregar fotos:", err);
-                    elPhotosEmpty.textContent = "Erro ao recarregar fotos";
-                    elPhotosEmpty.classList.remove("hidden");
                 }
             }
 
@@ -1062,7 +910,6 @@ Timeline do veículo e fotos por etapa.
                         observacoesCache = Array.isArray(raw.results) ? raw.results : Array.isArray(raw) ? raw : [];
                     }
 
-                    renderizarGaleria();
                     await carregarTimeline();
                 } catch (err) {
                     console.error("Erro ao carregar dados da OS:", err);
@@ -1077,8 +924,6 @@ Timeline do veículo e fotos por etapa.
             elHeaderSave.addEventListener("click", salvarHeader);
             elHeaderCancel.addEventListener("click", restaurarHeader);
 
-            if (elPhotosAdd) elPhotosAdd.addEventListener("click", () => abrirUploadModal(""));
-            if (elPhotosFilter) elPhotosFilter.addEventListener("change", renderizarGaleria);
             if (elUploadSubmit) elUploadSubmit.addEventListener("click", enviarFoto);
 
             carregarDados();
