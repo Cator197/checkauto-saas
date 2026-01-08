@@ -33,6 +33,7 @@ class UsuarioOficina(models.Model):
     oficina = models.ForeignKey(Oficina, on_delete=models.CASCADE, related_name='usuarios')
     papel = models.CharField(max_length=10, choices=ROLE_CHOICES, default='FUNC')
     ativo = models.BooleanField(default=True)
+    is_atual = models.BooleanField(default=False)
 
     criado_em = models.DateTimeField(auto_now_add=True)
 
