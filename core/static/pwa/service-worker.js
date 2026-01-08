@@ -1,13 +1,17 @@
 // Nome do cache (mude a versão quando fizer mudanças grandes no front)
-const CACHE_NAME = "checkauto-pwa-v3";
+const CACHE_NAME = "checkauto-pwa-v4";
 
 // Lista de arquivos essenciais para o app abrir (app shell)
 const URLS_TO_CACHE = [
-  "/pwa/",                 // home do PWA
-  "/static/pwa/js/app.js", // script principal
+  "/static/pwa/manifest.json",
+  "/static/pwa/js/app.js",
+  "/static/pwa/js/api.js",
+  "/static/pwa/js/db.js",
+  "/static/pwa/js/sync.js",
+  "/static/shared/api.js",
   "/static/pwa/icons/icon-192.png",
   "/static/pwa/icons/icon-512.png",
-  "/static/css/base.css"   // ajuste para o seu CSS real (ou remova se não tiver ainda)
+  "/static/pwa/offline.html"
 ];
 
 // Evento de instalação: cacheia os arquivos do app shell
@@ -54,7 +58,17 @@ self.addEventListener("fetch", event => {
   // Para chamadas de navegação (HTML), tenta rede primeiro, fallback para cache
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request).catch(() => caches.match("/pwa/"))
+      fetch(request)
+        .then(response => {
+          if (response && response.ok) {
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME).then(cache => {
+              cache.put(request, responseClone);
+            });
+          }
+          return response;
+        })
+        .catch(() => caches.match(request).then(cacheResp => cacheResp || caches.match("/static/pwa/offline.html")))
     );
     return;
   }
@@ -65,10 +79,13 @@ self.addEventListener("fetch", event => {
       return (
         response ||
         fetch(request).then(networkResponse => {
-          return caches.open(CACHE_NAME).then(cache => {
-            cache.put(request, networkResponse.clone());
-            return networkResponse;
-          });
+          if (networkResponse && networkResponse.ok) {
+            return caches.open(CACHE_NAME).then(cache => {
+              cache.put(request, networkResponse.clone());
+              return networkResponse;
+            });
+          }
+          return networkResponse;
         })
       );
     })
