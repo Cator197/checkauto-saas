@@ -25,24 +25,33 @@ Gerencie quem tem acesso à sua oficina no CheckAuto.
         Como funciona
     </h2>
     <p class="text-[11px] text-slate-300 mb-1">
-        Esta lista mostra os usuários vinculados à sua oficina (<code>UsuarioOficina</code>).
+        Cadastre usuários para sua oficina e defina permissões básicas (Admin ou Operador).
     </p>
     <p class="text-[11px] text-slate-400 mb-1">
-        Você pode ativar ou desativar o acesso ao sistema para cada usuário.
+        Admins podem criar e ativar/desativar acessos. Operadores usam o sistema com permissões limitadas.
     </p>
     <p class="text-[11px] text-slate-500">
-        A inclusão de novos usuários ainda é feita via painel administrativo (Django admin).
+        Usuários são sempre vinculados a uma oficina.
     </p>
 </div>
 
 <div class="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden">
     <div class="border-b border-slate-800 px-4 py-2 flex items-center justify-between">
-        <p class="text-xs text-slate-400">
-            Usuários vinculados à oficina.
-        </p>
-        <p id="usuarios-count" class="text-[11px] text-slate-500">
-            —
-        </p>
+        <div>
+            <p class="text-xs text-slate-400">
+                Usuários vinculados à oficina.
+            </p>
+            <p id="usuarios-count" class="text-[11px] text-slate-500">
+                —
+            </p>
+        </div>
+        <button
+            id="btn-novo-usuario"
+            type="button"
+            class="inline-flex items-center px-3 py-1 rounded-lg border border-slate-700 text-[11px]
+                   text-slate-100 hover:bg-slate-800/80">
+            Novo usuário
+        </button>
     </div>
 
     <div class="overflow-x-auto">
@@ -50,10 +59,10 @@ Gerencie quem tem acesso à sua oficina no CheckAuto.
             <thead class="bg-slate-900/90 border-b border-slate-800 text-slate-400 uppercase tracking-wide">
                 <tr>
                     <th class="px-3 py-2 text-left">Nome</th>
-                    <th class="px-3 py-2 text-left">Usuário</th>
-                    <th class="px-3 py-2 text-left">Papel</th>
-                    <th class="px-3 py-2 text-left">Ativo</th>
-                    <th class="px-3 py-2 text-left">Desde</th>
+                    <th class="px-3 py-2 text-left">E-mail</th>
+                    <th class="px-3 py-2 text-left">Tipo</th>
+                    <th class="px-3 py-2 text-left">Oficina</th>
+                    <th class="px-3 py-2 text-left">Status</th>
                     <th class="px-3 py-2 text-right">Ações</th>
                 </tr>
             </thead>
@@ -64,9 +73,79 @@ Gerencie quem tem acesso à sua oficina no CheckAuto.
     </div>
 </div>
 
+<div id="modal-novo-usuario" class="fixed inset-0 hidden items-center justify-center z-50">
+    <div class="absolute inset-0 bg-slate-900/80"></div>
+    <div class="relative bg-slate-950 border border-slate-800 rounded-2xl w-full max-w-lg p-4">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-semibold text-slate-100">Novo usuário</h3>
+            <button id="btn-fechar-modal" type="button" class="text-slate-400 hover:text-slate-100 text-sm">✕</button>
+        </div>
+
+        <div id="form-erro" class="hidden mb-3 bg-rose-900/40 border border-rose-700/70 text-rose-100 text-xs rounded-xl px-3 py-2"></div>
+        <div id="form-sucesso" class="hidden mb-3 bg-emerald-900/40 border border-emerald-700/70 text-emerald-100 text-xs rounded-xl px-3 py-2"></div>
+
+        <form id="form-novo-usuario" class="space-y-3">
+            <div>
+                <label class="block text-[11px] text-slate-400 mb-1">Nome completo *</label>
+                <input id="input-nome" type="text" class="w-full bg-slate-900/80 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100" />
+            </div>
+            <div>
+                <label class="block text-[11px] text-slate-400 mb-1">E-mail (login) *</label>
+                <input id="input-email" type="email" class="w-full bg-slate-900/80 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100" />
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-[11px] text-slate-400 mb-1">Senha *</label>
+                    <input id="input-senha" type="password" class="w-full bg-slate-900/80 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100" />
+                </div>
+                <div>
+                    <label class="block text-[11px] text-slate-400 mb-1">Confirmar senha *</label>
+                    <input id="input-confirmar-senha" type="password" class="w-full bg-slate-900/80 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100" />
+                </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-[11px] text-slate-400 mb-1">Tipo de usuário *</label>
+                    <select id="input-tipo" class="w-full bg-slate-900/80 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100">
+                        <option value="">Selecione</option>
+                        <option value="ADMIN">Admin</option>
+                        <option value="FUNC">Operador</option>
+                    </select>
+                </div>
+                <div id="campo-oficina">
+                    <label class="block text-[11px] text-slate-400 mb-1">Oficina *</label>
+                    <select id="input-oficina" class="w-full bg-slate-900/80 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-100">
+                        <option value="">Carregando...</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex items-center justify-end gap-2 pt-2">
+                <button type="button" id="btn-cancelar" class="px-3 py-1 rounded-lg border border-slate-700 text-[11px] text-slate-200 hover:bg-slate-800/80">Cancelar</button>
+                <button type="submit" id="btn-salvar" class="px-3 py-1 rounded-lg bg-emerald-600/80 text-[11px] text-white hover:bg-emerald-500">Criar usuário</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
 document.addEventListener("DOMContentLoaded", async () => {
     const erroBox = document.getElementById("usuarios-erro");
+    const modal = document.getElementById("modal-novo-usuario");
+    const btnNovo = document.getElementById("btn-novo-usuario");
+    const btnFecharModal = document.getElementById("btn-fechar-modal");
+    const btnCancelar = document.getElementById("btn-cancelar");
+    const form = document.getElementById("form-novo-usuario");
+    const formErro = document.getElementById("form-erro");
+    const formSucesso = document.getElementById("form-sucesso");
+    const inputNome = document.getElementById("input-nome");
+    const inputEmail = document.getElementById("input-email");
+    const inputSenha = document.getElementById("input-senha");
+    const inputConfirmarSenha = document.getElementById("input-confirmar-senha");
+    const inputTipo = document.getElementById("input-tipo");
+    const inputOficina = document.getElementById("input-oficina");
+    const campoOficina = document.getElementById("campo-oficina");
+    let oficinaPadrao = null;
+    let usuarioAtualId = null;
 
     const ok = await verificarAutenticacao();
     if (!ok) return;
@@ -74,14 +153,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     const tbody = document.getElementById("usuarios-tbody");
     const countLabel = document.getElementById("usuarios-count");
 
-    function formatarData(dataStr) {
-        if (!dataStr) return "-";
-        const apenasData = dataStr.split("T")[0];
-        const partes = apenasData.split("-");
-        if (partes.length === 3) {
-            return partes[2] + "/" + partes[1] + "/" + partes[0];
+    async function carregarUsuarioAtual() {
+        try {
+            const resp = await apiFetch("/api/auth/me/", { method: "GET" });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            usuarioAtualId = data.id;
+        } catch (err) {
+            console.error("Erro ao carregar usuário atual:", err);
         }
-        return apenasData;
     }
 
     function carregarUsuarios() {
@@ -125,13 +205,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    function formatarPapel(usuario) {
+        if (usuario.papel_label) return usuario.papel_label;
+        if (usuario.papel === "ADMIN") return "Admin";
+        if (usuario.papel === "FUNC") return "Operador";
+        if (usuario.papel === "GERENTE") return "Gerente";
+        return usuario.papel || "-";
+    }
+
     function adicionarLinhaUsuario(usuario) {
         const tr = document.createElement("tr");
         tr.dataset.id = usuario.id;
         tr.className = "hover:bg-slate-900";
 
-        const ativo = !!usuario.ativo;
-        const papel = usuario.papel || "-";
+        const ativo = usuario.user_ativo !== undefined ? !!usuario.user_ativo : !!usuario.ativo;
+        const papel = formatarPapel(usuario);
+        const nomeOficina = usuario.oficina_nome || "-";
 
         const badgeAtivoClasse = ativo ? "bg-emerald-600/20 text-emerald-300 border-emerald-500/40"
                                        : "bg-rose-600/20 text-rose-200 border-rose-500/40";
@@ -143,18 +232,18 @@ document.addEventListener("DOMContentLoaded", async () => {
                 ${usuario.user_nome || "-"}
             </td>
             <td class="px-3 py-2 align-middle whitespace-nowrap text-slate-300">
-                ${usuario.user_username || "-"}
+                ${usuario.user_email || usuario.user_username || "-"}
             </td>
             <td class="px-3 py-2 align-middle whitespace-nowrap text-slate-300">
                 ${papel}
+            </td>
+            <td class="px-3 py-2 align-middle whitespace-nowrap text-slate-300">
+                ${nomeOficina}
             </td>
             <td class="px-3 py-2 align-middle whitespace-nowrap">
                 <span class="inline-flex items-center px-2 py-0.5 rounded-full border text-[11px] ${badgeAtivoClasse}">
                     ${badgeAtivoTexto}
                 </span>
-            </td>
-            <td class="px-3 py-2 align-middle whitespace-nowrap text-slate-400">
-                ${formatarData(usuario.criado_em)}
             </td>
             <td class="px-3 py-2 align-middle whitespace-nowrap text-right">
                 <button
@@ -168,6 +257,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const btnToggle = tr.querySelector(".btn-usuario-toggle");
         btnToggle.addEventListener("click", () => {
+            if (usuarioAtualId && usuario.user === usuarioAtualId && !ativo) {
+                return;
+            }
             atualizarAtivoUsuario(usuario.id, !ativo);
         });
 
@@ -193,7 +285,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         })
         .then((data) => {
             if (!data) return;
-            // Recarrega a lista para refletir o novo status
             carregarUsuarios();
             erroBox.classList.add("hidden");
         })
@@ -203,6 +294,151 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
+    function mostrarModal() {
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+    }
+
+    function esconderModal() {
+        modal.classList.add("hidden");
+        modal.classList.remove("flex");
+        form.reset();
+        formErro.classList.add("hidden");
+        formSucesso.classList.add("hidden");
+    }
+
+    function validarFormulario() {
+        const nome = inputNome.value.trim();
+        const email = inputEmail.value.trim();
+        const senha = inputSenha.value;
+        const confirmar = inputConfirmarSenha.value;
+        const tipo = inputTipo.value;
+
+        if (!nome || !email || !senha || !confirmar || !tipo) {
+            return "Preencha todos os campos obrigatórios.";
+        }
+
+        const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        if (!emailValido) {
+            return "Informe um e-mail válido.";
+        }
+
+        if (senha !== confirmar) {
+            return "As senhas não conferem.";
+        }
+
+        if (!oficinaPadrao && !inputOficina.value) {
+            return "Selecione uma oficina.";
+        }
+
+        return null;
+    }
+
+    async function carregarOficinasDisponiveis() {
+        try {
+            const resp = await apiFetch("/api/usuarios-oficina/oficinas-disponiveis/", {
+                method: "GET",
+            });
+            if (!resp.ok) {
+                const t = await resp.text();
+                console.error("Erro ao listar oficinas:", resp.status, t);
+                inputOficina.innerHTML = "<option value=\"\">Nenhuma oficina disponível</option>";
+                return;
+            }
+            const data = await resp.json();
+            if (!Array.isArray(data) || !data.length) {
+                inputOficina.innerHTML = "<option value=\"\">Nenhuma oficina disponível</option>";
+                return;
+            }
+
+            inputOficina.innerHTML = "";
+            data.forEach((oficina) => {
+                const opt = document.createElement("option");
+                opt.value = oficina.id;
+                opt.textContent = oficina.nome;
+                inputOficina.appendChild(opt);
+            });
+
+            if (data.length === 1) {
+                oficinaPadrao = data[0].id;
+                campoOficina.classList.add("hidden");
+            } else {
+                oficinaPadrao = null;
+                const placeholder = document.createElement("option");
+                placeholder.value = "";
+                placeholder.textContent = "Selecione";
+                placeholder.selected = true;
+                placeholder.disabled = true;
+                inputOficina.insertBefore(placeholder, inputOficina.firstChild);
+                campoOficina.classList.remove("hidden");
+            }
+        } catch (err) {
+            console.error("Erro inesperado ao listar oficinas:", err);
+            inputOficina.innerHTML = "<option value=\"\">Nenhuma oficina disponível</option>";
+        }
+    }
+
+    btnNovo.addEventListener("click", async () => {
+        await carregarOficinasDisponiveis();
+        mostrarModal();
+    });
+
+    btnFecharModal.addEventListener("click", esconderModal);
+    btnCancelar.addEventListener("click", esconderModal);
+
+    form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        formErro.classList.add("hidden");
+        formSucesso.classList.add("hidden");
+
+        const erro = validarFormulario();
+        if (erro) {
+            formErro.textContent = erro;
+            formErro.classList.remove("hidden");
+            return;
+        }
+
+        const payload = {
+            nome_completo: inputNome.value.trim(),
+            email: inputEmail.value.trim(),
+            senha: inputSenha.value,
+            confirmar_senha: inputConfirmarSenha.value,
+            papel: inputTipo.value,
+        };
+
+        if (oficinaPadrao) {
+            payload.oficina = oficinaPadrao;
+        } else {
+            payload.oficina = inputOficina.value;
+        }
+
+        try {
+            const resp = await apiFetch("/api/usuarios-oficina/", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: payload,
+            });
+
+            if (!resp.ok) {
+                const data = await resp.json().catch(async () => ({ detail: await resp.text() }));
+                const mensagem = data.detail || data.oficina || "Não foi possível criar o usuário.";
+                formErro.textContent = mensagem;
+                formErro.classList.remove("hidden");
+                return;
+            }
+
+            formSucesso.textContent = "Usuário criado com sucesso.";
+            formSucesso.classList.remove("hidden");
+            carregarUsuarios();
+            form.reset();
+        } catch (err) {
+            console.error("Erro ao criar usuário:", err);
+            formErro.textContent = "Erro inesperado ao criar usuário.";
+            formErro.classList.remove("hidden");
+        }
+    });
+
+    await carregarUsuarioAtual();
     carregarUsuarios();
 });
 </script>

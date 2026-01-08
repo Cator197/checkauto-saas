@@ -7,6 +7,10 @@ from django.utils import timezone
 from django.core.files.base import ContentFile
 from django.urls import reverse
 from rest_framework import serializers
+from django.contrib.auth import password_validation
+from django.contrib.auth.models import User
+from django.core.validators import validate_email
+from django.db import transaction
 from .drive_service import gerar_assinatura_thumb
 from .models import (
     Oficina,
@@ -52,6 +56,10 @@ class OficinaSerializer(serializers.ModelSerializer):
 class UsuarioOficinaSerializer(serializers.ModelSerializer):
     user_nome = serializers.CharField(source='user.get_full_name', read_only=True)
     user_username = serializers.CharField(source='user.username', read_only=True)
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    user_ativo = serializers.BooleanField(source='user.is_active', read_only=True)
+    oficina_nome = serializers.CharField(source='oficina.nome', read_only=True)
+    papel_label = serializers.CharField(source='get_papel_display', read_only=True)
 
     class Meta:
         model = UsuarioOficina
@@ -60,11 +68,80 @@ class UsuarioOficinaSerializer(serializers.ModelSerializer):
             'user',
             'user_nome',
             'user_username',
+            'user_email',
+            'user_ativo',
             'oficina',
+            'oficina_nome',
             'papel',
+            'papel_label',
             'ativo',
             'criado_em',
         ]
+
+
+class UsuarioOficinaCreateSerializer(serializers.Serializer):
+    nome_completo = serializers.CharField(required=True, allow_blank=False)
+    email = serializers.EmailField(required=True)
+    senha = serializers.CharField(write_only=True, required=True)
+    confirmar_senha = serializers.CharField(write_only=True, required=True)
+    papel = serializers.ChoiceField(choices=[("ADMIN", "Admin"), ("FUNC", "Operador")])
+    oficina = serializers.IntegerField(required=False, allow_null=True)
+
+    def validate_email(self, value):
+        email = value.strip().lower()
+        validate_email(email)
+        if User.objects.filter(email__iexact=email).exists():
+            raise serializers.ValidationError("Já existe um usuário cadastrado com este e-mail.")
+        if User.objects.filter(username__iexact=email).exists():
+            raise serializers.ValidationError("Já existe um usuário cadastrado com este login.")
+        return email
+
+    def validate(self, attrs):
+        senha = attrs.get("senha")
+        confirmar = attrs.get("confirmar_senha")
+        if senha != confirmar:
+            raise serializers.ValidationError({"confirmar_senha": "As senhas não conferem."})
+
+        password_validation.validate_password(senha)
+        return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        nome_completo = validated_data["nome_completo"].strip()
+        email = validated_data["email"].strip().lower()
+        senha = validated_data["senha"]
+        papel = validated_data["papel"]
+        oficina = validated_data.pop("oficina", None)
+
+        if oficina is None:
+            raise serializers.ValidationError({"oficina": "Oficina é obrigatória."})
+
+        partes = [parte for parte in nome_completo.split(" ") if parte]
+        primeiro_nome = partes[0] if partes else nome_completo
+        sobrenome = " ".join(partes[1:]) if len(partes) > 1 else ""
+
+        user = User(
+            username=email,
+            email=email,
+            first_name=primeiro_nome,
+            last_name=sobrenome,
+            is_active=True,
+        )
+        user.set_password(senha)
+        user.save()
+
+        usuario_oficina = UsuarioOficina.objects.create(
+            user=user,
+            oficina=oficina,
+            papel=papel,
+            ativo=True,
+        )
+
+        return usuario_oficina
+
+
+class UsuarioOficinaStatusSerializer(serializers.Serializer):
+    ativo = serializers.BooleanField(required=True)
 
 
 class EtapaSerializer(serializers.ModelSerializer):
