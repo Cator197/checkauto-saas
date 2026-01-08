@@ -395,6 +395,18 @@ async function sincronizarItem(item) {
       if (window.checkautoRegistrarFotoOSComoSincronizada && localId) {
         await window.checkautoRegistrarFotoOSComoSincronizada(item.os_id, localId, data);
       }
+      if (typeof window !== "undefined" && window.dispatchEvent) {
+        window.dispatchEvent(
+          new CustomEvent("photoSynced", {
+            detail: {
+              osId: item.os_id,
+              local_id: localId,
+              server_id: data?.id || null,
+              data,
+            },
+          })
+        );
+      }
     }
 
     if (item.type === "AVANCAR_ETAPA") {

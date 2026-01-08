@@ -56,6 +56,47 @@
       font-size: 16px;
       color: #334155;
     }
+    .etapa-header {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      border: 2px solid #1d4ed8;
+      background: linear-gradient(135deg, #eef2ff 0%, #ffffff 60%);
+    }
+    .etapa-header__title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #1e3a8a;
+      letter-spacing: 0.08em;
+    }
+    .etapa-header__current {
+      font-size: 22px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+    .etapa-header__meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 13px;
+      color: #334155;
+    }
+    .etapa-alert {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+    .etapa-ok {
+      background: #dcfce7;
+      color: #15803d;
+    }
     .chip {
       display: inline-flex;
       align-items: center;
@@ -106,6 +147,20 @@
       font-weight: 700;
       background: rgba(15, 23, 42, 0.8);
       color: #fff;
+    }
+    .foto-badge--pending {
+      background: rgba(234, 179, 8, 0.9);
+      color: #1f2937;
+    }
+    .foto-badge--error {
+      background: rgba(220, 38, 38, 0.9);
+    }
+    .foto-error {
+      padding: 8px 10px;
+      font-size: 11px;
+      color: #991b1b;
+      background: #fee2e2;
+      border-top: 1px solid #fecaca;
     }
     textarea {
       width: 100%;
@@ -224,6 +279,15 @@
       <span class="chip" id="osEtapa">Etapa atual: -</span>
     </div>
     <div class="status-box" id="osStatus">Buscando dados locais…</div>
+  </div>
+
+  <div class="card etapa-header" id="etapaHeader">
+    <div class="etapa-header__title">Etapa atual</div>
+    <div class="etapa-header__current" id="etapaAtualNome">-</div>
+    <div class="etapa-header__meta">
+      <span id="etapaObrigatoriasStatus">Obrigatórias: —</span>
+      <span id="etapaProximaNome">Próxima etapa: —</span>
+    </div>
   </div>
 
   <div class="card">
