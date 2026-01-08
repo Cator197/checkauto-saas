@@ -63,7 +63,7 @@ from .permissions import (
     IsOficinaUser,
     IsOSPermission,
 )
-from .utils import get_oficina_do_usuario, get_papel_do_usuario
+from .utils import get_oficina_do_usuario, get_papel_do_usuario, resolve_oficina_atual
 
 logger = logging.getLogger(__name__)
 
@@ -73,18 +73,28 @@ class AuthMeView(APIView):
 
     def get(self, request):
         user = request.user
+        full_name = user.get_full_name().strip()
+
+        oficina, needs_selection = resolve_oficina_atual(user, marcar_se_unica=True)
 
         payload = {
-            "id": user.id,
-            "username": user.username,
-            "full_name": user.get_full_name() or user.username,
+            "user": {
+                "id": user.id,
+                "full_name": full_name or "",
+                "email": user.email or "",
+            },
+            "oficina": {
+                "id": oficina.id,
+                "nome": oficina.nome,
+            }
+            if oficina
+            else None,
         }
 
-        oficina = get_oficina_do_usuario(user)
-        if oficina is not None:
-            payload["oficina_id"] = oficina.id
+        if needs_selection:
+            payload["needs_oficina_selection"] = True
 
-        papel = get_papel_do_usuario(user, getattr(request, "auth", None))
+        papel = get_papel_do_usuario(user, getattr(request, "auth", None), oficina=oficina)
         if papel:
             payload["papel"] = papel
 

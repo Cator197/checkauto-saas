@@ -155,10 +155,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     async function carregarUsuarioAtual() {
         try {
-            const resp = await apiFetch("/api/auth/me/", { method: "GET" });
+            const resp = await apiFetch("/auth/me/", { method: "GET" });
             if (!resp.ok) return;
             const data = await resp.json();
-            usuarioAtualId = data.id;
+            usuarioAtualId = data?.user?.id ?? null;
         } catch (err) {
             console.error("Erro ao carregar usuário atual:", err);
         }

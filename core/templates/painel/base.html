@@ -180,15 +180,19 @@
                     <span>Online</span>
                 </div>
 
-                <!-- Usuário logado (futuro pegar da sessão) -->
-                <div class="flex items-center gap-2">
-                    <div class="text-right hidden sm:block">
-                        <p class="text-xs font-medium text-slate-100">Usuário da Oficina</p>
-                        <p class="text-[11px] text-slate-400">perfil: administrador</p>
+                <!-- Usuário logado -->
+                <div class="flex items-center gap-4">
+                    <div class="text-right">
+                        <p id="painel-user-label" class="text-xs font-medium text-slate-100">👤 —</p>
+                        <p id="painel-oficina-label" class="text-[11px] text-slate-400">🏢 —</p>
                     </div>
-                    <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xs">
-                        <span>U</span>
-                    </div>
+                    <button
+                        id="painel-logout-btn"
+                        class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-700/70 text-xs font-semibold text-slate-100 hover:bg-slate-800/80 transition"
+                        type="button"
+                    >
+                        Sair
+                    </button>
                 </div>
             </div>
         </header>
@@ -206,6 +210,7 @@
 
 <script src="{% static 'shared/api.js' %}"></script>
 <script src="{% static 'painel/js/auth.js' %}"></script>
+<script src="{% static 'painel/js/header.js' %}"></script>
 <script src="{% static 'painel/js/painel.js' %}"></script>
 
 </body>

@@ -1,24 +1,45 @@
 from .models import UsuarioOficina
 
 
+def resolve_oficina_atual(user, marcar_se_unica=False):
+    if not user or not user.is_authenticated:
+        return None, False
+
+    if user.is_superuser:
+        return None, False
+
+    vinculos = (
+        UsuarioOficina.objects.select_related("oficina")
+        .filter(user=user, ativo=True)
+        .order_by("id")
+    )
+
+    if not vinculos.exists():
+        return None, False
+
+    vinculo_atual = vinculos.filter(is_atual=True).first()
+    if vinculo_atual:
+        return vinculo_atual.oficina, False
+
+    if vinculos.count() == 1:
+        unico = vinculos.first()
+        if marcar_se_unica and not unico.is_atual:
+            unico.is_atual = True
+            unico.save(update_fields=["is_atual"])
+        return unico.oficina, False
+
+    primeiro = vinculos.first()
+    return primeiro.oficina if primeiro else None, True
+
+
 def get_oficina_do_usuario(user):
     """
     Retorna a oficina principal do usuário.
     Para superusuário (is_superuser), retornamos None (sem filtro).
     Para usuário sem vínculo, retornamos None (podemos tratar como sem acesso).
     """
-    if not user.is_authenticated:
-        return None
-
-    if user.is_superuser:
-        return None
-
-    usuario_oficina = (
-        UsuarioOficina.objects.select_related("oficina")
-        .filter(user=user, ativo=True)
-        .first()
-    )
-    return usuario_oficina.oficina if usuario_oficina else None
+    oficina, _ = resolve_oficina_atual(user, marcar_se_unica=True)
+    return oficina
 
 
 def get_papel_do_usuario(user, token=None, oficina=None):

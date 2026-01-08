@@ -31,6 +31,7 @@ function clearAuthStorage() {
     localStorage.removeItem("checkauto_refresh");
     // Token legado
     localStorage.removeItem("checkauto_token");
+    localStorage.removeItem("checkauto_me_cache");
 }
 
 function redirectAfterLogout(context) {
