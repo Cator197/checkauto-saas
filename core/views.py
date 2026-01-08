@@ -797,6 +797,7 @@ class FotoOSViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         os_id = self.request.query_params.get("os")
+        etapa_id = self.request.query_params.get("etapa")
         try:
             qs = FotoOS.objects.select_related('os', 'etapa', 'config_foto', 'tirada_por').filter(
                 is_deleted=False,
@@ -814,8 +815,16 @@ class FotoOSViewSet(viewsets.ModelViewSet):
             if os_id:
                 qs = qs.filter(os_id=os_id)
 
-            # 🔹 Ordenação padrão: etapa, data da foto
-            qs = qs.order_by("etapa__ordem", "tirada_em", "id")
+            # 🔹 Filtro por etapa (?etapa=ID)
+            if etapa_id:
+                try:
+                    etapa_id_int = int(etapa_id)
+                except (TypeError, ValueError):
+                    return FotoOS.objects.none()
+                qs = qs.filter(etapa_id=etapa_id_int)
+
+            # 🔹 Ordenação padrão: fotos mais recentes primeiro
+            qs = qs.order_by("-tirada_em", "-id")
 
             return qs
         except Exception:

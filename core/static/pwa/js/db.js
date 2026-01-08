@@ -215,6 +215,23 @@ function normalizarLocalIdFoto(foto) {
   return foto?.local_id || foto?.id || null;
 }
 
+function construirFotosOfflinePorEtapa(fotosLivres = [], fotosObrigatorias = []) {
+  const mapa = {};
+  const inserir = (foto, tipo) => {
+    const etapaId = foto?.etapa_id ?? foto?.etapa ?? null;
+    const chave = etapaId != null ? String(etapaId) : "sem-etapa";
+    if (!mapa[chave]) {
+      mapa[chave] = { livres: [], obrigatorias: [] };
+    }
+    mapa[chave][tipo].push(foto);
+  };
+
+  (fotosLivres || []).forEach((foto) => inserir(foto, "livres"));
+  (fotosObrigatorias || []).forEach((foto) => inserir(foto, "obrigatorias"));
+
+  return mapa;
+}
+
 // Adiciona ou sobrescreve um item na fila de sincronização
 window.checkautoAdicionarFilaSync = async function (item) {
   try {
@@ -701,6 +718,10 @@ window.checkautoRegistrarFotoOSComoSincronizada = async function (
 
       const fotosLivresAtualizadas = removerPorLocalId(fotosLivres);
       const fotosObrigatoriasAtualizadas = removerPorLocalId(fotosObrigatorias);
+      const fotosOfflinePorEtapa = construirFotosOfflinePorEtapa(
+        fotosLivresAtualizadas,
+        fotosObrigatoriasAtualizadas
+      );
 
       const fotosServidor = Array.isArray(item.fotos_livres_servidor)
         ? item.fotos_livres_servidor
@@ -731,6 +752,7 @@ window.checkautoRegistrarFotoOSComoSincronizada = async function (
         ...item,
         fotos_livres_offline: fotosLivresAtualizadas,
         fotos_obrigatorias_offline: fotosObrigatoriasAtualizadas,
+        fotos_offline_por_etapa: fotosOfflinePorEtapa,
         fotos_livres_servidor: fotosServidorAtualizadas,
         ultima_sincronizacao: new Date().toISOString(),
       };
@@ -759,10 +781,18 @@ window.checkautoRemoverFotosOfflineOS = async function (osId, localIds = []) {
       const removerPorLocalId = (lista) =>
         lista.filter((foto) => !idsNormalizados.includes(normalizarLocalIdFoto(foto)));
 
+      const fotosLivresAtualizadas = removerPorLocalId(fotosLivres);
+      const fotosObrigatoriasAtualizadas = removerPorLocalId(fotosObrigatorias);
+      const fotosOfflinePorEtapa = construirFotosOfflinePorEtapa(
+        fotosLivresAtualizadas,
+        fotosObrigatoriasAtualizadas
+      );
+
       return {
         ...item,
-        fotos_livres_offline: removerPorLocalId(fotosLivres),
-        fotos_obrigatorias_offline: removerPorLocalId(fotosObrigatorias),
+        fotos_livres_offline: fotosLivresAtualizadas,
+        fotos_obrigatorias_offline: fotosObrigatoriasAtualizadas,
+        fotos_offline_por_etapa: fotosOfflinePorEtapa,
         ultima_sincronizacao: new Date().toISOString(),
       };
     });
