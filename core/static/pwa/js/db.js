@@ -183,6 +183,7 @@ function normalizarItemFila(item) {
     created_at: item.created_at || new Date().toISOString(),
     tries: typeof item.tries === "number" ? item.tries : 0,
     last_error: item.last_error || null,
+    error_permanent: Boolean(item.error_permanent),
   };
 }
 
@@ -294,6 +295,19 @@ window.checkautoRegistrarErroFilaSync = async function (id, mensagem) {
     ...item,
     tries: (item.tries || 0) + 1,
     last_error: mensagem || "Erro desconhecido",
+    error_permanent: Boolean(item.error_permanent),
+  });
+};
+
+window.checkautoMarcarErroPermanenteFilaSync = async function (id, mensagem) {
+  const item = (await window.checkautoListarFilaSync()).find((i) => i.id === id);
+  if (!item) return null;
+
+  return window.checkautoAdicionarFilaSync({
+    ...item,
+    tries: (item.tries || 0) + 1,
+    last_error: mensagem || "Erro permanente",
+    error_permanent: true,
   });
 };
 
@@ -723,6 +737,37 @@ window.checkautoRegistrarFotoOSComoSincronizada = async function (
     });
   } catch (e) {
     console.error("Falha em checkautoRegistrarFotoOSComoSincronizada:", e);
+    return null;
+  }
+};
+
+window.checkautoRemoverFotosOfflineOS = async function (osId, localIds = []) {
+  if (!osId || !Array.isArray(localIds) || !localIds.length) return null;
+
+  const idsNormalizados = localIds.filter(Boolean);
+  if (!idsNormalizados.length) return null;
+
+  try {
+    return await checkautoUpsertOSProducao(osId, (item) => {
+      const fotosLivres = Array.isArray(item.fotos_livres_offline)
+        ? item.fotos_livres_offline
+        : [];
+      const fotosObrigatorias = Array.isArray(item.fotos_obrigatorias_offline)
+        ? item.fotos_obrigatorias_offline
+        : [];
+
+      const removerPorLocalId = (lista) =>
+        lista.filter((foto) => !idsNormalizados.includes(normalizarLocalIdFoto(foto)));
+
+      return {
+        ...item,
+        fotos_livres_offline: removerPorLocalId(fotosLivres),
+        fotos_obrigatorias_offline: removerPorLocalId(fotosObrigatorias),
+        ultima_sincronizacao: new Date().toISOString(),
+      };
+    });
+  } catch (e) {
+    console.error("Falha em checkautoRemoverFotosOfflineOS:", e);
     return null;
   }
 };
