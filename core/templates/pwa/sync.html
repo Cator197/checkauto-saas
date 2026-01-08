@@ -1,14 +1,9 @@
+{% extends "pwa/base_pwa.html" %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <title>CheckAuto - Sincronização</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <link rel="manifest" href="{% static 'pwa/manifest.json' %}">
-  <meta name="theme-color" content="#0f172a">
+{% block title %}CheckAuto - Sincronização{% endblock %}
 
+{% block head_extra %}
   <style>
     body { font-family: Arial, sans-serif; padding: 20px; background: #f8fafc; }
     a { color: #0f172a; text-decoration: none; }
@@ -107,10 +102,9 @@
       width: 100%;
     }
   </style>
-</head>
+{% endblock %}
 
-<body>
-
+{% block content %}
   <a href="/pwa/" class="back">← Voltar para Home</a>
 
   <h1>Sincronização</h1>
@@ -126,11 +120,8 @@
   <button id="btnSync">Sincronizar agora</button>
 
   <div class="status" id="syncStatus">Aguardando ação do usuário…</div>
+{% endblock %}
 
-  <script src="{% static 'shared/api.js' %}"></script>
-  <script src="{% static 'pwa/js/api.js' %}"></script>
-  <script src="{% static 'pwa/js/db.js' %}"></script>
+{% block scripts %}
   <script src="{% static 'pwa/js/sync.js' %}"></script>
-
-</body>
-</html>
+{% endblock %}

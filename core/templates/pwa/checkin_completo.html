@@ -1,14 +1,9 @@
+{% extends "pwa/base_pwa.html" %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <title>CheckAuto - Check-in Completo</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <link rel="manifest" href="{% static 'pwa/manifest.json' %}">
-  <meta name="theme-color" content="#0f172a">
+{% block title %}CheckAuto - Check-in Completo{% endblock %}
 
+{% block head_extra %}
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -31,6 +26,12 @@
       margin-top: 20px;
       margin-bottom: 8px;
     }
+    .section {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 8px;
+      background: #f5f5f5;
+    }
     .field {
       margin-bottom: 10px;
     }
@@ -48,14 +49,8 @@
       box-sizing: border-box;
     }
     textarea {
-      min-height: 70px;
+      min-height: 60px;
       resize: vertical;
-    }
-    .section {
-      margin-top: 10px;
-      padding: 10px;
-      border-radius: 8px;
-      background: #f5f5f5;
     }
     .lista-fotos {
       display: flex;
@@ -106,38 +101,18 @@
       color: green;
     }
   </style>
-</head>
-<body>
+{% endblock %}
 
+{% block content %}
   <a href="/pwa/" class="back">← Voltar para Home</a>
 
   <h1>Check-in Completo</h1>
-  <p>Preencha os dados do cliente, veículo e observações. As fotos serão adicionadas na próxima etapa.</p>
+  <p>Faça o check-in completo com identificação do veículo e fotos.</p>
 
   <form id="formCheckinCompleto">
-    <!-- DADOS DO CLIENTE -->
-    <div class="section">
-      <h2>Dados do Cliente</h2>
-
-      <div class="field">
-        <label for="clienteNome">Nome do cliente</label>
-        <input id="clienteNome" name="clienteNome" type="text" required>
-      </div>
-
-      <div class="field">
-        <label for="clienteTelefone">Telefone (WhatsApp)</label>
-        <input id="clienteTelefone" name="clienteTelefone" type="tel">
-      </div>
-
-      <div class="field">
-        <label for="clienteEmail">E-mail</label>
-        <input id="clienteEmail" name="clienteEmail" type="email">
-      </div>
-    </div>
-
     <!-- DADOS DO VEÍCULO -->
     <div class="section">
-      <h2>Dados do Veículo</h2>
+      <h2>Identificação do Veículo</h2>
 
       <div class="field">
         <label for="veiculoPlaca">Placa</label>
@@ -150,64 +125,35 @@
       </div>
 
       <div class="field">
-        <label for="veiculoCor">Cor</label>
-        <input id="veiculoCor" name="veiculoCor" type="text">
-      </div>
-
-      <div class="field">
-        <label for="veiculoAno">Ano</label>
-        <input id="veiculoAno" name="veiculoAno" type="number" min="1900" max="2100">
-      </div>
-
-      <div class="field">
-        <label for="veiculoKm">KM na entrada</label>
-        <input id="veiculoKm" name="veiculoKm" type="number" min="0">
-      </div>
-    </div>
-
-    <!-- INFORMAÇÕES DA OS -->
-    <div class="section">
-      <h2>Informações da OS</h2>
-
-      <div class="field">
         <label for="osNumero">Número interno da OS (opcional)</label>
         <input id="osNumero" name="osNumero" type="text">
       </div>
+    </div>
+
+    <!-- OBSERVAÇÕES -->
+    <div class="section">
+      <h2>Observações (opcional)</h2>
 
       <div class="field">
-        <label for="etapaInicial">Etapa inicial</label>
-        <!-- Por enquanto estático; depois vamos buscar as etapas via API -->
-        <select id="etapaInicial" name="etapaInicial">
-          <option value="entrada">Entrada</option>
-          <option value="funilaria">Funilaria</option>
-          <option value="pintura">Pintura</option>
-          <option value="acabamento">Acabamento</option>
-        </select>
-      </div>
-
-      <div class="field">
-        <label for="observacoes">Observações gerais</label>
+        <label for="observacoes">Observações rápidas</label>
         <textarea id="observacoes" name="observacoes"></textarea>
       </div>
     </div>
 
-
     <!-- FOTOS -->
     <div class="section">
-      <h2>Fotos do Check-in</h2>
+      <h2>Fotos do Veículo</h2>
 
-      <!-- FOTOS PADRÃO -->
       <div>
         <strong>Fotos padrão</strong>
         <p style="font-size:13px; margin-top:4px;">
-          Ex.: frente, traseira, laterais, interior. (Depois vamos ligar com a configuração da oficina.)
+          Ex.: frente, traseira, laterais, interior.
         </p>
         <button type="button" id="btnAddFotoPadrao">Adicionar foto padrão</button>
         <input id="inputFotoPadrao" type="file" accept="image/*" capture="environment" style="display:none">
         <div id="listaFotosPadrao" class="lista-fotos"></div>
       </div>
 
-      <!-- FOTOS LIVRES -->
       <div style="margin-top:12px;">
         <strong>Fotos livres</strong>
         <p style="font-size:13px; margin-top:4px;">
@@ -219,18 +165,13 @@
       </div>
     </div>
 
-
-    <button type="submit">Salvar Check-in (Pendência offline)</button>
+    <button type="submit">Salvar Check-in Completo (Pendência offline)</button>
 
     <div id="msgRetorno" class="msg" style="display:none;"></div>
   </form>
+{% endblock %}
 
-  <script src="{% static 'shared/api.js' %}"></script>
-  <script src="{% static 'pwa/js/api.js' %}"></script>
-  <script src="{% static 'pwa/js/db.js' %}"></script>
-  <script src="{% static 'pwa/js/app.js' %}"></script>
+{% block scripts %}
   <script src="{% static 'pwa/js/fotos_module.js' %}"></script>
   <script src="{% static 'pwa/js/checkin_completo.js' %}"></script>
-</body>
-</html>
-
+{% endblock %}

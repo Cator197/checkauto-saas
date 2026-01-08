@@ -18,6 +18,8 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.contrib.staticfiles import finders
+from django.http import Http404, HttpResponse
 from django.shortcuts import render
 from django.views.generic import RedirectView, TemplateView
 from core.authentication import CustomTokenObtainPairView
@@ -47,6 +49,20 @@ def pwa_veiculos_em_producao(request):
 
 def pwa_os_producao(request, os_id):
     return render(request, "pwa/os_producao.html", {"os_id": os_id})
+
+
+def pwa_service_worker(request):
+    sw_path = finders.find("pwa/service-worker.js")
+    if not sw_path:
+        raise Http404("Service worker não encontrado.")
+    with open(sw_path, "rb") as sw_file:
+        content = sw_file.read()
+    response = HttpResponse(
+        content,
+        content_type="application/javascript; charset=utf-8",
+    )
+    response["Cache-Control"] = "no-cache"
+    return response
 
 
 def painel_dashboard(request):
@@ -88,6 +104,7 @@ urlpatterns = [
     path('pwa/', pwa_home, name='pwa_home'),
     path('pwa/checkin-completo/', pwa_checkin_completo, name='pwa_checkin_completo'),
     path('pwa/checkin-fotos/', pwa_checkin_fotos, name='pwa_checkin_fotos'),
+    path('pwa/service-worker.js', pwa_service_worker, name='pwa_service_worker'),
     path('pwa/sync/', pwa_sync, name='pwa_sync'),
     path('pwa/veiculos-em-producao/', pwa_veiculos_em_producao, name='pwa_veiculos_em_producao'),
     path('pwa/os/<int:os_id>/', pwa_os_producao, name='pwa_os_producao'),

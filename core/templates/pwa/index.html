@@ -1,17 +1,9 @@
+{% extends "pwa/base_pwa.html" %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8" />
-  <title>CheckAuto - Home</title>
 
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+{% block title %}CheckAuto - Home{% endblock %}
 
-  <!-- Manifest -->
-  <link rel="manifest" href="{% static 'pwa/manifest.json' %}">
-
-  <meta name="theme-color" content="#0f172a" />
-
+{% block head_extra %}
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -39,10 +31,9 @@
       border-left: 4px solid #0f172a;
     }
   </style>
-</head>
+{% endblock %}
 
-<body>
-
+{% block content %}
   <h1>CheckAuto</h1>
   <p>Escolha uma ação:</p>
 
@@ -56,11 +47,4 @@
     OS pendentes: <span id="osPendentes">0</span><br>
     Fotos pendentes: <span id="fotosPendentes">0</span>
   </div>
-
-  <script src="{% static 'shared/api.js' %}"></script>
-  <script src="{% static 'pwa/js/api.js' %}"></script>
-  <script src="{% static 'pwa/js/db.js' %}"></script>
-  <script src="{% static 'pwa/js/app.js' %}"></script>
-
-</body>
-</html>
+{% endblock %}
