@@ -22,6 +22,9 @@ function formatarTipo(tipo) {
 }
 
 function statusInicial(item) {
+  if (item.error_permanent) {
+    return { texto: "erro_permanente", detalhe: item.last_error };
+  }
   if (item.last_error) {
     return { texto: "erro", detalhe: item.last_error };
   }
@@ -200,6 +203,52 @@ async function limparAvancosDuplicados(osId, manterId = null) {
   }
 }
 
+function extrairIdsFotosPendentes(item) {
+  if (!item) return [];
+
+  if (item.type === "POST_FOTO_OS") {
+    return item.payload?.local_id ? [item.payload.local_id] : [];
+  }
+
+  if (item.type === "AVANCAR_ETAPA") {
+    const fotos = Array.isArray(item.payload?.fotos) ? item.payload.fotos : [];
+    return fotos
+      .map((foto) => foto?.local_id || foto?.id)
+      .filter((id) => id !== undefined && id !== null);
+  }
+
+  return [];
+}
+
+function erroPermanenteParaItem(item, status) {
+  const tiposPermanentes = ["PATCH_OS", "AVANCAR_ETAPA", "UPSERT_OBSERVACAO", "POST_FOTO_OS"];
+  return tiposPermanentes.includes(item.type) && (status === 404 || status === 410);
+}
+
+async function removerItemPermanente(item) {
+  if (!item) return;
+
+  if (item.type === "SYNC_OS") {
+    if (window.checkautoRemoverOSPendente) {
+      await window.checkautoRemoverOSPendente(item.os_local_id);
+    }
+    return;
+  }
+
+  const fotosParaLimpar = extrairIdsFotosPendentes(item);
+  if (fotosParaLimpar.length && window.checkautoRemoverFotosOfflineOS) {
+    await window.checkautoRemoverFotosOfflineOS(item.os_id, fotosParaLimpar);
+  }
+
+  if (window.checkautoRemoverItemFilaSync) {
+    await window.checkautoRemoverItemFilaSync(item.id);
+  }
+
+  if (window.checkautoRemoverOperacaoProducao) {
+    await window.checkautoRemoverOperacaoProducao(item.os_id, item.id);
+  }
+}
+
 async function sincronizarItem(item) {
   try {
     let resp = null;
@@ -307,6 +356,14 @@ async function sincronizarItem(item) {
       if (item.type === "SYNC_OS") {
         await registrarErroOSPendente(item.os_local_id, texto);
       } else {
+        if (erroPermanenteParaItem(item, resp.status)) {
+          if (window.checkautoMarcarErroPermanenteFilaSync) {
+            await window.checkautoMarcarErroPermanenteFilaSync(item.id, texto);
+          } else {
+            await window.checkautoRegistrarErroFilaSync(item.id, texto);
+          }
+          return { ok: false, mensagem: texto, error_permanent: true };
+        }
         await window.checkautoRegistrarErroFilaSync(item.id, texto);
       }
       return { ok: false, mensagem: texto };
@@ -417,6 +474,8 @@ function renderPendencias(lista) {
             ? "Pendente"
             : status.texto === "processando"
               ? "Processando"
+              : status.texto === "erro_permanente"
+                ? "Erro permanente"
               : status.texto === "erro"
                 ? `Erro` + (status.detalhe ? ` (${status.detalhe})` : "")
                 : "Sincronizado"
@@ -428,6 +487,25 @@ function renderPendencias(lista) {
       }</div>
       <div class="os-meta">Tentativas: ${item.tries || 0}</div>
     `;
+
+    if (item.error_permanent) {
+      const actions = document.createElement("div");
+      actions.className = "os-actions";
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn-excluir";
+      button.textContent = "Excluir";
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        await removerItemPermanente(item);
+        delete statusPendencias[item.id];
+        await carregarPendencias();
+      });
+
+      actions.appendChild(button);
+      div.appendChild(actions);
+    }
 
     listaDiv.appendChild(div);
   });
@@ -449,6 +527,7 @@ async function carregarPendencias() {
     created_at: os.criadoEm || os.created_at,
     tries: os.tries || 0,
     last_error: os.last_error || null,
+    error_permanent: false,
   }));
 
   const itens = [...itensOsPendentes, ...fila];
@@ -505,7 +584,9 @@ async function processarFilaSync() {
       const resultado = await sincronizarItem(item);
       statusPendencias[item.id] = resultado.ok
         ? { texto: "sincronizado" }
-        : { texto: "erro", detalhe: resultado.mensagem };
+        : resultado.error_permanent
+          ? { texto: "erro_permanente", detalhe: resultado.mensagem }
+          : { texto: "erro", detalhe: resultado.mensagem };
 
       renderPendencias(await carregarPendencias());
     }
