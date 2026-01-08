@@ -52,9 +52,10 @@ function normalizarFotoOSPendente(foto) {
   if (!dataUrl) return null;
 
   const extensao = (extrairExtensaoFoto(foto) || "jpg").toLowerCase();
+  const localId = foto.local_id || foto.id;
 
   const normalizada = {
-    local_id: foto.id,
+    local_id: localId,
     nome: foto.nome || undefined,
     dataUrl,
     arquivo: foto.arquivo,
@@ -211,6 +212,14 @@ async function sincronizarItem(item) {
         body: item.payload,
       });
     } else if (item.type === "POST_FOTO_OS") {
+      if (item.payload?.status_sync === "synced") {
+        await window.checkautoRemoverItemFilaSync(item.id);
+        if (window.checkautoRemoverOperacaoProducao) {
+          await window.checkautoRemoverOperacaoProducao(item.os_id, item.id);
+        }
+        return { ok: true, mensagem: "Foto já sincronizada", data: null };
+      }
+
       const arquivo = dataUrlParaArquivo(
         item.payload?.dataUrl,
         `foto-os-${item.os_id}-${Date.now()}.jpg`
@@ -227,6 +236,9 @@ async function sincronizarItem(item) {
       }
       if (item.payload?.config_foto_id) {
         formData.append("config_foto", item.payload.config_foto_id);
+      }
+      if (item.payload?.local_id) {
+        formData.append("local_id", item.payload.local_id);
       }
       formData.append("arquivo", arquivo);
 
@@ -314,6 +326,17 @@ async function sincronizarItem(item) {
       await window.checkautoRemoverItemFilaSync(item.id);
       if (window.checkautoRemoverOperacaoProducao) {
         await window.checkautoRemoverOperacaoProducao(item.os_id, item.id);
+      }
+    }
+
+    if (item.type === "POST_FOTO_OS") {
+      const localId = item.payload?.local_id;
+      const resultado = resp.status === 200 ? "reused" : "created";
+      console.info(
+        `[SYNC] Foto OS local_id=${localId || "sem-id"} resultado=${resultado}`
+      );
+      if (window.checkautoRegistrarFotoOSComoSincronizada && localId) {
+        await window.checkautoRegistrarFotoOSComoSincronizada(item.os_id, localId, data);
       }
     }
 

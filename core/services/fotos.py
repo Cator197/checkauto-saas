@@ -106,6 +106,7 @@ def criar_foto_os(
             arquivo=arquivo,
             titulo=foto.get("nome") or None,
             tirada_por=usuario_oficina,
+            local_id=foto.get("local_id") or foto.get("id"),
         )
     except Exception as e:
         message = f"[SYNC] Falha ao criar FotoOS: {e}"

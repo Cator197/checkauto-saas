@@ -428,6 +428,7 @@ class FotoOSSerializer(serializers.ModelSerializer):
             'config_foto',
             'config_foto_nome',
             'arquivo',
+            'local_id',
             'drive_file_id',  # <-- adicionar aqui
             'thumb_url',
             'drive_thumb_url',
@@ -446,6 +447,7 @@ class FotoOSSerializer(serializers.ModelSerializer):
             'etapa': {'required': False, 'allow_null': True},
             'tipo': {'required': False},
             'is_indisponivel': {'required': False},
+            'local_id': {'required': False, 'allow_null': True},
         }
 
     def get_oficina(self, obj):

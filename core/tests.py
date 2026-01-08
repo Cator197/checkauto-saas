@@ -312,3 +312,80 @@ class AvancarEtapaTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.os.refresh_from_db()
         self.assertEqual(self.os.etapa_atual, self.etapa_atual)
+
+
+class FotoOSIdempotencyTests(APITestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._media_root = tempfile.mkdtemp()
+        cls._override_media = override_settings(MEDIA_ROOT=cls._media_root)
+        cls._override_media.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._override_media.disable()
+        shutil.rmtree(cls._media_root, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="user-foto", password="pass")
+        self.oficina = Oficina.objects.create(nome="Oficina Foto")
+        self.usuario_oficina = UsuarioOficina.objects.create(
+            user=self.user,
+            oficina=self.oficina,
+            papel="GERENTE",
+            ativo=True,
+        )
+        self.etapa = Etapa.objects.create(
+            oficina=self.oficina,
+            nome="Check-in",
+            ordem=1,
+            is_checkin=True,
+        )
+        self.os_obj = OS.objects.create(
+            oficina=self.oficina,
+            codigo="OS-FOTO",
+            etapa_atual=self.etapa,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+        self.url = reverse("fotoos-list")
+
+    def test_post_foto_os_idempotente_por_local_id(self):
+        local_id = "8b9a0b61-0f62-4d95-9e52-cc1b908b6b26"
+        arquivo = SimpleUploadedFile(
+            "foto.jpg",
+            b"conteudo",
+            content_type="image/jpeg",
+        )
+
+        payload = {
+            "os": self.os_obj.id,
+            "etapa": self.etapa.id,
+            "tipo": "LIVRE",
+            "local_id": local_id,
+            "arquivo": arquivo,
+        }
+
+        response1 = self.client.post(self.url, payload, format="multipart")
+        self.assertEqual(response1.status_code, 201)
+        foto_id = response1.data["id"]
+
+        arquivo2 = SimpleUploadedFile(
+            "foto.jpg",
+            b"conteudo",
+            content_type="image/jpeg",
+        )
+        payload2 = {
+            "os": self.os_obj.id,
+            "etapa": self.etapa.id,
+            "tipo": "LIVRE",
+            "local_id": local_id,
+            "arquivo": arquivo2,
+        }
+        response2 = self.client.post(self.url, payload2, format="multipart")
+
+        self.assertEqual(response2.status_code, 200)
+        self.assertEqual(response2.data["id"], foto_id)
+        self.assertEqual(FotoOS.objects.count(), 1)

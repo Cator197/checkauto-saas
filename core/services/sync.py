@@ -321,6 +321,8 @@ class SyncService:
     def _assinaturas_fotos_existentes(self, os_obj: OS) -> set:
         assinaturas = set()
         for foto in FotoOS.objects.filter(os=os_obj):
+            if foto.local_id:
+                assinaturas.add(("local_id", str(foto.local_id)))
             if foto.arquivo and hasattr(foto.arquivo, "open"):
                 try:
                     with foto.arquivo.open("rb") as fp:

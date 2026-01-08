@@ -768,6 +768,32 @@ class FotoOSViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsFotoOSPermission]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
+    def create(self, request, *args, **kwargs):
+        local_id = request.data.get("local_id")
+        if local_id:
+            user = request.user
+            oficina = get_oficina_do_usuario(user)
+            qs = FotoOS.objects.select_related("os", "etapa", "config_foto", "tirada_por").filter(
+                local_id=local_id
+            )
+            if oficina and not user.is_superuser:
+                qs = qs.filter(os__oficina=oficina)
+            existente = qs.first()
+            if existente:
+                serializer = self.get_serializer(existente)
+                logger.info(
+                    "FotoOS reutilizada por local_id",
+                    extra={
+                        "foto_id": existente.id,
+                        "local_id": local_id,
+                        "os_id": existente.os_id,
+                        "oficina_id": existente.os.oficina_id,
+                    },
+                )
+                return Response(serializer.data, status=status.HTTP_200_OK)
+
+        return super().create(request, *args, **kwargs)
+
     def get_queryset(self):
         user = self.request.user
         os_id = self.request.query_params.get("os")
@@ -812,6 +838,17 @@ class FotoOSViewSet(viewsets.ModelViewSet):
 
         # salva a foto corretamente
         foto = serializer.save(tirada_por=usuario_oficina)
+
+        if foto.local_id:
+            logger.info(
+                "FotoOS criada",
+                extra={
+                    "foto_id": foto.id,
+                    "local_id": foto.local_id,
+                    "os_id": foto.os_id,
+                    "oficina_id": foto.os.oficina_id,
+                },
+            )
 
         # tenta subir pro drive
         try:
