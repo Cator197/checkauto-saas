@@ -5,6 +5,18 @@ let fotosPadrao = [];
 let fotosLivres = [];
 let fotoIdCounter = 1;
 
+function gerarLocalId() {
+  if (window.crypto && typeof window.crypto.randomUUID === "function") {
+    return window.crypto.randomUUID();
+  }
+
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+    const rand = Math.random() * 16;
+    const value = char === "x" ? rand : (rand & 0x3) | 0x8;
+    return Math.floor(value).toString(16);
+  });
+}
+
 // Expor para outros scripts (checkins)
 window.checkautoFotosPadrao = fotosPadrao;
 window.checkautoFotosLivres = fotosLivres;
@@ -70,11 +82,15 @@ function handleFileSelection(input, tipoLista) {
 
       const fotoObj = {
         id: fotoIdCounter++,
+        local_id: gerarLocalId(),
         nome: file.name,
-        tipo: tipoLista,
+        tipo: tipoLista === "padrao" ? "PADRAO" : "LIVRE",
         dataUrl: dataUrl,
         tamanhoBytes: file.size,
         criadoEm: new Date().toISOString(),
+        etapa_id: null,
+        config_foto_id: null,
+        status_sync: "pending",
       };
 
       if (tipoLista === "padrao") {

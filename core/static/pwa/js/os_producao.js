@@ -83,6 +83,18 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   };
 
+  function gerarLocalId() {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+      return window.crypto.randomUUID();
+    }
+
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+      const rand = Math.random() * 16;
+      const value = char === "x" ? rand : (rand & 0x3) | 0x8;
+      return Math.floor(value).toString(16);
+    });
+  }
+
   function coletarMetadadosFotosPendentes() {
     const livres = Array.isArray(state.fotos_livres_offline)
       ? state.fotos_livres_offline
@@ -92,15 +104,56 @@ document.addEventListener("DOMContentLoaded", () => {
       : [];
 
     return [...livres, ...obrigatorias].map((foto) => ({
-      id: foto.id,
+      id: foto.local_id || foto.id,
+      local_id: foto.local_id || foto.id,
       origem: foto.origem,
       etapa_id: foto.etapa_id,
       tipo: foto.tipo,
       dataUrl: foto.dataUrl || null,
+      status_sync: foto.status_sync,
     }));
   }
 
   async function aoSincronizarItem(item, data) {
+    if (item.type === "POST_FOTO_OS") {
+      const fotosLivres = Array.isArray(state.fotos_livres_offline)
+        ? state.fotos_livres_offline
+        : [];
+      const fotosObrigatorias = Array.isArray(state.fotos_obrigatorias_offline)
+        ? state.fotos_obrigatorias_offline
+        : [];
+      const localId = item.payload?.local_id;
+      const fotosServidor = Array.isArray(state.fotos_livres_servidor)
+        ? state.fotos_livres_servidor
+        : [];
+      const fotoServidor = data
+        ? {
+            id: data.id,
+            origem: "servidor",
+            thumb_url: data.thumb_url || data.drive_thumb_url || data.drive_url,
+            etapa_id: data.etapa || data.etapa_id,
+            config_foto: data.config_foto,
+            config_foto_id: data.config_foto_id,
+          }
+        : null;
+
+      state = {
+        ...state,
+        fotos_livres_offline: fotosLivres.filter(
+          (foto) => (foto.local_id || foto.id) !== localId
+        ),
+        fotos_obrigatorias_offline: fotosObrigatorias.filter(
+          (foto) => (foto.local_id || foto.id) !== localId
+        ),
+        fotos_livres_servidor: fotoServidor
+          ? [...fotosServidor.filter((foto) => foto.id !== fotoServidor.id), fotoServidor]
+          : fotosServidor,
+      };
+
+      renderFotosLivres();
+      return;
+    }
+
     if (item.type !== "AVANCAR_ETAPA") return;
 
     const etapaNormalizada = normalizarEtapaLocal({
@@ -416,10 +469,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const dataUrl = ev.target.result;
         const fotoObj = {
           id: `local-${Date.now()}-${Math.random()}`,
+          local_id: gerarLocalId(),
           origem: "offline",
           dataUrl,
           etapa_id: state.etapa_atual?.id,
           tipo: "LIVRE",
+          status_sync: "pending",
         };
 
         state.fotos_livres_offline = [...(state.fotos_livres_offline || []), fotoObj];
@@ -437,6 +492,8 @@ document.addEventListener("DOMContentLoaded", () => {
               dataUrl,
               etapa_id: state.etapa_atual?.id,
               tipo: "LIVRE",
+              local_id: fotoObj.local_id,
+              status_sync: fotoObj.status_sync,
             },
             { pendente_sync: true }
           );

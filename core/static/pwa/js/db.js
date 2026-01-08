@@ -210,6 +210,10 @@ function normalizarIdEtapa(etapa) {
   return numero;
 }
 
+function normalizarLocalIdFoto(foto) {
+  return foto?.local_id || foto?.id || null;
+}
+
 // Adiciona ou sobrescreve um item na fila de sincronização
 window.checkautoAdicionarFilaSync = async function (item) {
   try {
@@ -658,6 +662,67 @@ window.checkautoAplicarEtapaOS = async function (osId, etapa) {
     return atualizado;
   } catch (e) {
     console.error("Falha em checkautoAplicarEtapaOS:", e);
+    return null;
+  }
+};
+
+window.checkautoRegistrarFotoOSComoSincronizada = async function (
+  osId,
+  localId,
+  fotoServidor = null
+) {
+  if (!localId) return null;
+
+  try {
+    return await checkautoUpsertOSProducao(osId, (item) => {
+      const fotosLivres = Array.isArray(item.fotos_livres_offline)
+        ? item.fotos_livres_offline
+        : [];
+      const fotosObrigatorias = Array.isArray(item.fotos_obrigatorias_offline)
+        ? item.fotos_obrigatorias_offline
+        : [];
+
+      const removerPorLocalId = (lista) =>
+        lista.filter((foto) => normalizarLocalIdFoto(foto) !== localId);
+
+      const fotosLivresAtualizadas = removerPorLocalId(fotosLivres);
+      const fotosObrigatoriasAtualizadas = removerPorLocalId(fotosObrigatorias);
+
+      const fotosServidor = Array.isArray(item.fotos_livres_servidor)
+        ? item.fotos_livres_servidor
+        : [];
+      const fotoServidorNormalizada = fotoServidor
+        ? {
+            id: fotoServidor.id,
+            origem: "servidor",
+            thumb_url:
+              fotoServidor.thumb_url ||
+              fotoServidor.drive_thumb_url ||
+              fotoServidor.drive_url,
+            etapa_id: fotoServidor.etapa || fotoServidor.etapa_id,
+            config_foto: fotoServidor.config_foto,
+            config_foto_id: fotoServidor.config_foto_id,
+            status_sync: "synced",
+          }
+        : null;
+
+      const fotosServidorAtualizadas = fotoServidorNormalizada
+        ? [
+            ...fotosServidor.filter((foto) => foto.id !== fotoServidorNormalizada.id),
+            fotoServidorNormalizada,
+          ]
+        : fotosServidor;
+
+      return {
+        ...item,
+        fotos_livres_offline: fotosLivresAtualizadas,
+        fotos_obrigatorias_offline: fotosObrigatoriasAtualizadas,
+        fotos_livres_servidor: fotosServidorAtualizadas,
+        ultima_sincronizacao: new Date().toISOString(),
+      };
+    });
+  } catch (e) {
+    console.error("Falha em checkautoRegistrarFotoOSComoSincronizada:", e);
     return null;
   }
 };

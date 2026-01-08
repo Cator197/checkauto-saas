@@ -234,6 +234,14 @@ class FotoOS(models.Model):
         help_text="Caminho/arquivo da foto. No futuro pode ser apenas um link externo."
     )
 
+    local_id = models.CharField(
+        max_length=36,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="UUID local do PWA para garantir idempotência no sync.",
+    )
+
     drive_file_id = models.CharField(
         max_length=255,
         blank=True,
