@@ -5,8 +5,8 @@ from datetime import date, timedelta
 
 from django.conf import settings
 from django.db import transaction
-from django.http import FileResponse, Http404, HttpResponse
 from django.db.models import Q
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone
@@ -52,7 +52,9 @@ from .serializers import (
     OSSerializer,
     OficinaSerializer,
     PwaVeiculoEmProducaoSerializer,
+    UsuarioOficinaCreateSerializer,
     UsuarioOficinaSerializer,
+    UsuarioOficinaStatusSerializer,
 )
 from .permissions import (
     IsFotoOSPermission,
@@ -112,17 +114,117 @@ class UsuarioOficinaViewSet(viewsets.ModelViewSet):
     serializer_class = UsuarioOficinaSerializer
     permission_classes = [IsAuthenticated, IsOficinaAdminOrReadOnly]
 
+    def get_permissions(self):
+        if self.action in {"list", "retrieve"}:
+            return [IsAuthenticated(), IsOficinaUser()]
+        return [IsAuthenticated()]
+
     def get_queryset(self):
         user = self.request.user
 
         if user.is_superuser:
             return UsuarioOficina.objects.select_related('user', 'oficina').all()
 
-        oficina = get_oficina_do_usuario(user)
-        if oficina is None:
+        oficina_ids = (
+            UsuarioOficina.objects.filter(user=user, ativo=True)
+            .values_list("oficina_id", flat=True)
+        )
+        if not oficina_ids:
             return UsuarioOficina.objects.none()
 
-        return UsuarioOficina.objects.select_related('user', 'oficina').filter(oficina=oficina)
+        return UsuarioOficina.objects.select_related('user', 'oficina').filter(
+            oficina_id__in=list(oficina_ids)
+        )
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return UsuarioOficinaCreateSerializer
+        if self.action == "partial_update":
+            return UsuarioOficinaStatusSerializer
+        return UsuarioOficinaSerializer
+
+    def _get_admin_oficinas(self, user):
+        if user.is_superuser:
+            return Oficina.objects.all()
+
+        return Oficina.objects.filter(
+            usuarios__user=user,
+            usuarios__ativo=True,
+            usuarios__papel__in=IsOficinaAdmin.allowed_roles,
+        ).distinct()
+
+    def create(self, request, *args, **kwargs):
+        user = request.user
+
+        admin_oficinas = self._get_admin_oficinas(user)
+        if not admin_oficinas.exists():
+            return Response(
+                {"detail": "Apenas administradores podem criar usuários."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        oficina_id = request.data.get("oficina")
+
+        if oficina_id:
+            try:
+                oficina = admin_oficinas.get(id=oficina_id)
+            except Oficina.DoesNotExist:
+                return Response(
+                    {"oficina": "Oficina inválida ou sem permissão para esta ação."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            if admin_oficinas.count() == 1:
+                oficina = admin_oficinas.first()
+            else:
+                return Response(
+                    {"oficina": "Selecione uma oficina para o novo usuário."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        usuario_oficina = serializer.save(oficina=oficina)
+        data = UsuarioOficinaSerializer(usuario_oficina).data
+        return Response(data, status=status.HTTP_201_CREATED)
+
+    def partial_update(self, request, *args, **kwargs):
+        usuario_oficina = self.get_object()
+        admin_oficinas = self._get_admin_oficinas(request.user)
+
+        if not request.user.is_superuser and not admin_oficinas.filter(
+            id=usuario_oficina.oficina_id
+        ).exists():
+            return Response(
+                {"detail": "Sem permissão para alterar usuários desta oficina."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        status_serializer = self.get_serializer(data=request.data)
+        status_serializer.is_valid(raise_exception=True)
+        novo_status = status_serializer.validated_data["ativo"]
+
+        if usuario_oficina.user_id == request.user.id and not novo_status:
+            return Response(
+                {"detail": "Você não pode desativar o próprio usuário."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        usuario_oficina.ativo = novo_status
+        usuario_oficina.save(update_fields=["ativo"])
+
+        usuario_oficina.user.is_active = novo_status
+        usuario_oficina.user.save(update_fields=["is_active"])
+
+        data = UsuarioOficinaSerializer(usuario_oficina).data
+        return Response(data)
+
+    @action(detail=False, methods=["get"], url_path="oficinas-disponiveis")
+    def oficinas_disponiveis(self, request):
+        oficinas = self._get_admin_oficinas(request.user)
+        serializer = OficinaSerializer(oficinas, many=True)
+        return Response(serializer.data)
 
 
 class EtapaViewSet(viewsets.ModelViewSet):
