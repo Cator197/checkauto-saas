@@ -1,334 +1,123 @@
+{% extends "pwa/base_pwa.html" %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8" />
-  <title>Produção do Veículo</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="manifest" href="{% static 'pwa/manifest.json' %}">
-  <meta name="theme-color" content="#0f172a" />
+
+{% block title %}CheckAuto - OS em Produção{% endblock %}
+
+{% block head_extra %}
   <style>
-    :root {
-      color-scheme: light;
-    }
     body {
-      font-family: "Inter", Arial, sans-serif;
+      font-family: Arial, sans-serif;
       padding: 16px;
-      margin: 0;
-      background: #f8fafc;
-      color: #0f172a;
+      max-width: 800px;
+      margin: 0 auto;
     }
-    .top-bar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
+    h1 {
+      margin-top: 0;
       margin-bottom: 12px;
     }
-    .top-bar a {
+    h2 {
+      margin-bottom: 8px;
+    }
+    .back {
+      display: inline-block;
+      margin-bottom: 16px;
       text-decoration: none;
-      color: #2563eb;
-      font-weight: 600;
-    }
-    .card {
-      background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
-      padding: 16px;
-      margin-bottom: 14px;
-      border: 1px solid #e2e8f0;
-    }
-    .header {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .header .codigo {
-      font-size: 14px;
-      font-weight: 600;
-      color: #475569;
-    }
-    .header .titulo {
-      font-size: 20px;
-      font-weight: 700;
       color: #0f172a;
     }
-    .header .placa {
-      font-size: 16px;
-      color: #334155;
+    .info {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .etapa {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      background: #fff;
     }
     .etapa-header {
       display: flex;
-      flex-direction: column;
-      gap: 10px;
-      border: 2px solid #1d4ed8;
-      background: linear-gradient(135deg, #eef2ff 0%, #ffffff 60%);
+      justify-content: space-between;
+      align-items: center;
     }
-    .etapa-header__title {
+    .etapa-status {
+      padding: 2px 8px;
+      border-radius: 999px;
       font-size: 12px;
       font-weight: 700;
       text-transform: uppercase;
-      color: #1e3a8a;
-      letter-spacing: 0.08em;
     }
-    .etapa-header__current {
-      font-size: 22px;
-      font-weight: 800;
-      color: #0f172a;
+    .status-em-andamento {
+      background: #e0f2fe;
+      color: #0c4a6e;
     }
-    .etapa-header__meta {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      font-size: 13px;
-      color: #334155;
-    }
-    .etapa-alert {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 700;
-      background: #fee2e2;
-      color: #b91c1c;
-    }
-    .etapa-ok {
+    .status-finalizada {
       background: #dcfce7;
-      color: #15803d;
+      color: #166534;
     }
-    .chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 10px;
-      border-radius: 999px;
-      font-size: 13px;
-      font-weight: 600;
-      background: #eef2ff;
-      color: #3730a3;
+    .status-pendente {
+      background: #fef9c3;
+      color: #854d0e;
     }
-    .status-box {
-      font-size: 13px;
+    .etapa-info {
+      margin-top: 8px;
+      font-size: 14px;
       color: #475569;
     }
-    .section-title {
-      font-size: 16px;
-      font-weight: 700;
-      margin: 0 0 10px;
-      color: #0f172a;
-    }
-    .grid-fotos {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-      gap: 10px;
-    }
-    .foto-card {
-      position: relative;
-      border-radius: 10px;
-      overflow: hidden;
-      background: #e2e8f0;
-      border: 1px solid #cbd5e1;
-      min-height: 110px;
-    }
-    .foto-card img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-    }
-    .foto-badge {
-      position: absolute;
-      bottom: 6px;
-      left: 6px;
-      padding: 4px 8px;
-      border-radius: 8px;
-      font-size: 11px;
-      font-weight: 700;
-      background: rgba(15, 23, 42, 0.8);
-      color: #fff;
-    }
-    .foto-badge--pending {
-      background: rgba(234, 179, 8, 0.9);
-      color: #1f2937;
-    }
-    .foto-badge--error {
-      background: rgba(220, 38, 38, 0.9);
-    }
-    .foto-error {
-      padding: 8px 10px;
-      font-size: 11px;
-      color: #991b1b;
-      background: #fee2e2;
-      border-top: 1px solid #fecaca;
-    }
-    textarea {
-      width: 100%;
-      min-height: 90px;
-      border-radius: 10px;
-      border: 1px solid #cbd5e1;
-      padding: 10px;
-      font-size: 14px;
-      box-sizing: border-box;
-      resize: vertical;
-    }
-    .actions {
+    .etapa-actions {
+      margin-top: 12px;
       display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .btn {
-      width: 100%;
-      padding: 12px;
-      border-radius: 10px;
-      border: none;
-      font-size: 16px;
-      font-weight: 700;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
       gap: 8px;
     }
-    .btn-primary {
+    .etapa-actions button {
+      border: none;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
       background: #0f172a;
       color: #fff;
+      font-size: 14px;
     }
-    .btn-secondary {
+    .etapa-actions button.secondary {
       background: #e2e8f0;
       color: #0f172a;
     }
-    .btn:disabled {
-      opacity: 0.55;
-      cursor: not-allowed;
+    .loading {
+      text-align: center;
+      color: #475569;
+      margin-top: 24px;
     }
-    .camera-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(15, 23, 42, 0.8);
-      color: #fff;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      z-index: 999;
-      backdrop-filter: blur(2px);
-    }
-    .camera-overlay.show {
-      display: flex;
-    }
-    .camera-overlay__content {
-      max-width: 560px;
-      width: 100%;
-      background: rgba(15, 23, 42, 0.8);
-      border: 1px solid rgba(148, 163, 184, 0.4);
-      border-radius: 16px;
-      padding: 24px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
-    }
-    .camera-overlay__mode {
-      display: inline-flex;
-      padding: 6px 12px;
-      border-radius: 999px;
-      background: rgba(15, 23, 42, 0.6);
-      border: 1px solid rgba(148, 163, 184, 0.4);
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
-      margin-bottom: 10px;
-    }
-    .camera-overlay__title {
-      font-size: 26px;
-      font-weight: 800;
-      margin: 0 0 6px;
-      line-height: 1.2;
-    }
-    .camera-overlay__subtitle {
-      margin: 0 0 18px;
-      color: #cbd5e1;
-      line-height: 1.5;
-    }
-    .camera-overlay__actions {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .muted {
-      color: #94a3b8;
-      font-size: 14px;
-    }
-    .info-line {
-      font-size: 13px;
-      color: #334155;
-      margin-top: 6px;
+    .erro {
+      color: #991b1b;
+      background: #fee2e2;
+      border: 1px solid #fecaca;
+      padding: 10px;
+      border-radius: 6px;
+      margin-top: 12px;
     }
   </style>
-</head>
-<body data-os-id="{{ os_id }}">
-  <div class="top-bar">
-    <a href="/pwa/veiculos-em-producao/">← Voltar</a>
-    <span class="muted">Produção do veículo</span>
-  </div>
+{% endblock %}
 
-  <div class="card" id="blocoHeader">
-    <div class="header">
-      <span class="codigo" id="osCodigo">OS {{ os_id }}</span>
-      <div class="titulo" id="osModelo">Carregando…</div>
-      <div class="placa" id="osPlaca"></div>
-      <span class="chip" id="osEtapa">Etapa atual: -</span>
-    </div>
-    <div class="status-box" id="osStatus">Buscando dados locais…</div>
-  </div>
+{% block content %}
+  <a href="/pwa/veiculos-em-producao/" class="back">← Voltar</a>
 
-  <div class="card etapa-header" id="etapaHeader">
-    <div class="etapa-header__title">Etapa atual</div>
-    <div class="etapa-header__current" id="etapaAtualNome">-</div>
-    <div class="etapa-header__meta">
-      <span id="etapaObrigatoriasStatus">Obrigatórias: —</span>
-      <span id="etapaProximaNome">Próxima etapa: —</span>
-    </div>
-  </div>
+  <h1>OS em Produção</h1>
+  <p>Gerencie as etapas do veículo selecionado.</p>
 
-  <div class="card">
-    <h2 class="section-title">Fotos livres da etapa</h2>
-    <div class="grid-fotos" id="gridFotosLivres">
-      <p class="muted">Nenhuma foto livre encontrada para esta etapa.</p>
-    </div>
-    <div class="info-line" id="infoOffline"></div>
-  </div>
+  <div id="infoOs" class="info" style="display:none;"></div>
+  <div id="etapasContainer"></div>
 
-  <div class="card">
-    <h2 class="section-title">Observação da etapa</h2>
-    <textarea id="observacaoEtapa" placeholder="Anote detalhes e pendências da etapa"></textarea>
-    <div class="info-line" id="observacaoStatus">Edição salva localmente.</div>
-  </div>
+  <div id="loading" class="loading">Carregando dados...</div>
+  <div id="erro" class="erro" style="display:none;"></div>
+{% endblock %}
 
-  <div class="card actions">
-    <button class="btn btn-secondary" id="btnTirarFotos">📷 Tirar fotos da etapa</button>
-    <button class="btn btn-primary" id="btnAvancarEtapa" disabled>Enviar para próxima etapa</button>
-    <input id="inputFotosEtapa" type="file" accept="image/*" capture="environment" multiple style="display:none">
-  </div>
-
-  <div class="camera-overlay" id="cameraOverlay">
-    <div class="camera-overlay__content">
-      <div class="camera-overlay__mode" id="cameraOverlayMode">Captura</div>
-      <h3 class="camera-overlay__title" id="cameraOverlayTitle">Foto da etapa</h3>
-      <p class="camera-overlay__subtitle" id="cameraOverlaySubtitle">
-        Capture fotos desta etapa livremente. Elas ficarão salvas nesta tela e serão sincronizadas quando houver conexão.
-      </p>
-      <div class="camera-overlay__actions">
-        <button class="btn btn-primary" id="btnCapturarFoto">Capturar foto</button>
-        <button class="btn btn-secondary" id="btnFecharOverlay">Fechar</button>
-      </div>
-    </div>
-  </div>
-
-  <script src="{% static 'shared/api.js' %}"></script>
-  <script src="{% static 'pwa/js/api.js' %}"></script>
-  <script src="{% static 'pwa/js/db.js' %}"></script>
-  <script src="{% static 'pwa/js/app.js' %}"></script>
+{% block scripts %}
+  <script>
+    window.CHECKAUTO_OS_ID = {{ os_id|default:0 }};
+  </script>
   <script src="{% static 'pwa/js/sync.js' %}"></script>
   <script src="{% static 'pwa/js/os_producao.js' %}"></script>
-</body>
-</html>
+{% endblock %}

@@ -1,5 +1,5 @@
 // Nome do cache (mude a versão quando fizer mudanças grandes no front)
-const CACHE_NAME = "checkauto-pwa-v2";
+const CACHE_NAME = "checkauto-pwa-v3";
 
 // Lista de arquivos essenciais para o app abrir (app shell)
 const URLS_TO_CACHE = [
@@ -13,22 +13,26 @@ const URLS_TO_CACHE = [
 // Evento de instalação: cacheia os arquivos do app shell
 self.addEventListener("install", event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(URLS_TO_CACHE);
-    })
+    caches
+      .open(CACHE_NAME)
+      .then(cache => cache.addAll(URLS_TO_CACHE))
+      .then(() => self.skipWaiting())
   );
 });
 
 // Evento de ativação: limpa caches antigos
 self.addEventListener("activate", event => {
   event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames
-          .filter(name => name !== CACHE_NAME)
-          .map(name => caches.delete(name))
-      );
-    })
+    caches
+      .keys()
+      .then(cacheNames => {
+        return Promise.all(
+          cacheNames
+            .filter(name => name !== CACHE_NAME)
+            .map(name => caches.delete(name))
+        );
+      })
+      .then(() => self.clients.claim())
   );
 });
 
@@ -36,6 +40,10 @@ self.addEventListener("activate", event => {
 self.addEventListener("fetch", event => {
   const request = event.request;
   const url = new URL(request.url);
+
+  if (request.method !== "GET") {
+    return;
+  }
 
   // Ignora qualquer rota que não esteja dentro do escopo do PWA, evitando interferir no painel/admin
   const isPwaRoute = url.pathname.startsWith("/pwa") || url.pathname.startsWith("/static/pwa/");
