@@ -269,16 +269,10 @@ document.addEventListener("DOMContentLoaded", () => {
         item.hasOwnProperty("proxima_etapa")
           ? item.proxima_etapa
           : calcularProximaEtapa(item.etapa_atual?.id);
-      const podeAvancar = Boolean(proximaEtapa);
       const proximaNome =
         proximaEtapa === null
           ? "Última etapa"
           : proximaEtapa?.nome || "—";
-      const textoBotaoProxima = proximaEtapa === null
-        ? "Última etapa"
-        : podeAvancar
-          ? "Enviar para próxima etapa"
-          : "Próxima etapa indisponível";
       const pendenteSync = item.pendente_sync || (item.fila_sync || []).length > 0;
 
       const card = document.createElement("div");
@@ -290,42 +284,14 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
         <div class="card-body">
           <div class="modelo">${item.modelo_veiculo || "Modelo não informado"}</div>
-          <div class="placa">${item.placa || "Sem placa"}</div>
-          <div class="proxima">Próxima etapa: ${proximaNome}</div>
+          <div class="placa meta">Placa: ${item.placa || "Sem placa"}</div>
+          <div class="meta">Etapa atual: ${etapaNome}</div>
+          <div class="meta proxima">Próxima etapa: ${proximaNome}</div>
         </div>
         <div class="card-footer">
           ${pendenteSync ? '<span class="badge badge-pendente">Pendente de sync</span>' : ""}
-          <div class="actions">
-            <button class="btn-secundario" data-action="checkin">Check-in</button>
-            <button class="btn-primario" ${podeAvancar ? "" : "disabled"}>${textoBotaoProxima}</button>
-          </div>
         </div>
       `;
-
-      const btnAvancar = card.querySelector(".btn-primario");
-      const btnCheckin = card.querySelector('[data-action="checkin"]');
-
-      if (btnAvancar && podeAvancar) {
-        btnAvancar.addEventListener("click", (ev) => {
-          ev.stopPropagation();
-          enviarParaProximaEtapa(item, proximaEtapa);
-        });
-      }
-
-      if (btnCheckin) {
-        btnCheckin.addEventListener("click", (ev) => {
-          ev.stopPropagation();
-          const escolherCompleto = window.confirm(
-            "Deseja iniciar um check-in completo? Escolha 'Cancelar' para somente fotos."
-          );
-
-          if (escolherCompleto) {
-            window.location.href = "/pwa/checkin-completo/";
-          } else {
-            window.location.href = "/pwa/checkin-fotos/";
-          }
-        });
-      }
 
       card.addEventListener("click", () => {
         window.location.href = `/pwa/os/${item.os_id}/`;
