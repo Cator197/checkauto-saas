@@ -223,7 +223,6 @@ class ObservacaoEtapaOSSerializer(serializers.ModelSerializer):
             'etapa',
             'etapa_nome',
             'texto',
-            'local_id',
             'criado_por',
             'criado_por_nome',
             'criado_em',
