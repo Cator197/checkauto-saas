@@ -47,4 +47,27 @@ async function checkautoAtualizarContadoresHome() {
 
 document.addEventListener("DOMContentLoaded", () => {
   checkautoAtualizarContadoresHome();
+  const statusBadge = document.getElementById("pwaStatusBadge");
+  const homeOfflineBadge = document.getElementById("homeOfflineBadge");
+  if (!statusBadge && !homeOfflineBadge) {
+    return;
+  }
+
+  const atualizarStatusOnline = () => {
+    const online = navigator.onLine;
+    if (statusBadge) {
+      statusBadge.textContent = online ? "Online" : "Offline";
+      statusBadge.classList.toggle("pwa-badge-success", online);
+      statusBadge.classList.toggle("pwa-badge-danger", !online);
+    }
+    if (homeOfflineBadge) {
+      homeOfflineBadge.textContent = online ? "Online" : "Offline";
+      homeOfflineBadge.classList.toggle("pwa-badge-success", online);
+      homeOfflineBadge.classList.toggle("pwa-badge-warning", !online);
+    }
+  };
+
+  atualizarStatusOnline();
+  window.addEventListener("online", atualizarStatusOnline);
+  window.addEventListener("offline", atualizarStatusOnline);
 });

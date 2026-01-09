@@ -2,56 +2,6 @@
 
 {% block title %}Sem conexão | CheckAuto{% endblock %}
 
-{% block head_extra %}
-  <style>
-    .offline-container {
-      max-width: 560px;
-      margin: 0 auto;
-      padding: 32px 20px;
-      color: #0f172a;
-    }
-    .offline-card {
-      border: 1px solid #e2e8f0;
-      border-radius: 16px;
-      padding: 24px;
-      background: #ffffff;
-      box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
-    }
-    .offline-card h1 {
-      margin: 0 0 12px;
-      font-size: 24px;
-    }
-    .offline-card p {
-      margin: 0 0 16px;
-      color: #475569;
-      line-height: 1.5;
-    }
-    .offline-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      margin-top: 20px;
-    }
-    .offline-actions a,
-    .offline-actions button {
-      border-radius: 10px;
-      padding: 10px 16px;
-      font-weight: 600;
-      border: none;
-      cursor: pointer;
-      text-decoration: none;
-    }
-    .offline-actions button {
-      background: #0f172a;
-      color: #fff;
-    }
-    .offline-actions a {
-      background: #e2e8f0;
-      color: #0f172a;
-    }
-  </style>
-{% endblock %}
-
 {% block content %}
   <main class="offline-container">
     <section class="offline-card">

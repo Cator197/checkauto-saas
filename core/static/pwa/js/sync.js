@@ -540,9 +540,41 @@ async function resetarItemErroPermanente(item) {
 function renderPendencias(lista) {
   const listaDiv = document.getElementById("listaPendentes");
   const spanQtd = document.getElementById("qtdPendentes");
+  const spanSucesso = document.getElementById("qtdSucesso");
+  const spanErros = document.getElementById("qtdErros");
+  const progressWrap = document.getElementById("syncProgress");
+  const progressBar = document.getElementById("syncProgressBar");
 
   if (spanQtd) {
     spanQtd.textContent = (lista?.length || 0).toString();
+  }
+
+  let sucesso = 0;
+  let erros = 0;
+
+  (lista || []).forEach((item) => {
+    const status = statusPendencias[item.id] || statusInicial(item);
+    if (status.texto === "sincronizado") {
+      sucesso += 1;
+    }
+    if (status.texto === "erro" || status.texto === "erro_permanente") {
+      erros += 1;
+    }
+  });
+
+  if (spanSucesso) {
+    spanSucesso.textContent = sucesso.toString();
+  }
+
+  if (spanErros) {
+    spanErros.textContent = erros.toString();
+  }
+
+  if (progressWrap && progressBar) {
+    const total = lista?.length || 0;
+    const processados = sucesso + erros;
+    progressWrap.style.display = syncEmAndamento && total > 0 ? "block" : "none";
+    progressBar.value = total > 0 ? Math.round((processados / total) * 100) : 0;
   }
 
   if (!listaDiv) return;
@@ -550,25 +582,30 @@ function renderPendencias(lista) {
   listaDiv.innerHTML = "";
 
   if (!lista || lista.length === 0) {
-    listaDiv.innerHTML = "<p>Nenhuma pendência encontrada.</p>";
+    listaDiv.innerHTML = '<div class="state-empty">Nenhuma pendência encontrada.</div>';
     return;
   }
 
   lista.forEach((item) => {
     const status = statusPendencias[item.id] || statusInicial(item);
-    const osLabel =
-      item.type === "SYNC_OS"
-        ? item.os_payload?.os?.numeroInterno ||
-          item.os_payload?.veiculo?.placa ||
-          item.os_local_id ||
-          "—"
-        : item.os_id || "—";
     const div = document.createElement("div");
-    div.className = "os-item";
+    div.className = "pwa-card pwa-card--compact";
+    const referencia =
+      item.type === "SYNC_OS"
+        ? item.os_payload?.veiculo?.placa || item.os_payload?.os?.numeroInterno || item.os_local_id || "—"
+        : item.os_id || "—";
     div.innerHTML = `
-      <div class="os-header">
+      <div class="pwa-row pwa-row--between">
         <strong>${formatarTipo(item.tipo || item.type)}</strong>
-        <span class="status-badge status-${status.texto}">${
+        <span class="pwa-badge ${
+          status.texto === "sincronizado"
+            ? "pwa-badge-success"
+            : status.texto === "processando"
+              ? "pwa-badge-warning"
+              : status.texto === "erro" || status.texto === "erro_permanente"
+                ? "pwa-badge-danger"
+                : "pwa-badge-warning"
+        }">${
           status.texto === "pendente"
             ? "Pendente"
             : status.texto === "processando"
@@ -576,24 +613,25 @@ function renderPendencias(lista) {
               : status.texto === "erro_permanente"
                 ? "Erro permanente"
               : status.texto === "erro"
-                ? `Erro` + (status.detalhe ? ` (${status.detalhe})` : "")
+                ? "Erro"
                 : "Sincronizado"
         }</span>
       </div>
-      <div class="os-meta">OS ${osLabel}</div>
-      <div class="os-meta">Criado em: ${
+      <div class="pwa-muted">Referência: ${referencia}</div>
+      <div class="pwa-muted">Criado em: ${
         item.created_at ? new Date(item.created_at).toLocaleString() : "—"
       }</div>
-      <div class="os-meta">Tentativas: ${item.tentativas || item.tries || 0}</div>
+      <div class="pwa-muted">Tentativas: ${item.tentativas || item.tries || 0}</div>
+      ${status.detalhe ? `<div class="state-error" style="margin-top:8px;">${status.detalhe}</div>` : ""}
     `;
 
     if (item.error_permanent) {
       const actions = document.createElement("div");
-      actions.className = "os-actions";
+      actions.className = "pwa-actions-row";
 
       const retryButton = document.createElement("button");
       retryButton.type = "button";
-      retryButton.className = "btn-retry";
+      retryButton.className = "pwa-btn pwa-btn-secondary";
       retryButton.textContent = "Tentar novamente";
       retryButton.addEventListener("click", async () => {
         retryButton.disabled = true;
@@ -604,7 +642,7 @@ function renderPendencias(lista) {
 
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "btn-excluir";
+      button.className = "pwa-btn pwa-btn-danger";
       button.textContent = "Excluir";
       button.addEventListener("click", async () => {
         button.disabled = true;

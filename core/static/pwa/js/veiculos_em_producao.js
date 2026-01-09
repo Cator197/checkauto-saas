@@ -246,9 +246,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function mostrarMensagem(msg) {
+  function mostrarMensagem(msg, tipo = "info") {
     if (statusEl) {
       statusEl.textContent = msg;
+      statusEl.classList.remove("state-loading", "state-empty", "state-error", "state-offline", "state-info");
+      statusEl.classList.add(`state-${tipo}`);
     }
   }
 
@@ -257,7 +259,7 @@ document.addEventListener("DOMContentLoaded", () => {
     listaEl.innerHTML = "";
 
     if (!listaAtual || listaAtual.length === 0) {
-      listaEl.innerHTML = '<p class="muted">Nenhum veículo em produção.</p>';
+      listaEl.innerHTML = '<div class="state-empty">Nenhum veículo em produção.</div>';
       return;
     }
 
@@ -280,11 +282,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const pendenteSync = item.pendente_sync || (item.fila_sync || []).length > 0;
 
       const card = document.createElement("div");
-      card.className = "card-veiculo";
+      card.className = "pwa-card card-veiculo";
       card.innerHTML = `
         <div class="card-header">
           <span class="codigo">OS ${item.codigo || "-"}</span>
-          <span class="etapa">Etapa atual: ${etapaNome}</span>
+          <span class="badge badge-etapa">${etapaNome}</span>
         </div>
         <div class="card-body">
           <div class="modelo">${item.modelo_veiculo || "Modelo não informado"}</div>
@@ -340,17 +342,17 @@ document.addEventListener("DOMContentLoaded", () => {
       const listaComPendencias = await anexarPendenciasLocais(lista);
       const listaComProxima = await anexarProximasEtapas(listaComPendencias);
       renderizar(listaComProxima);
-      mostrarMensagem("Exibindo lista salva (offline).");
+      mostrarMensagem("Exibindo lista salva (offline).", "offline");
     } else {
       renderizar([]);
-      mostrarMensagem("Nenhum dado salvo. Conecte-se para atualizar.");
+      mostrarMensagem("Nenhum dado salvo. Conecte-se para atualizar.", "offline");
     }
   }
 
   async function buscarOnline() {
     const token = getAccessToken();
     if (!token) {
-      mostrarMensagem("Token não encontrado. Faça login para carregar os veículos.");
+      mostrarMensagem("Token não encontrado. Faça login para carregar os veículos.", "error");
       logDev("Token ausente no storage (localStorage)");
       redirectAfterLogout("pwa");
       return;
@@ -367,22 +369,22 @@ document.addEventListener("DOMContentLoaded", () => {
         );
 
         if (algumSemModelo) {
-          mostrarMensagem("Modelo do veículo não pode ser vazio!");
+          mostrarMensagem("Modelo do veículo não pode ser vazio!", "error");
           return;
         }
       }
 
-      mostrarMensagem("Buscando veículos em produção…");
+      mostrarMensagem("Buscando veículos em produção…", "loading");
       const response = await apiFetch("/api/pwa/veiculos-em-producao/");
 
       if (!response.ok) {
         if (response.status === 401) {
-          mostrarMensagem("Sessão expirada. Faça login novamente.");
+          mostrarMensagem("Sessão expirada. Faça login novamente.", "error");
           logDev("Resposta 401 ao buscar veículos (token expirado ou inválido)");
           return;
         }
 
-        mostrarMensagem("Falha ao buscar lista no servidor.");
+        mostrarMensagem("Falha ao buscar lista no servidor.", "error");
         return;
       }
 
@@ -393,10 +395,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
       await window.checkautoSalvarVeiculosEmProducao(listaComProxima);
       renderizar(listaComProxima);
-      mostrarMensagem("Lista atualizada do servidor.");
+      mostrarMensagem("Lista atualizada do servidor.", "info");
     } catch (err) {
       console.error("Erro ao buscar veículos em produção:", err);
-      mostrarMensagem("Erro ao atualizar. Mostrando cache.");
+      mostrarMensagem("Erro ao atualizar. Mostrando cache.", "error");
       await carregarDoCache();
     }
   }
@@ -434,7 +436,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const fila = Array.isArray(pendencia?.fila_sync) ? pendencia.fila_sync : [];
 
     atualizarListaLocal(osItem.os_id, etapaNormalizada, true, fila);
-    mostrarMensagem("Enfileirado para sincronização.");
+    mostrarMensagem("Enfileirado para sincronização.", "info");
     alert("Enfileirado para sincronização.");
   }
 
@@ -458,7 +460,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (window.checkautoMarcarOSProducaoSincronizada) {
           await window.checkautoMarcarOSProducaoSincronizada(osItem.os_id);
         }
-        mostrarMensagem("Etapa atualizada.");
+        mostrarMensagem("Etapa atualizada.", "info");
         alert("Etapa atualizada.");
         return;
       }
@@ -477,7 +479,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (navigator.onLine) {
       await buscarOnline();
     } else {
-      mostrarMensagem("Offline. Usando a última lista salva.");
+      mostrarMensagem("Offline. Usando a última lista salva.", "offline");
     }
   }
 

@@ -3,171 +3,66 @@
 
 {% block title %}CheckAuto - Check-in Completo{% endblock %}
 
-{% block head_extra %}
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 16px;
-      max-width: 600px;
-      margin: 0 auto;
-    }
-    a.back {
-      display: inline-block;
-      margin-bottom: 16px;
-      text-decoration: none;
-      color: #0f172a;
-    }
-    h1 {
-      margin-top: 0;
-      margin-bottom: 10px;
-    }
-    h2 {
-      font-size: 18px;
-      margin-top: 20px;
-      margin-bottom: 8px;
-    }
-    .section {
-      margin-top: 10px;
-      padding: 10px;
-      border-radius: 8px;
-      background: #f5f5f5;
-    }
-    .field {
-      margin-bottom: 10px;
-    }
-    .field label {
-      display: block;
-      font-size: 14px;
-      margin-bottom: 4px;
-    }
-    .field input,
-    .field textarea,
-    .field select {
-      width: 100%;
-      padding: 8px;
-      font-size: 14px;
-      box-sizing: border-box;
-    }
-    textarea {
-      min-height: 60px;
-      resize: vertical;
-    }
-    .lista-fotos {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 8px;
-    }
-    .foto-thumb {
-      position: relative;
-      width: 90px;
-      height: 90px;
-      border-radius: 6px;
-      overflow: hidden;
-      border: 1px solid #ccc;
-    }
-    .foto-thumb img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    .foto-thumb button {
-      position: absolute;
-      top: 2px;
-      right: 2px;
-      background: rgba(0,0,0,0.7);
-      color: #fff;
-      border: none;
-      border-radius: 3px;
-      padding: 2px 4px;
-      font-size: 10px;
-      cursor: pointer;
-    }
-
-    button[type="submit"] {
-      width: 100%;
-      padding: 12px;
-      margin-top: 18px;
-      border: none;
-      border-radius: 8px;
-      background: #0f172a;
-      color: #fff;
-      font-size: 16px;
-      cursor: pointer;
-    }
-    .msg {
-      margin-top: 10px;
-      font-size: 14px;
-      color: green;
-    }
-  </style>
-{% endblock %}
-
 {% block content %}
-  <a href="/pwa/" class="back">← Voltar para Home</a>
+  <a href="/pwa/" class="pwa-back">← Voltar para Home</a>
 
-  <h1>Check-in Completo</h1>
-  <p>Faça o check-in completo com identificação do veículo e fotos.</p>
+  <section class="pwa-page-header">
+    <h1 class="pwa-title">Check-in Completo</h1>
+    <p class="pwa-subtitle">Faça o check-in completo com identificação do veículo e fotos.</p>
+  </section>
 
-  <form id="formCheckinCompleto">
-    <!-- DADOS DO VEÍCULO -->
-    <div class="section">
-      <h2>Identificação do Veículo</h2>
+  <form id="formCheckinCompleto" class="pwa-form">
+    <div class="pwa-card">
+      <h2 class="pwa-title" style="font-size: 18px;">Identificação do Veículo</h2>
 
-      <div class="field">
+      <div class="pwa-field">
         <label for="veiculoPlaca">Placa</label>
-        <input id="veiculoPlaca" name="veiculoPlaca" type="text" required>
+        <input id="veiculoPlaca" name="veiculoPlaca" type="text" class="pwa-input" required>
       </div>
 
-      <div class="field">
+      <div class="pwa-field">
         <label for="veiculoModelo">Modelo</label>
-        <input id="veiculoModelo" name="veiculoModelo" type="text" required>
+        <input id="veiculoModelo" name="veiculoModelo" type="text" class="pwa-input" required>
       </div>
 
-      <div class="field">
+      <div class="pwa-field">
         <label for="osNumero">Número interno da OS (opcional)</label>
-        <input id="osNumero" name="osNumero" type="text">
+        <input id="osNumero" name="osNumero" type="text" class="pwa-input">
       </div>
     </div>
 
-    <!-- OBSERVAÇÕES -->
-    <div class="section">
-      <h2>Observações (opcional)</h2>
+    <div class="pwa-card">
+      <h2 class="pwa-title" style="font-size: 18px;">Observações (opcional)</h2>
 
-      <div class="field">
+      <div class="pwa-field">
         <label for="observacoes">Observações rápidas</label>
-        <textarea id="observacoes" name="observacoes"></textarea>
+        <textarea id="observacoes" name="observacoes" class="pwa-textarea"></textarea>
       </div>
     </div>
 
-    <!-- FOTOS -->
-    <div class="section">
-      <h2>Fotos do Veículo</h2>
+    <div class="pwa-card">
+      <h2 class="pwa-title" style="font-size: 18px;">Fotos do Veículo</h2>
 
       <div>
         <strong>Fotos padrão</strong>
-        <p style="font-size:13px; margin-top:4px;">
-          Ex.: frente, traseira, laterais, interior.
-        </p>
-        <button type="button" id="btnAddFotoPadrao">Adicionar foto padrão</button>
+        <p class="pwa-muted">Ex.: frente, traseira, laterais, interior.</p>
+        <button type="button" id="btnAddFotoPadrao" class="pwa-btn pwa-btn-secondary">Adicionar foto padrão</button>
         <input id="inputFotoPadrao" type="file" accept="image/*" capture="environment" style="display:none">
-        <div id="listaFotosPadrao" class="lista-fotos"></div>
+        <div id="listaFotosPadrao" class="pwa-grid" style="margin-top: 8px;"></div>
       </div>
 
       <div style="margin-top:12px;">
         <strong>Fotos livres</strong>
-        <p style="font-size:13px; margin-top:4px;">
-          Use para registrar detalhes, avarias específicas, peças soltas etc.
-        </p>
-        <button type="button" id="btnAddFotoLivre">Adicionar foto livre</button>
+        <p class="pwa-muted">Use para registrar detalhes, avarias específicas, peças soltas etc.</p>
+        <button type="button" id="btnAddFotoLivre" class="pwa-btn pwa-btn-secondary">Adicionar foto livre</button>
         <input id="inputFotoLivre" type="file" accept="image/*" capture="environment" style="display:none">
-        <div id="listaFotosLivres" class="lista-fotos"></div>
+        <div id="listaFotosLivres" class="pwa-grid" style="margin-top: 8px;"></div>
       </div>
     </div>
 
-    <button type="submit">Salvar Check-in Completo (Pendência offline)</button>
+    <button type="submit" class="pwa-btn pwa-btn-primary pwa-btn-block">Salvar Check-in Completo (Pendência offline)</button>
 
-    <div id="msgRetorno" class="msg" style="display:none;"></div>
+    <div id="msgRetorno" class="pwa-muted" style="display:none;"></div>
   </form>
 {% endblock %}
 

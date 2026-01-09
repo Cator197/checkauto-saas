@@ -3,48 +3,37 @@
 
 {% block title %}CheckAuto - Home{% endblock %}
 
-{% block head_extra %}
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 20px;
-    }
-    h1 {
-      margin-bottom: 10px;
-    }
-    .btn {
-      display: block;
-      width: 100%;
-      padding: 15px;
-      margin: 10px 0;
-      background-color: #0f172a;
-      color: white;
-      border-radius: 8px;
-      text-align: center;
-      text-decoration: none;
-      font-size: 18px;
-    }
-    .pending {
-      margin-top: 20px;
-      padding: 10px;
-      background: #f0f4ff;
-      border-left: 4px solid #0f172a;
-    }
-  </style>
-{% endblock %}
-
 {% block content %}
-  <h1>CheckAuto</h1>
-  <p>Escolha uma ação:</p>
+  <section class="pwa-page-header">
+    <h1 class="pwa-title">CheckAuto</h1>
+    <p class="pwa-subtitle">Escolha uma ação rápida para a oficina.</p>
+  </section>
 
-  <a class="btn" href="/pwa/checkin-completo/">Novo Check-in Completo</a>
-  <a class="btn" href="/pwa/checkin-fotos/">Check-in (Somente Fotos)</a>
-  <a class="btn" href="/pwa/veiculos-em-producao/">Veículos em Produção</a>
-  <a class="btn" href="/pwa/sync/">Sincronizar Dados</a>
+  <div class="pwa-actions">
+    <a class="pwa-btn pwa-btn-primary pwa-btn-block" href="/pwa/checkin-completo/">Novo Check-in Completo</a>
+    <a class="pwa-btn pwa-btn-secondary pwa-btn-block" href="/pwa/checkin-fotos/">Check-in (Somente Fotos)</a>
+    <a class="pwa-btn pwa-btn-secondary pwa-btn-block" href="/pwa/veiculos-em-producao/">Veículos em Produção</a>
+    <a class="pwa-btn pwa-btn-secondary pwa-btn-block" href="/pwa/sync/">Sincronizar Dados</a>
+  </div>
 
-  <div class="pending">
-    <strong>Pendências:</strong><br>
-    OS pendentes: <span id="osPendentes">0</span><br>
-    Fotos pendentes: <span id="fotosPendentes">0</span>
+  <div class="pwa-card pwa-card--compact" style="margin-top: 16px;">
+    <div class="pwa-row pwa-row--between">
+      <div class="pwa-col">
+        <strong>Pendências</strong>
+        <span class="pwa-muted">Atualizadas automaticamente</span>
+      </div>
+      <span id="homeOfflineBadge" class="pwa-badge pwa-badge-warning">Offline</span>
+    </div>
+    <div class="pwa-divider"></div>
+    <div class="pwa-summary-grid">
+      <div class="pwa-stat">
+        <strong id="osPendentes">0</strong>
+        <span class="pwa-muted">OS pendentes</span>
+      </div>
+      <div class="pwa-stat">
+        <strong id="fotosPendentes">0</strong>
+        <span class="pwa-muted">Fotos pendentes</span>
+      </div>
+    </div>
   </div>
 {% endblock %}

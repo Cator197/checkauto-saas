@@ -3,67 +3,16 @@
 
 {% block title %}CheckAuto - Veículos em Produção{% endblock %}
 
-{% block head_extra %}
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 16px;
-      max-width: 800px;
-      margin: 0 auto;
-    }
-    a.back {
-      display: inline-block;
-      margin-bottom: 16px;
-      text-decoration: none;
-      color: #0f172a;
-    }
-    h1 {
-      margin-top: 0;
-      margin-bottom: 10px;
-    }
-    .vehicle-list {
-      margin-top: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .vehicle-card {
-      padding: 12px 14px;
-      border-radius: 8px;
-      border: 1px solid #e2e8f0;
-      background: #fff;
-      cursor: pointer;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-    }
-    .vehicle-card:hover {
-      background: #f1f5f9;
-    }
-    .vehicle-title {
-      font-weight: bold;
-      font-size: 16px;
-    }
-    .vehicle-status {
-      margin-top: 6px;
-      color: #475569;
-      font-size: 14px;
-    }
-    .loading {
-      text-align: center;
-      margin-top: 20px;
-      font-size: 14px;
-      color: #475569;
-    }
-  </style>
-{% endblock %}
-
 {% block content %}
-  <a href="/pwa/" class="back">← Voltar para Home</a>
+  <a href="/pwa/" class="pwa-back">← Voltar para Home</a>
 
-  <h1>Veículos em Produção</h1>
-  <p>Acompanhe o status dos veículos em andamento na oficina.</p>
+  <section class="pwa-page-header">
+    <h1 class="pwa-title">Veículos em Produção</h1>
+    <p class="pwa-subtitle">Acompanhe o status dos veículos em andamento na oficina.</p>
+  </section>
 
-  <div id="loading" class="loading">Carregando veículos...</div>
-  <div id="listaVeiculos" class="vehicle-list"></div>
+  <div id="statusVeiculos" class="state-info">Carregando veículos...</div>
+  <div id="listaVeiculos" class="pwa-list"></div>
 {% endblock %}
 
 {% block scripts %}

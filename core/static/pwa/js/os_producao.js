@@ -309,7 +309,7 @@ document.addEventListener("DOMContentLoaded", () => {
     atualizarBotoes();
     refs.btnAvancar.textContent = "Enviar para próxima etapa";
     refs.btnAvancar.disabled = false;
-    setStatus("Etapa avançada e sincronizada.");
+    setStatus("Etapa avançada e sincronizada.", "info");
   }
 
   async function sincronizarPendenciasSePossivel() {
@@ -318,10 +318,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function setStatus(texto) {
-    if (refs.status) {
-      refs.status.textContent = texto;
-    }
+  function setStatus(texto, tipo = "info") {
+    if (!refs.status) return;
+    refs.status.textContent = texto;
+    refs.status.classList.remove(
+      "state-loading",
+      "state-empty",
+      "state-error",
+      "state-offline",
+      "state-info"
+    );
+    refs.status.classList.add(`state-${tipo}`);
   }
 
   function salvarCache(extra = {}) {
@@ -367,6 +374,9 @@ document.addEventListener("DOMContentLoaded", () => {
     refs.modelo.textContent = state.modelo || "Modelo não informado";
     refs.placa.textContent = state.placa ? `Placa ${state.placa}` : "Placa não informada";
     refs.etapa.textContent = `Etapa atual: ${state.etapaAtualNome || "-"}`;
+    if (refs.infoOffline) {
+      refs.infoOffline.style.display = state.pendente_sync ? "inline-flex" : "none";
+    }
   }
 
   function renderEtapaHeader(os) {
@@ -386,10 +396,11 @@ document.addEventListener("DOMContentLoaded", () => {
           faltam > 0
             ? `Obrigatórias pendentes: ${faltam}`
             : "Obrigatórias completas";
-        refs.etapaObrigatoriasStatus.className = faltam > 0 ? "etapa-alert" : "etapa-alert etapa-ok";
+        refs.etapaObrigatoriasStatus.className =
+          faltam > 0 ? "pwa-badge pwa-badge-warning" : "pwa-badge pwa-badge-success";
       } else {
         refs.etapaObrigatoriasStatus.textContent = "Obrigatórias: —";
-        refs.etapaObrigatoriasStatus.className = "";
+        refs.etapaObrigatoriasStatus.className = "pwa-badge pwa-badge-warning";
       }
     }
 
@@ -624,7 +635,7 @@ document.addEventListener("DOMContentLoaded", () => {
       renderFotosLivres();
       renderObservacao();
       atualizarBotoes();
-      setStatus("Dados carregados do dispositivo (offline).");
+      setStatus("Dados carregados do dispositivo (offline).", "offline");
       return true;
     }
 
@@ -686,17 +697,17 @@ document.addEventListener("DOMContentLoaded", () => {
   async function buscarOnline() {
     const token = getAccessToken();
     if (!token) {
-      setStatus("Token não encontrado. Exibindo dados locais.");
+      setStatus("Token não encontrado. Exibindo dados locais.", "error");
       redirectAfterLogout("pwa");
       return;
     }
 
     try {
-      setStatus("Atualizando do servidor…");
+      setStatus("Atualizando do servidor…", "loading");
       const osResp = await apiFetch(`/api/os/${osId}/`);
 
       if (!osResp.ok) {
-        setStatus("Não foi possível atualizar agora.");
+        setStatus("Não foi possível atualizar agora.", "error");
         return;
       }
 
@@ -769,10 +780,10 @@ document.addEventListener("DOMContentLoaded", () => {
       renderFotosLivres();
       renderObservacao();
       atualizarBotoes();
-      setStatus("Dados atualizados do servidor.");
+      setStatus("Dados atualizados do servidor.", "info");
     } catch (err) {
       console.error("Erro ao buscar dados online da OS:", err);
-      setStatus("Erro ao atualizar. Mostrando cache.");
+      setStatus("Erro ao atualizar. Mostrando cache.", "error");
     }
   }
 
@@ -869,7 +880,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
         renderFotosLivres();
         atualizarBotoes();
-        refs.infoOffline.textContent = "Novas fotos salvas localmente. Serão enviadas no próximo sync.";
+        if (refs.infoOffline) {
+          refs.infoOffline.style.display = "inline-flex";
+          refs.infoOffline.textContent = "Pendente sync";
+        }
       };
       reader.readAsDataURL(file);
     });
@@ -933,7 +947,7 @@ document.addEventListener("DOMContentLoaded", () => {
       await buscarOnline();
       await sincronizarPendenciasSePossivel();
     } else {
-      setStatus("Offline. Usando dados salvos.");
+      setStatus("Offline. Usando dados salvos.", "offline");
     }
 
     window.addEventListener("online", () => {

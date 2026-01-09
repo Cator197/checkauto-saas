@@ -7,17 +7,29 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <link rel="manifest" href="{% static 'pwa/manifest.json' %}">
-    <link rel="apple-touch-icon" sizes="180x180" href="{% static 'pwa/icons/apple-touch-icon.png' %}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{% static 'pwa/icons/apple-touch-icon.png' %}">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="CheckAuto">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#0f172a">
 
+  <link rel="stylesheet" href="{% static 'pwa/css/pwa.css' %}">
   {% block head_extra %}{% endblock %}
 </head>
 <body>
-  {% block content %}{% endblock %}
+  <header class="pwa-header">
+    <div class="pwa-header__content">
+      <span class="pwa-header__title">CheckAuto</span>
+      <span id="pwaStatusBadge" class="pwa-badge pwa-badge-success" aria-live="polite">Online</span>
+    </div>
+  </header>
+
+  <main class="pwa-main">
+    <div class="pwa-container">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
 
   <script src="{% static 'shared/api.js' %}"></script>
   <script src="{% static 'pwa/js/api.js' %}"></script>
