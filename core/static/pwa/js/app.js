@@ -8,10 +8,55 @@ if ("serviceWorker" in navigator) {
       .register("/pwa/service-worker.js", { scope: "/pwa/" })
       .then((registration) => {
         console.log("Service Worker registrado com sucesso:", registration.scope);
+        checkautoSetupServiceWorkerUpdates(registration);
       })
       .catch((error) => {
         console.error("Falha ao registrar o Service Worker:", error);
       });
+  });
+}
+
+let checkautoHasReloaded = false;
+
+function checkautoShowUpdateBanner(registration) {
+  const banner = document.getElementById("pwaUpdateBanner");
+  const button = document.getElementById("pwaUpdateButton");
+  if (!banner || !button) {
+    return;
+  }
+
+  banner.hidden = false;
+  button.onclick = () => {
+    button.disabled = true;
+    button.textContent = "Atualizando...";
+    registration.waiting?.postMessage({ type: "SKIP_WAITING" });
+  };
+}
+
+function checkautoSetupServiceWorkerUpdates(registration) {
+  if (registration.waiting) {
+    checkautoShowUpdateBanner(registration);
+  }
+
+  registration.addEventListener("updatefound", () => {
+    const newWorker = registration.installing;
+    if (!newWorker) {
+      return;
+    }
+
+    newWorker.addEventListener("statechange", () => {
+      if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+        checkautoShowUpdateBanner(registration);
+      }
+    });
+  });
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (checkautoHasReloaded) {
+      return;
+    }
+    checkautoHasReloaded = true;
+    window.location.reload();
   });
 }
 

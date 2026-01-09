@@ -27,6 +27,10 @@
 
   <main class="pwa-main">
     <div class="pwa-container">
+      <div id="pwaUpdateBanner" class="pwa-update-banner" role="status" aria-live="polite" hidden>
+        <span>Nova versão disponível</span>
+        <button id="pwaUpdateButton" class="pwa-btn pwa-btn-secondary" type="button">Atualizar</button>
+      </div>
       {% block content %}{% endblock %}
     </div>
   </main>
