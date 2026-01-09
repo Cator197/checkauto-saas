@@ -8,6 +8,17 @@ const VEICULOS_PRODUCAO_STORE = "veiculosEmProducao";
 const OS_PRODUCAO_STORE = "osProducao";
 const SYNC_QUEUE_STORE = "filaSync";
 const ACAO_AVANCAR_ETAPA = "AVANCAR_ETAPA";
+const TIPO_OS_UPSERT = "os_upsert";
+const TIPO_OBSERVACAO = "observacao_create";
+const TIPO_FOTO = "foto_upload";
+const TIPO_AVANCO = "avanco_etapa";
+const TIPO_LEGADO_MAPA = {
+  PATCH_OS: TIPO_OS_UPSERT,
+  POST_FOTO_OS: TIPO_FOTO,
+  UPSERT_OBSERVACAO: TIPO_OBSERVACAO,
+  AVANCAR_ETAPA: TIPO_AVANCO,
+  SYNC_OS: TIPO_OS_UPSERT,
+};
 
 // Abre (ou cria) o banco de dados
 function checkautoOpenDB() {
@@ -175,16 +186,63 @@ window.checkautoLimparOSPendentes = async function () {
 };
 
 function normalizarItemFila(item) {
+  const tipoBruto = item.tipo || item.type;
+  const tipoNormalizado = TIPO_LEGADO_MAPA[tipoBruto] || tipoBruto || TIPO_OS_UPSERT;
+  const tentativas =
+    typeof item.tentativas === "number"
+      ? item.tentativas
+      : typeof item.tries === "number"
+        ? item.tries
+        : 0;
+  const status =
+    item.status ||
+    (item.error_permanent || item.last_error ? "erro" : "pendente");
+
   return {
     id: item.id || `sync-${Date.now()}-${Math.random()}`,
-    type: item.type,
+    type: item.type || tipoNormalizado,
+    tipo: tipoNormalizado,
     os_id: item.os_id,
+    os_ref: item.os_ref || item.os_id || item.os_local_id || null,
     payload: item.payload || {},
     created_at: item.created_at || new Date().toISOString(),
-    tries: typeof item.tries === "number" ? item.tries : 0,
+    tentativas,
+    tries: tentativas,
     last_error: item.last_error || null,
     error_permanent: Boolean(item.error_permanent),
+    status,
+    dedupe_key: item.dedupe_key || null,
   };
+}
+
+function obterTipoFila(item) {
+  return TIPO_LEGADO_MAPA[item?.tipo || item?.type] || item?.tipo || item?.type;
+}
+
+function gerarLocalId() {
+  if (window.crypto && typeof window.crypto.randomUUID === "function") {
+    return window.crypto.randomUUID();
+  }
+
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+    const rand = Math.random() * 16;
+    const value = char === "x" ? rand : (rand & 0x3) | 0x8;
+    return Math.floor(value).toString(16);
+  });
+}
+
+function gerarHashTexto(texto) {
+  let hash = 5381;
+  for (let i = 0; i < texto.length; i++) {
+    hash = (hash * 33) ^ texto.charCodeAt(i);
+  }
+  return (hash >>> 0).toString(16);
+}
+
+function gerarDedupeKeyObservacao(osRef, etapaId, texto) {
+  const textoNormalizado = (texto || "").trim();
+  const etapaNormalizada = etapaId ?? "sem-etapa";
+  return `${osRef || "sem-os"}-${etapaNormalizada}-${gerarHashTexto(textoNormalizado)}`;
 }
 
 function normalizarEtapaLocal(etapa) {
@@ -262,7 +320,7 @@ window.checkautoListarFilaSync = async function () {
       const request = store.getAll();
 
       request.onsuccess = () => {
-        const itens = request.result || [];
+        const itens = (request.result || []).map(normalizarItemFila);
         itens.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
         resolve(itens);
       };
@@ -310,9 +368,10 @@ window.checkautoRegistrarErroFilaSync = async function (id, mensagem) {
 
   return window.checkautoAdicionarFilaSync({
     ...item,
-    tries: (item.tries || 0) + 1,
+    tentativas: (item.tentativas || item.tries || 0) + 1,
     last_error: mensagem || "Erro desconhecido",
     error_permanent: Boolean(item.error_permanent),
+    status: "erro",
   });
 };
 
@@ -322,9 +381,10 @@ window.checkautoMarcarErroPermanenteFilaSync = async function (id, mensagem) {
 
   return window.checkautoAdicionarFilaSync({
     ...item,
-    tries: (item.tries || 0) + 1,
+    tentativas: (item.tentativas || item.tries || 0) + 1,
     last_error: mensagem || "Erro permanente",
     error_permanent: true,
+    status: "erro",
   });
 };
 
@@ -467,7 +527,9 @@ window.checkautoEnfileirarPatchOS = async function (osId, payload, extra = {}) {
   const operacao = await window.checkautoAdicionarFilaSync({
     id: `patch-${Date.now()}-${Math.random()}`,
     type: "PATCH_OS",
+    tipo: TIPO_OS_UPSERT,
     os_id: osId,
+    os_ref: osId,
     payload,
   });
 
@@ -484,11 +546,54 @@ window.checkautoEnfileirarPatchOS = async function (osId, payload, extra = {}) {
 };
 
 window.checkautoEnfileirarFotoOS = async function (osId, payload, extra = {}) {
+  const payloadNormalizado = { ...(payload || {}) };
+  if (payloadNormalizado.status_sync === "synced") {
+    return checkautoUpsertOSProducao(osId, (item) => ({
+      ...item,
+      ...extra,
+      pendente_sync: item.pendente_sync || false,
+    }));
+  }
+
+  payloadNormalizado.local_id = payloadNormalizado.local_id || gerarLocalId();
+
+  const filaExistente = await window.checkautoListarFilaSync();
+  const duplicada = filaExistente.find(
+    (item) =>
+      obterTipoFila(item) === TIPO_FOTO &&
+      item.os_ref === osId &&
+      item.payload?.local_id === payloadNormalizado.local_id
+  );
+
+  if (duplicada) {
+    if (duplicada.error_permanent) {
+      return checkautoUpsertOSProducao(osId, (item) => ({
+        ...item,
+        ...extra,
+        pendente_sync: true,
+      }));
+    }
+    return checkautoUpsertOSProducao(osId, (item) => {
+      const filaAtual = Array.isArray(item.fila_sync) ? item.fila_sync : [];
+      const jaExisteNaFila = filaAtual.some((op) => op.id === duplicada.id);
+      const filaAtualizada = jaExisteNaFila ? filaAtual : [...filaAtual, duplicada];
+
+      return {
+        ...item,
+        ...extra,
+        fila_sync: filaAtualizada,
+        pendente_sync: true,
+      };
+    });
+  }
+
   const operacao = await window.checkautoAdicionarFilaSync({
     id: `foto-${Date.now()}-${Math.random()}`,
     type: "POST_FOTO_OS",
+    tipo: TIPO_FOTO,
     os_id: osId,
-    payload,
+    os_ref: osId,
+    payload: payloadNormalizado,
   });
 
   return checkautoUpsertOSProducao(osId, (item) => {
@@ -519,20 +624,68 @@ window.checkautoEnfileirarObservacaoOS = async function (osId, payload, extra = 
     }
   }
 
-  await window.checkautoRemoverDaFilaPorFiltro(
-    (item) => item.type === "UPSERT_OBSERVACAO" && item.os_id === osId
+  const dedupeKey = gerarDedupeKeyObservacao(
+    osId,
+    payloadNormalizado.etapa ?? null,
+    payloadNormalizado.texto || ""
   );
+
+  const filaExistente = await window.checkautoListarFilaSync();
+  const duplicada = filaExistente.find(
+    (item) =>
+      obterTipoFila(item) === TIPO_OBSERVACAO &&
+      item.os_ref === osId &&
+      item.dedupe_key === dedupeKey
+  );
+
+  if (duplicada) {
+    if (duplicada.error_permanent) {
+      return checkautoUpsertOSProducao(osId, (item) => ({
+        ...item,
+        ...extra,
+        pendente_sync: true,
+      }));
+    }
+
+    const atualizado = {
+      ...duplicada,
+      payload: payloadNormalizado,
+      created_at: new Date().toISOString(),
+      last_error: null,
+      status: "pendente",
+    };
+    await window.checkautoAdicionarFilaSync(atualizado);
+
+    return checkautoUpsertOSProducao(osId, (item) => {
+      const filaAtual = Array.isArray(item.fila_sync) ? item.fila_sync : [];
+      const filaAtualizada = filaAtual.map((op) =>
+        op.id === atualizado.id ? atualizado : op
+      );
+
+      return {
+        ...item,
+        ...extra,
+        fila_sync: filaAtualizada,
+        pendente_sync: true,
+      };
+    });
+  }
 
   const operacao = await window.checkautoAdicionarFilaSync({
     id: `obs-${Date.now()}-${Math.random()}`,
     type: "UPSERT_OBSERVACAO",
+    tipo: TIPO_OBSERVACAO,
     os_id: osId,
+    os_ref: osId,
     payload: payloadNormalizado,
+    dedupe_key: dedupeKey,
   });
 
   return checkautoUpsertOSProducao(osId, (item) => {
     const filaAtual = Array.isArray(item.fila_sync) ? item.fila_sync : [];
-    const semAntigas = filaAtual.filter((op) => op.type !== "UPSERT_OBSERVACAO");
+    const semAntigas = filaAtual.filter(
+      (op) => obterTipoFila(op) !== TIPO_OBSERVACAO || op.dedupe_key !== dedupeKey
+    );
 
     return {
       ...item,
@@ -544,8 +697,9 @@ window.checkautoEnfileirarObservacaoOS = async function (osId, payload, extra = 
 };
 
 window.checkautoEnfileirarAvancoEtapaOS = async function (osId, payload = {}, extra = {}) {
-  await window.checkautoRemoverDaFilaPorFiltro(
-    (item) => item.type === ACAO_AVANCAR_ETAPA && item.os_id === osId
+  const filaExistente = await window.checkautoListarFilaSync();
+  const duplicada = filaExistente.find(
+    (item) => obterTipoFila(item) === TIPO_AVANCO && item.os_ref === osId
   );
 
   const cacheProducao = window.checkautoBuscarOSProducao
@@ -566,22 +720,61 @@ window.checkautoEnfileirarAvancoEtapaOS = async function (osId, payload = {}, ex
 
   const fotosNormalizadas = Array.isArray(payload.fotos) ? payload.fotos : [];
 
+  const payloadAvanco = {
+    acao: "avancar_etapa",
+    timestamp: new Date().toISOString(),
+    observacao: payload.observacao || "",
+    fotos: fotosNormalizadas,
+    etapa_origem: etapaOrigem,
+  };
+
+  if (duplicada) {
+    if (duplicada.error_permanent) {
+      return checkautoUpsertOSProducao(osId, (item) => ({
+        ...item,
+        ...extra,
+        pendente_sync: true,
+        avancar_solicitado: true,
+      }));
+    }
+
+    const atualizado = {
+      ...duplicada,
+      payload: payloadAvanco,
+      created_at: new Date().toISOString(),
+      last_error: null,
+      status: "pendente",
+    };
+    await window.checkautoAdicionarFilaSync(atualizado);
+
+    return checkautoUpsertOSProducao(osId, (item) => {
+      const filaAtual = Array.isArray(item.fila_sync) ? item.fila_sync : [];
+      const filaAtualizada = filaAtual.map((op) =>
+        op.id === atualizado.id ? atualizado : op
+      );
+
+      return {
+        ...item,
+        ...extra,
+        fila_sync: filaAtualizada,
+        pendente_sync: true,
+        avancar_solicitado: true,
+      };
+    });
+  }
+
   const operacao = await window.checkautoAdicionarFilaSync({
     id: `avanco-${Date.now()}-${Math.random()}`,
     type: ACAO_AVANCAR_ETAPA,
+    tipo: TIPO_AVANCO,
     os_id: osId,
-    payload: {
-      acao: "avancar_etapa",
-      timestamp: new Date().toISOString(),
-      observacao: payload.observacao || "",
-      fotos: fotosNormalizadas,
-      etapa_origem: etapaOrigem,
-    },
+    os_ref: osId,
+    payload: payloadAvanco,
   });
 
   return checkautoUpsertOSProducao(osId, (item) => {
     const filaAtual = Array.isArray(item.fila_sync) ? item.fila_sync : [];
-    const semAvanco = filaAtual.filter((op) => op.type !== ACAO_AVANCAR_ETAPA);
+    const semAvanco = filaAtual.filter((op) => obterTipoFila(op) !== TIPO_AVANCO);
 
     return {
       ...item,
@@ -657,7 +850,7 @@ window.checkautoAplicarEtapaOS = async function (osId, etapa) {
 
     const atualizado = await checkautoUpsertOSProducao(osId, (item) => {
       const fila = Array.isArray(item.fila_sync) ? item.fila_sync : [];
-      const filaSemAvanco = fila.filter((op) => op.type !== ACAO_AVANCAR_ETAPA);
+      const filaSemAvanco = fila.filter((op) => obterTipoFila(op) !== TIPO_AVANCO);
       const pendente = filaSemAvanco.length > 0;
 
       return {
