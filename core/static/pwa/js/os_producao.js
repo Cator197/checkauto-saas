@@ -16,8 +16,14 @@ document.addEventListener("DOMContentLoaded", () => {
     status: document.getElementById("osStatus"),
     gridFotos: document.getElementById("gridFotosLivres"),
     infoOffline: document.getElementById("infoOffline"),
-    observacao: document.getElementById("observacaoEtapa"),
     observacaoStatus: document.getElementById("observacaoStatus"),
+    btnNovaObservacao: document.getElementById("btnNovaObservacao"),
+    blocoNovaObservacao: document.getElementById("blocoNovaObservacao"),
+    novaObservacaoTexto: document.getElementById("novaObservacaoTexto"),
+    btnAdicionarObservacao: document.getElementById("btnAdicionarObservacao"),
+    btnCancelarObservacao: document.getElementById("btnCancelarObservacao"),
+    observacaoFeedback: document.getElementById("observacaoFeedback"),
+    listaObservacoes: document.getElementById("listaObservacoesEtapa"),
     btnCamera: document.getElementById("btnTirarFotos"),
     btnAvancar: document.getElementById("btnAvancarEtapa"),
     inputCamera: document.getElementById("inputFotosEtapa"),
@@ -61,6 +67,7 @@ document.addEventListener("DOMContentLoaded", () => {
     fotosOffline: [],
     fotosOfflinePorEtapa: {},
     observacaoEtapa: "",
+    observacoes: [],
     avancar_solicitado: false,
     pendente_sync: false,
     atualizado_em: null,
@@ -190,14 +197,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return mapa;
   }
 
-  const debounce = (fn, wait = 300) => {
-    let t = null;
-    return (...args) => {
-      clearTimeout(t);
-      t = setTimeout(() => fn(...args), wait);
-    };
-  };
-
   function gerarLocalId() {
     if (window.crypto && typeof window.crypto.randomUUID === "function") {
       return window.crypto.randomUUID();
@@ -259,6 +258,18 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    if (item.type === "UPSERT_OBSERVACAO") {
+      if (data) {
+        const listaAtual = Array.isArray(state.observacoes) ? state.observacoes : [];
+        const atualizada = [
+          ...listaAtual.filter((obs) => obs?.dedupe_key !== item.dedupe_key),
+          data,
+        ];
+        atualizarObservacoesLocal(atualizada);
+      }
+      return;
+    }
+
     if (item.type !== "AVANCAR_ETAPA") return;
 
     const etapaNormalizada = normalizarEtapaLocal({
@@ -306,6 +317,7 @@ document.addEventListener("DOMContentLoaded", () => {
     await atualizarFotosOfflineDaEtapa(etapaNormalizada.id);
     renderEtapaHeader(state);
     preencherHeader();
+    renderizarListaObservacoes(state.etapaAtualId);
     atualizarBotoes();
     refs.btnAvancar.textContent = "Enviar para próxima etapa";
     refs.btnAvancar.disabled = false;
@@ -355,6 +367,7 @@ document.addEventListener("DOMContentLoaded", () => {
       fotos_obrigatorias_offline: fotosObrigatorias,
       fotos_offline_por_etapa: state.fotosOfflinePorEtapa,
       observacao_etapa: state.observacaoEtapa,
+      observacoes: state.observacoes,
       avancar_solicitado: state.avancar_solicitado,
       pendente_sync: state.pendente_sync,
       atualizado_em: state.atualizado_em,
@@ -553,11 +566,193 @@ document.addEventListener("DOMContentLoaded", () => {
     );
   }
 
-  function renderObservacao() {
-    const valor = state.observacaoEtapa || "";
-    if (refs.observacao.value !== valor) {
-      refs.observacao.value = valor;
+  function formatarDataHora(valor) {
+    if (!valor) return "—";
+    const data = new Date(valor);
+    if (Number.isNaN(data.getTime())) return "—";
+    return data.toLocaleString("pt-BR", {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+  }
+
+  function obterNomeUsuario(obs) {
+    return obs?.criado_por_nome || obs?.usuario_nome || obs?.tirada_por_nome || "Sistema";
+  }
+
+  function obterDataObservacao(obs) {
+    return obs?.criado_em || obs?.atualizado_em || obs?.data || obs?.created_at || null;
+  }
+
+  function obterObservacoesDaEtapa(etapaId, lista = state.observacoes) {
+    const observacoes = Array.isArray(lista) ? lista : [];
+    return observacoes
+      .filter((obs) => {
+        const id = typeof obs.etapa === "object" ? obs.etapa?.id : obs.etapa;
+        return Number(id) === Number(etapaId);
+      })
+      .sort(
+        (a, b) =>
+          new Date(obterDataObservacao(b) || 0) - new Date(obterDataObservacao(a) || 0)
+      );
+  }
+
+  function criarCardObservacao(obs) {
+    const card = document.createElement("div");
+    const statusSync = obs?.status_sync;
+    card.className = "pwa-observacao-card";
+    if (statusSync === "error") {
+      card.classList.add("pwa-observacao-card--error");
     }
+
+    const meta = document.createElement("div");
+    meta.className = "pwa-observacao-meta";
+
+    const nome = document.createElement("span");
+    nome.className = "pwa-observacao-nome";
+    nome.textContent = obterNomeUsuario(obs);
+
+    const data = document.createElement("span");
+    data.textContent = formatarDataHora(obterDataObservacao(obs));
+
+    meta.appendChild(nome);
+    meta.appendChild(document.createTextNode("•"));
+    meta.appendChild(data);
+
+    if (statusSync === "pending" || statusSync === "error") {
+      const badge = document.createElement("span");
+      badge.className = "pwa-observacao-badge";
+      badge.textContent = statusSync === "error" ? "Erro sync" : "Pendente";
+      meta.appendChild(badge);
+    }
+
+    const texto = document.createElement("p");
+    texto.className = "pwa-observacao-texto";
+    texto.textContent = obs?.texto || "";
+
+    card.appendChild(meta);
+    card.appendChild(texto);
+
+    if (statusSync === "error" && obs?.last_error) {
+      const erro = document.createElement("div");
+      erro.className = "pwa-muted";
+      erro.textContent = obs.last_error;
+      card.appendChild(erro);
+    }
+
+    return card;
+  }
+
+  function renderizarListaObservacoes(etapaId) {
+    if (!refs.listaObservacoes) return;
+    refs.listaObservacoes.innerHTML = "";
+    const observacoesEtapa = obterObservacoesDaEtapa(etapaId);
+    if (!observacoesEtapa.length) {
+      const vazio = document.createElement("p");
+      vazio.className = "pwa-muted";
+      vazio.textContent = "Sem observações nesta etapa.";
+      refs.listaObservacoes.appendChild(vazio);
+      return;
+    }
+    observacoesEtapa.forEach((obs) => {
+      refs.listaObservacoes.appendChild(criarCardObservacao(obs));
+    });
+  }
+
+  function gerarHashTexto(texto) {
+    let hash = 5381;
+    for (let i = 0; i < texto.length; i += 1) {
+      hash = (hash * 33) ^ texto.charCodeAt(i);
+    }
+    return (hash >>> 0).toString(16);
+  }
+
+  function gerarDedupeKeyObservacao(osRef, etapaId, texto) {
+    const textoNormalizado = (texto || "").trim();
+    const etapaNormalizada = etapaId ?? "sem-etapa";
+    return `${osRef || "sem-os"}-${etapaNormalizada}-${gerarHashTexto(textoNormalizado)}`;
+  }
+
+  function extrairPendenciasObservacao(filaSync = []) {
+    return (filaSync || [])
+      .filter((item) => item.type === "UPSERT_OBSERVACAO" && item.os_id === osId)
+      .map((item) => ({
+        id: item.id,
+        local_id: item.id,
+        dedupe_key: item.dedupe_key || null,
+        texto: item.payload?.texto || "",
+        etapa: item.payload?.etapa ?? item.payload?.etapa_id ?? null,
+        criado_em: item.created_at,
+        criado_por_nome: "Você",
+        status_sync: item.error_permanent ? "error" : "pending",
+        last_error: item.last_error || null,
+      }));
+  }
+
+  function atualizarObservacoesLocal(novasObservacoes) {
+    state = {
+      ...state,
+      observacoes: novasObservacoes,
+    };
+    salvarCache({ observacoes: novasObservacoes });
+    renderizarListaObservacoes(state.etapaAtualId);
+  }
+
+  async function carregarObservacoesDaOS() {
+    if (!osId) return;
+    try {
+      const resp = await apiFetch(`/api/os/${osId}/observacoes/`);
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const lista = Array.isArray(data?.results)
+        ? data.results
+        : Array.isArray(data)
+        ? data
+        : [];
+
+      const filaSync = window.checkautoListarFilaSync
+        ? await window.checkautoListarFilaSync()
+        : [];
+      const pendentes = extrairPendenciasObservacao(filaSync);
+      const pendentesDedupe = new Set(pendentes.map((item) => item.dedupe_key).filter(Boolean));
+      const listaFiltrada = lista.filter((obs) => {
+        if (!pendentesDedupe.size) return true;
+        const dedupe = gerarDedupeKeyObservacao(
+          osId,
+          typeof obs.etapa === "object" ? obs.etapa?.id : obs.etapa,
+          obs?.texto || ""
+        );
+        return !pendentesDedupe.has(dedupe);
+      });
+
+      atualizarObservacoesLocal([...listaFiltrada, ...pendentes]);
+    } catch (err) {
+      console.warn("Falha ao carregar observações da OS", err);
+    }
+  }
+
+  function limparFeedbackObservacao() {
+    if (!refs.observacaoFeedback) return;
+    refs.observacaoFeedback.textContent = "";
+    refs.observacaoFeedback.className = "pwa-muted";
+  }
+
+  function abrirNovaObservacao() {
+    if (refs.blocoNovaObservacao) {
+      refs.blocoNovaObservacao.style.display = "block";
+    }
+    limparFeedbackObservacao();
+    refs.novaObservacaoTexto?.focus();
+  }
+
+  function fecharNovaObservacao() {
+    if (refs.blocoNovaObservacao) {
+      refs.blocoNovaObservacao.style.display = "none";
+    }
+    if (refs.novaObservacaoTexto) {
+      refs.novaObservacaoTexto.value = "";
+    }
+    limparFeedbackObservacao();
   }
 
   function atualizarBotoes() {
@@ -597,6 +792,23 @@ document.addEventListener("DOMContentLoaded", () => {
         ? await window.checkautoListarFilaSync()
         : [];
       const mapaStatus = construirMapaStatusSync(filaSync);
+      const observacoesCache = Array.isArray(salvo.observacoes) ? salvo.observacoes : [];
+      const observacoesPendentes = extrairPendenciasObservacao(filaSync);
+      const pendentesDedupe = new Set(
+        observacoesPendentes.map((item) => item.dedupe_key).filter(Boolean)
+      );
+      const observacoesCombinadas = [
+        ...observacoesCache.filter((obs) => {
+          if (!pendentesDedupe.size) return true;
+          const dedupe = gerarDedupeKeyObservacao(
+            osId,
+            typeof obs.etapa === "object" ? obs.etapa?.id : obs.etapa,
+            obs?.texto || ""
+          );
+          return !pendentesDedupe.has(dedupe);
+        }),
+        ...observacoesPendentes,
+      ];
 
       const fotosOfflineEtapa = extrairFotosOfflineDaEtapa(
         fotosOfflinePorEtapa,
@@ -625,6 +837,7 @@ document.addEventListener("DOMContentLoaded", () => {
         fotosOfflinePorEtapa,
         fotosOffline: fotosOfflineEtapa,
         observacaoEtapa: salvo.observacao_etapa || "",
+        observacoes: observacoesCombinadas,
         avancar_solicitado: Boolean(salvo.avancar_solicitado),
         pendente_sync: Boolean(salvo.pendente_sync),
         fila_sync: Array.isArray(salvo.fila_sync) ? salvo.fila_sync : [],
@@ -633,7 +846,7 @@ document.addEventListener("DOMContentLoaded", () => {
       preencherHeader();
       renderEtapaHeader({ etapa_atual: etapaAtual, faltam_fotos_obrigatorias: state.faltamFotosObrigatorias });
       renderFotosLivres();
-      renderObservacao();
+      renderizarListaObservacoes(state.etapaAtualId);
       atualizarBotoes();
       setStatus("Dados carregados do dispositivo (offline).", "offline");
       return true;
@@ -778,7 +991,7 @@ document.addEventListener("DOMContentLoaded", () => {
       preencherHeader();
       renderEtapaHeader({ ...osData, proxima_etapa: proximaEtapa });
       renderFotosLivres();
-      renderObservacao();
+      await carregarObservacoesDaOS();
       atualizarBotoes();
       setStatus("Dados atualizados do servidor.", "info");
     } catch (err) {
@@ -791,25 +1004,110 @@ document.addEventListener("DOMContentLoaded", () => {
     preencherHeader();
     renderEtapaHeader(state);
     renderFotosLivres();
-    renderObservacao();
+    renderizarListaObservacoes(state.etapaAtualId);
     atualizarBotoes();
   }
 
-  const salvarObservacaoDebounce = debounce((valor) => {
-    salvarCache({ observacaoEtapa: valor, pendente_sync: true });
-    refs.observacaoStatus.textContent = "Observação salva localmente (aguardando sync).";
-    if (window.checkautoEnfileirarObservacaoOS) {
-      window.checkautoEnfileirarObservacaoOS(osId, {
-        texto: valor,
-        etapa: state.etapaAtualId,
-      });
-    }
-  }, 350);
+  if (refs.btnNovaObservacao) {
+    refs.btnNovaObservacao.addEventListener("click", () => {
+      abrirNovaObservacao();
+    });
+  }
 
-  refs.observacao.addEventListener("input", (e) => {
-    const valor = e.target.value;
-    salvarObservacaoDebounce(valor);
-  });
+  if (refs.btnCancelarObservacao) {
+    refs.btnCancelarObservacao.addEventListener("click", () => {
+      fecharNovaObservacao();
+    });
+  }
+
+  if (refs.btnAdicionarObservacao) {
+    refs.btnAdicionarObservacao.addEventListener("click", async () => {
+      if (!refs.novaObservacaoTexto) return;
+      const texto = refs.novaObservacaoTexto.value.trim();
+      const etapaId = state.etapaAtualId;
+
+      limparFeedbackObservacao();
+
+      if (!texto || texto.length < 3) {
+        if (refs.observacaoFeedback) {
+          refs.observacaoFeedback.textContent = "Digite ao menos 3 caracteres.";
+          refs.observacaoFeedback.className = "pwa-muted";
+        }
+        return;
+      }
+
+      if (!etapaId) {
+        if (refs.observacaoFeedback) {
+          refs.observacaoFeedback.textContent = "Etapa atual indisponível.";
+          refs.observacaoFeedback.className = "pwa-muted";
+        }
+        return;
+      }
+
+      refs.btnAdicionarObservacao.disabled = true;
+      refs.btnAdicionarObservacao.textContent = "Salvando...";
+
+      const payload = { etapa: etapaId, texto };
+
+      try {
+        if (navigator.onLine) {
+          const resp = await apiFetch(`/api/os/${osId}/observacoes/`, {
+            method: "POST",
+            body: payload,
+          });
+
+          if (!resp.ok) {
+            const textoErro = await resp.text();
+            throw new Error(textoErro || `Erro ${resp.status}`);
+          }
+
+          const salvo = await resp.json();
+          const listaAtual = Array.isArray(state.observacoes) ? state.observacoes : [];
+          const atualizada = [
+            ...listaAtual.filter((obs) => Number(obs?.id) !== Number(salvo?.id)),
+            salvo,
+          ];
+          state.observacaoEtapa = texto;
+          atualizarObservacoesLocal(atualizada);
+          fecharNovaObservacao();
+        } else {
+          const dedupeKey = gerarDedupeKeyObservacao(osId, etapaId, texto);
+          const pendente = {
+            id: `pendente-${Date.now()}-${Math.random()}`,
+            local_id: dedupeKey,
+            dedupe_key: dedupeKey,
+            texto,
+            etapa: etapaId,
+            criado_em: new Date().toISOString(),
+            criado_por_nome: "Você",
+            status_sync: "pending",
+          };
+
+          if (window.checkautoEnfileirarObservacaoOS) {
+            await window.checkautoEnfileirarObservacaoOS(osId, payload, {
+              pendente_sync: true,
+            });
+          }
+
+          const listaAtual = Array.isArray(state.observacoes) ? state.observacoes : [];
+          state.observacaoEtapa = texto;
+          atualizarObservacoesLocal([...listaAtual, pendente]);
+          salvarCache({ pendente_sync: true });
+          preencherHeader();
+          fecharNovaObservacao();
+        }
+      } catch (err) {
+        if (refs.observacaoFeedback) {
+          refs.observacaoFeedback.textContent = "Erro ao salvar observação.";
+          refs.observacaoFeedback.className = "pwa-muted";
+        }
+        console.error("Erro ao salvar observação", err);
+      } finally {
+        refs.btnAdicionarObservacao.disabled = false;
+        refs.btnAdicionarObservacao.textContent = "Adicionar";
+      }
+    });
+  }
 
   refs.btnCamera.addEventListener("click", () => {
     abrirOverlayCamera();
@@ -892,7 +1190,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   refs.btnAvancar.addEventListener("click", async () => {
-    const observacaoAtual = refs.observacao.value || state.observacaoEtapa || "";
+    const observacaoAtual = state.observacaoEtapa || "";
     const etapaLocal = state.etapaAtualId ?? null;
     const possuiEtapa = etapaLocal !== null && etapaLocal !== undefined;
 
@@ -907,9 +1205,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     refs.btnAvancar.textContent = "Agendado para próxima etapa";
     refs.btnAvancar.disabled = true;
-    refs.observacaoStatus.textContent = possuiEtapa
-      ? "Avanço agendado. Será enviado no próximo sync."
-      : "⚠️ Etapa local desconhecida. Enviaremos com fallback do servidor ao sincronizar.";
+    if (refs.observacaoStatus) {
+      refs.observacaoStatus.textContent = possuiEtapa
+        ? "Avanço agendado. Será enviado no próximo sync."
+        : "⚠️ Etapa local desconhecida. Enviaremos com fallback do servidor ao sincronizar.";
+    }
 
     if (!possuiEtapa) {
       console.warn(
