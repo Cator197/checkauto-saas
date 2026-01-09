@@ -18,11 +18,6 @@ document.addEventListener("DOMContentLoaded", () => {
     infoOffline: document.getElementById("infoOffline"),
     observacao: document.getElementById("observacaoEtapa"),
     observacaoStatus: document.getElementById("observacaoStatus"),
-    observacaoForm: document.getElementById("observacaoForm"),
-    observacoesLista: document.getElementById("observacoesLista"),
-    btnAdicionarObservacao: document.getElementById("btnAdicionarObservacao"),
-    btnSalvarObservacao: document.getElementById("btnSalvarObservacao"),
-    btnCancelarObservacao: document.getElementById("btnCancelarObservacao"),
     btnCamera: document.getElementById("btnTirarFotos"),
     btnAvancar: document.getElementById("btnAvancarEtapa"),
     inputCamera: document.getElementById("inputFotosEtapa"),
@@ -66,7 +61,6 @@ document.addEventListener("DOMContentLoaded", () => {
     fotosOffline: [],
     fotosOfflinePorEtapa: {},
     observacaoEtapa: "",
-    observacoes: [],
     avancar_solicitado: false,
     pendente_sync: false,
     atualizado_em: null,
@@ -196,6 +190,14 @@ document.addEventListener("DOMContentLoaded", () => {
     return mapa;
   }
 
+  const debounce = (fn, wait = 300) => {
+    let t = null;
+    return (...args) => {
+      clearTimeout(t);
+      t = setTimeout(() => fn(...args), wait);
+    };
+  };
+
   function gerarLocalId() {
     if (window.crypto && typeof window.crypto.randomUUID === "function") {
       return window.crypto.randomUUID();
@@ -254,35 +256,6 @@ document.addEventListener("DOMContentLoaded", () => {
       );
 
       renderFotosLivres();
-      return;
-    }
-
-    if (item.type === "UPSERT_OBSERVACAO") {
-      const textoPayload = item.payload?.texto || "";
-      const etapaPayload = item.payload?.etapa ?? item.payload?.etapa_id ?? null;
-      const atuais = Array.isArray(state.observacoes) ? state.observacoes : [];
-      const pendentes = atuais.filter((obs) => obs.status_sync === "pending");
-      const server = atuais.filter((obs) => obs.status_sync !== "pending");
-      const pendentesFiltradas = pendentes.filter((obs) => {
-        if (textoPayload && obs.texto !== textoPayload) return true;
-        if (etapaPayload == null) return false;
-        return obs.etapa_id && Number(obs.etapa_id) !== Number(etapaPayload);
-      });
-      if (data) {
-        const observacao = normalizarObservacaoItem(data);
-        state = {
-          ...state,
-          observacoes: mergeObservacoes([...server, observacao], pendentesFiltradas),
-        };
-      } else {
-        state = {
-          ...state,
-          observacoes: mergeObservacoes(server, pendentesFiltradas),
-        };
-      }
-
-      salvarCache({ observacoes: state.observacoes });
-      renderObservacoesLista();
       return;
     }
 
@@ -382,7 +355,6 @@ document.addEventListener("DOMContentLoaded", () => {
       fotos_obrigatorias_offline: fotosObrigatorias,
       fotos_offline_por_etapa: state.fotosOfflinePorEtapa,
       observacao_etapa: state.observacaoEtapa,
-      observacoes_etapas_cache: state.observacoes,
       avancar_solicitado: state.avancar_solicitado,
       pendente_sync: state.pendente_sync,
       atualizado_em: state.atualizado_em,
@@ -400,10 +372,8 @@ document.addEventListener("DOMContentLoaded", () => {
   function preencherHeader() {
     refs.codigo.textContent = state.codigo || `OS ${osId}`;
     refs.modelo.textContent = state.modelo || "Modelo não informado";
-    refs.placa.textContent = state.placa || "—";
-    refs.etapa.textContent = state.etapaAtualNome
-      ? `Etapa atual: ${state.etapaAtualNome}`
-      : "Etapa atual —";
+    refs.placa.textContent = state.placa ? `Placa ${state.placa}` : "Placa não informada";
+    refs.etapa.textContent = `Etapa atual: ${state.etapaAtualNome || "-"}`;
     if (refs.infoOffline) {
       refs.infoOffline.style.display = state.pendente_sync ? "inline-flex" : "none";
     }
@@ -588,88 +558,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (refs.observacao.value !== valor) {
       refs.observacao.value = valor;
     }
-    if (valor && refs.observacaoForm) {
-      refs.observacaoForm.style.display = "flex";
-    }
-  }
-
-  function formatarDataHora(valor) {
-    if (!valor) return "—";
-    const data = new Date(valor);
-    if (Number.isNaN(data.getTime())) return "—";
-    return data.toLocaleString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
-
-  function normalizarObservacaoItem(item) {
-    if (!item) return null;
-    return {
-      id: item.id ?? null,
-      local_id: item.local_id ?? null,
-      etapa_id: item.etapa ?? item.etapa_id ?? null,
-      texto: item.texto || "",
-      criado_em: item.criado_em || item.created_at || item.atualizado_em || null,
-      criado_por_nome: item.criado_por_nome || item.usuario_nome || "Você",
-      status_sync: item.status_sync || "synced",
-    };
-  }
-
-  function ordenarObservacoes(lista) {
-    return [...lista].sort((a, b) => {
-      const dataA = a.criado_em ? new Date(a.criado_em).getTime() : 0;
-      const dataB = b.criado_em ? new Date(b.criado_em).getTime() : 0;
-      if (dataA !== dataB) return dataB - dataA;
-      const idA = a.id || a.local_id || 0;
-      const idB = b.id || b.local_id || 0;
-      return idB > idA ? 1 : -1;
-    });
-  }
-
-  function renderObservacoesLista() {
-    if (!refs.observacoesLista) return;
-    refs.observacoesLista.innerHTML = "";
-
-    const observacoes = ordenarObservacoes(state.observacoes || []);
-
-    if (!observacoes.length) {
-      refs.observacoesLista.innerHTML =
-        '<p class="pwa-muted">Nenhuma observação registrada nesta etapa.</p>';
-      return;
-    }
-
-    observacoes.forEach((obs) => {
-      const item = document.createElement("div");
-      item.className = "pwa-observacao-item";
-      if (obs.status_sync === "pending") {
-        item.classList.add("pwa-observacao-pendente");
-      }
-
-      const texto = document.createElement("div");
-      texto.textContent = obs.texto || "—";
-
-      const meta = document.createElement("div");
-      meta.className = "pwa-observacao-meta";
-      meta.textContent = `${obs.criado_por_nome || "—"} • ${formatarDataHora(
-        obs.criado_em
-      )}`;
-
-      item.appendChild(texto);
-      item.appendChild(meta);
-
-      if (obs.status_sync === "pending") {
-        const badge = document.createElement("span");
-        badge.className = "pwa-observacao-badge";
-        badge.textContent = "Pendente";
-        meta.appendChild(badge);
-      }
-
-      refs.observacoesLista.appendChild(item);
-    });
   }
 
   function atualizarBotoes() {
@@ -723,14 +611,6 @@ document.addEventListener("DOMContentLoaded", () => {
         };
       });
 
-      const observacoesPendentes = extrairObservacoesPendentes(filaSync, etapaAtual.id);
-      const observacoesMescladas = mergeObservacoes(
-        Array.isArray(salvo.observacoes_etapas_cache)
-          ? salvo.observacoes_etapas_cache
-          : [],
-        observacoesPendentes
-      );
-
       state = {
         ...state,
         osOnline: salvo.osOnline || null,
@@ -745,7 +625,6 @@ document.addEventListener("DOMContentLoaded", () => {
         fotosOfflinePorEtapa,
         fotosOffline: fotosOfflineEtapa,
         observacaoEtapa: salvo.observacao_etapa || "",
-        observacoes: observacoesMescladas,
         avancar_solicitado: Boolean(salvo.avancar_solicitado),
         pendente_sync: Boolean(salvo.pendente_sync),
         fila_sync: Array.isArray(salvo.fila_sync) ? salvo.fila_sync : [],
@@ -755,7 +634,6 @@ document.addEventListener("DOMContentLoaded", () => {
       renderEtapaHeader({ etapa_atual: etapaAtual, faltam_fotos_obrigatorias: state.faltamFotosObrigatorias });
       renderFotosLivres();
       renderObservacao();
-      renderObservacoesLista();
       atualizarBotoes();
       setStatus("Dados carregados do dispositivo (offline).", "offline");
       return true;
@@ -802,60 +680,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!resp.ok) return [];
     const data = await resp.json();
     return (data || []).filter((f) => f.etapa === etapaId || f.etapa_id === etapaId);
-  }
-
-  async function fetchObservacoes(osId, etapaId) {
-    const url = new URL(`${window.location.origin}/api/os/${osId}/observacoes/`);
-    if (etapaId != null) {
-      url.searchParams.set("etapa", etapaId);
-    }
-
-    const resp = await apiFetch(url.toString());
-    if (!resp.ok) return [];
-    const data = await resp.json();
-    return Array.isArray(data) ? data.map(normalizarObservacaoItem).filter(Boolean) : [];
-  }
-
-  function extrairObservacoesPendentes(filaSync = [], etapaId) {
-    return (filaSync || [])
-      .filter((item) => item.type === "UPSERT_OBSERVACAO" && item.os_id === osId)
-      .filter((item) => {
-        if (etapaId == null) return true;
-        const etapaPayload = item.payload?.etapa ?? item.payload?.etapa_id ?? null;
-        return etapaPayload == null || Number(etapaPayload) === Number(etapaId);
-      })
-      .map((item) =>
-        normalizarObservacaoItem({
-          local_id: item.id,
-          texto: item.payload?.texto || "",
-          criado_em: item.created_at || new Date().toISOString(),
-          etapa_id: item.payload?.etapa ?? item.payload?.etapa_id ?? null,
-          criado_por_nome: "Você",
-          status_sync: "pending",
-        })
-      )
-      .filter(Boolean);
-  }
-
-  function mergeObservacoes(serverItems = [], pendentes = []) {
-    const mapa = new Map();
-    const pendentesNormalizados = [...(pendentes || [])];
-    serverItems.forEach((item) => {
-      if (!item) return;
-      if (item.status_sync === "pending") {
-        pendentesNormalizados.push(item);
-        return;
-      }
-      const chave = item.id ?? item.local_id ?? item.texto;
-      mapa.set(`server:${chave}`, { ...item, status_sync: item.status_sync || "synced" });
-    });
-
-    pendentesNormalizados.forEach((item) => {
-      if (!item) return;
-      mapa.set(`local:${item.local_id || item.id || item.texto}`, item);
-    });
-
-    return ordenarObservacoes(Array.from(mapa.values()));
   }
 
   async function fetchProximaEtapa(osId) {
@@ -912,19 +736,13 @@ document.addEventListener("DOMContentLoaded", () => {
         status_sync: "synced",
       }));
 
-      const observacaoEtapa = state.observacaoEtapa || "";
-
-      const observacoesServidor = await fetchObservacoes(osId, etapaId);
+      const observacaoEtapa =
+        state.observacaoEtapa || osData.observacao_etapa_atual || osData.observacoes || "";
 
       const filaAtual = window.checkautoListarFilaSync
         ? await window.checkautoListarFilaSync()
         : [];
       const pendenteSync = (filaAtual || []).some((item) => item.os_id === osId);
-      const observacoesPendentes = extrairObservacoesPendentes(filaAtual, etapaId);
-      const observacoesMescladas = mergeObservacoes(
-        observacoesServidor,
-        observacoesPendentes
-      );
 
       salvarCache({
         codigo: `OS ${osData.codigo || osId}`,
@@ -934,7 +752,6 @@ document.addEventListener("DOMContentLoaded", () => {
         etapaAtualNome: etapaNome,
         fotosServer: fotosServidor,
         observacaoEtapa: observacaoEtapa,
-        observacoes: observacoesMescladas,
         avancar_solicitado: false,
         pendente_sync: pendenteSync,
         faltamFotosObrigatorias: osData.faltam_fotos_obrigatorias ?? state.faltamFotosObrigatorias,
@@ -950,7 +767,6 @@ document.addEventListener("DOMContentLoaded", () => {
         etapaAtualNome: etapaNome,
         fotosServer: fotosServidor,
         observacaoEtapa: observacaoEtapa,
-        observacoes: observacoesMescladas,
         avancar_solicitado: false,
         pendente_sync: pendenteSync,
         faltamFotosObrigatorias: osData.faltam_fotos_obrigatorias ?? state.faltamFotosObrigatorias,
@@ -963,7 +779,6 @@ document.addEventListener("DOMContentLoaded", () => {
       renderEtapaHeader({ ...osData, proxima_etapa: proximaEtapa });
       renderFotosLivres();
       renderObservacao();
-      renderObservacoesLista();
       atualizarBotoes();
       setStatus("Dados atualizados do servidor.", "info");
     } catch (err) {
@@ -977,129 +792,24 @@ document.addEventListener("DOMContentLoaded", () => {
     renderEtapaHeader(state);
     renderFotosLivres();
     renderObservacao();
-    renderObservacoesLista();
     atualizarBotoes();
   }
 
-  function toggleFormularioObservacao(abrir) {
-    if (!refs.observacaoForm) return;
-    refs.observacaoForm.style.display = abrir ? "flex" : "none";
-    if (abrir && refs.observacao) {
-      refs.observacao.focus();
-    }
-  }
-
-  async function adicionarObservacaoNaLista(observacao) {
-    if (!observacao) return;
-    const atuais = Array.isArray(state.observacoes) ? state.observacoes : [];
-    const server = atuais.filter((obs) => obs.status_sync !== "pending");
-    const pendentes = atuais.filter((obs) => obs.status_sync === "pending");
-    if (observacao.status_sync === "pending") {
-      pendentes.push(observacao);
-    } else {
-      server.push(observacao);
-    }
-    state = {
-      ...state,
-      observacoes: mergeObservacoes(server, pendentes),
-    };
-    salvarCache({ observacoes: state.observacoes });
-    renderObservacoesLista();
-  }
-
-  async function salvarObservacao() {
-    if (!refs.observacao) return;
-    const texto = (refs.observacao.value || "").trim();
-    if (!texto) {
-      refs.observacaoStatus.textContent = "Digite uma observação antes de salvar.";
-      return;
-    }
-
-    refs.observacaoStatus.textContent = "Salvando observação...";
-    const etapaId = state.etapaAtualId;
-
-    if (!navigator.onLine) {
-      if (window.checkautoEnfileirarObservacaoOS) {
-        await window.checkautoEnfileirarObservacaoOS(osId, {
-          texto,
-          etapa: etapaId,
-        });
-      } else {
-        refs.observacaoStatus.textContent =
-          "Sem internet, observação será enviada ao sincronizar.";
-      }
-
-      const pendente = normalizarObservacaoItem({
-        local_id: `local-${Date.now()}`,
-        texto,
-        criado_em: new Date().toISOString(),
-        etapa_id: etapaId,
-        criado_por_nome: "Você",
-        status_sync: "pending",
+  const salvarObservacaoDebounce = debounce((valor) => {
+    salvarCache({ observacaoEtapa: valor, pendente_sync: true });
+    refs.observacaoStatus.textContent = "Observação salva localmente (aguardando sync).";
+    if (window.checkautoEnfileirarObservacaoOS) {
+      window.checkautoEnfileirarObservacaoOS(osId, {
+        texto: valor,
+        etapa: state.etapaAtualId,
       });
-
-      await adicionarObservacaoNaLista(pendente);
-      salvarCache({ observacaoEtapa: "", pendente_sync: true });
-      refs.observacao.value = "";
-      refs.observacaoStatus.textContent =
-        "Sem internet, observação será enviada ao sincronizar.";
-      toggleFormularioObservacao(false);
-      if (refs.infoOffline) {
-        refs.infoOffline.style.display = "inline-flex";
-        refs.infoOffline.textContent = "Pendente sync";
-      }
-      return;
     }
+  }, 350);
 
-    try {
-      const resp = await apiFetch(`/api/os/${osId}/observacoes/`, {
-        method: "POST",
-        body: {
-          texto,
-          etapa: etapaId,
-        },
-      });
-
-      if (!resp.ok) {
-        refs.observacaoStatus.textContent =
-          "Não foi possível salvar a observação agora.";
-        return;
-      }
-
-      const data = await resp.json();
-      const observacao = normalizarObservacaoItem(data);
-      await adicionarObservacaoNaLista(observacao);
-
-      refs.observacao.value = "";
-      salvarCache({ observacaoEtapa: "" });
-      refs.observacaoStatus.textContent = "Observação salva.";
-      toggleFormularioObservacao(false);
-    } catch (err) {
-      console.error("Erro ao salvar observação:", err);
-      refs.observacaoStatus.textContent =
-        "Erro ao salvar observação. Tente novamente.";
-    }
-  }
-
-  if (refs.btnAdicionarObservacao) {
-    refs.btnAdicionarObservacao.addEventListener("click", () => {
-      toggleFormularioObservacao(true);
-    });
-  }
-
-  if (refs.btnCancelarObservacao) {
-    refs.btnCancelarObservacao.addEventListener("click", () => {
-      if (refs.observacao) {
-        refs.observacao.value = "";
-      }
-      refs.observacaoStatus.textContent = "";
-      toggleFormularioObservacao(false);
-    });
-  }
-
-  if (refs.btnSalvarObservacao) {
-    refs.btnSalvarObservacao.addEventListener("click", salvarObservacao);
-  }
+  refs.observacao.addEventListener("input", (e) => {
+    const valor = e.target.value;
+    salvarObservacaoDebounce(valor);
+  });
 
   refs.btnCamera.addEventListener("click", () => {
     abrirOverlayCamera();
@@ -1182,8 +892,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   refs.btnAvancar.addEventListener("click", async () => {
-    const observacaoAtual = (refs.observacao?.value || "").trim();
-    const possuiObservacao = Boolean(observacaoAtual);
+    const observacaoAtual = refs.observacao.value || state.observacaoEtapa || "";
     const etapaLocal = state.etapaAtualId ?? null;
     const possuiEtapa = etapaLocal !== null && etapaLocal !== undefined;
 
@@ -1208,7 +917,7 @@ document.addEventListener("DOMContentLoaded", () => {
       );
     }
 
-    if (possuiObservacao && window.checkautoEnfileirarObservacaoOS) {
+    if (window.checkautoEnfileirarObservacaoOS) {
       await window.checkautoEnfileirarObservacaoOS(osId, {
         texto: observacaoAtual,
         etapa: state.etapaAtualId,
@@ -1219,7 +928,7 @@ document.addEventListener("DOMContentLoaded", () => {
       await window.checkautoEnfileirarAvancoEtapaOS(
         osId,
         {
-          observacao: possuiObservacao ? observacaoAtual : "",
+          observacao: observacaoAtual,
           fotos: coletarMetadadosFotosPendentes(),
         },
         { pendente_sync: true, etapa_atual: { id: state.etapaAtualId, nome: state.etapaAtualNome } }
