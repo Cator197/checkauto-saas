@@ -17,6 +17,7 @@ if ("serviceWorker" in navigator) {
 }
 
 let checkautoHasReloaded = false;
+let checkautoHasUpdateBanner = false;
 
 function checkautoShowUpdateBanner(registration) {
   const banner = document.getElementById("pwaUpdateBanner");
@@ -25,8 +26,21 @@ function checkautoShowUpdateBanner(registration) {
     return;
   }
 
+  if (!registration?.waiting) {
+    return;
+  }
+
+  if (!checkautoHasUpdateBanner) {
+    console.log("[PWA] Nova versão disponível, exibindo banner.");
+    checkautoHasUpdateBanner = true;
+  }
   banner.hidden = false;
   button.onclick = () => {
+    if (!registration.waiting) {
+      console.warn("[PWA] Nenhum service worker em espera ao solicitar atualização.");
+      return;
+    }
+    console.log("[PWA] Enviando SKIP_WAITING para service worker.");
     button.disabled = true;
     button.textContent = "Atualizando...";
     registration.waiting?.postMessage({ type: "SKIP_WAITING" });
@@ -46,6 +60,7 @@ function checkautoSetupServiceWorkerUpdates(registration) {
 
     newWorker.addEventListener("statechange", () => {
       if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+        console.log("[PWA] Update encontrado via updatefound.");
         checkautoShowUpdateBanner(registration);
       }
     });
@@ -55,6 +70,7 @@ function checkautoSetupServiceWorkerUpdates(registration) {
     if (checkautoHasReloaded) {
       return;
     }
+    console.log("[PWA] controllerchange detectado, recarregando.");
     checkautoHasReloaded = true;
     window.location.reload();
   });
