@@ -11,47 +11,79 @@
     <p class="pwa-subtitle">Gerencie as etapas do veículo selecionado.</p>
   </section>
 
-  <div class="pwa-card">
-    <div class="pwa-row pwa-row--between">
-      <div class="pwa-col">
-        <strong id="osCodigo">OS —</strong>
+  <section class="pwa-card pwa-card--section">
+    <div class="pwa-card__header">
+      <h2 class="pwa-card__title">Resumo da OS</h2>
+      <span id="osEtapa" class="pwa-badge pwa-badge-success">Etapa atual —</span>
+    </div>
+    <div class="pwa-summary">
+      <div class="pwa-summary__info">
+        <strong id="osCodigo" class="pwa-summary__codigo">OS —</strong>
         <span id="osModelo" class="pwa-muted">Modelo —</span>
-        <span id="osPlaca" class="pwa-muted">Placa —</span>
       </div>
-      <div class="pwa-col" style="text-align:right;">
-        <span id="osEtapa" class="pwa-badge pwa-badge-success">Etapa atual —</span>
+      <div class="pwa-summary__plate">
+        <span class="pwa-summary__label">Placa</span>
+        <strong id="osPlaca" class="pwa-summary__value">—</strong>
+      </div>
+      <div class="pwa-summary__status">
         <span id="osStatus" class="pwa-muted"></span>
         <span id="infoOffline" class="pwa-badge pwa-badge-warning" style="display:none;">Pendente sync</span>
       </div>
     </div>
-  </div>
+  </section>
 
-  <section id="etapaHeader" class="pwa-card" style="margin-top: 16px;">
-    <div class="pwa-row pwa-row--between">
-      <div class="pwa-col">
-        <h2 id="etapaAtualNome" class="pwa-title" style="font-size: 18px;">Etapa —</h2>
-        <div id="etapaObrigatoriasStatus" class="pwa-badge pwa-badge-warning"></div>
-      </div>
+  <section id="etapaHeader" class="pwa-card pwa-card--section">
+    <div class="pwa-card__header">
+      <h2 class="pwa-card__title">Etapa</h2>
       <div id="etapaProximaNome" class="pwa-muted"></div>
     </div>
+    <div class="pwa-row pwa-row--between pwa-row--align-start">
+      <div class="pwa-col">
+        <h3 id="etapaAtualNome" class="pwa-section-title">Etapa —</h3>
+        <div id="etapaObrigatoriasStatus" class="pwa-badge pwa-badge-warning"></div>
+      </div>
+    </div>
   </section>
 
-  <section class="pwa-card" style="margin-top: 16px;">
-    <div class="pwa-row pwa-row--between">
-      <h2 class="pwa-title" style="font-size: 18px;">Fotos da etapa</h2>
-      <div class="pwa-muted">Fotos livres e sincronização</div>
-    </div>
-    <div class="pwa-actions-row" style="margin-top: 12px;">
-      <button id="btnTirarFotos" class="pwa-btn pwa-btn-primary" type="button">Adicionar fotos</button>
+  <section class="pwa-card pwa-card--section">
+    <div class="pwa-card__header">
+      <div>
+        <h2 class="pwa-card__title">Fotos da etapa</h2>
+        <p class="pwa-muted">Fotos livres e sincronização</p>
+      </div>
+      <button id="btnTirarFotos" class="pwa-btn pwa-btn-primary pwa-btn-small" type="button">
+        Adicionar fotos
+      </button>
     </div>
     <input id="inputFotosEtapa" type="file" accept="image/*" capture="environment" multiple hidden>
-    <div id="gridFotosLivres" class="fotos-grid" style="margin-top: 12px;"></div>
+    <div id="gridFotosLivres" class="fotos-grid pwa-grid" style="margin-top: 12px;"></div>
   </section>
 
-  <section class="pwa-card" style="margin-top: 16px;">
-    <label for="observacaoEtapa"><strong>Observações da etapa</strong></label>
-    <textarea id="observacaoEtapa" class="pwa-textarea" placeholder="Digite observações sobre a etapa atual..."></textarea>
+  <section class="pwa-card pwa-card--section">
+    <div class="pwa-card__header">
+      <div>
+        <h2 class="pwa-card__title">Observações da etapa</h2>
+        <p class="pwa-muted">Histórico desta etapa</p>
+      </div>
+      <button id="btnAdicionarObservacao" class="pwa-btn pwa-btn-primary pwa-btn-small" type="button">
+        Adicionar observação
+      </button>
+    </div>
+    <div id="observacaoForm" class="pwa-form" style="display:none;">
+      <textarea
+        id="observacaoEtapa"
+        class="pwa-textarea"
+        placeholder="Digite observações sobre a etapa atual..."
+      ></textarea>
+      <div class="pwa-actions-row">
+        <button id="btnSalvarObservacao" class="pwa-btn pwa-btn-primary" type="button">Salvar</button>
+        <button id="btnCancelarObservacao" class="pwa-btn pwa-btn-secondary" type="button">
+          Cancelar
+        </button>
+      </div>
+    </div>
     <div id="observacaoStatus" class="pwa-muted"></div>
+    <div id="observacoesLista" class="pwa-observacoes-lista"></div>
   </section>
 
   <div class="pwa-actions" style="margin-top: 16px;">
