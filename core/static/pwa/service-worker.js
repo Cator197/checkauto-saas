@@ -1,8 +1,9 @@
 // Nome do cache (mude a versão quando fizer mudanças grandes no front)
-const CACHE_NAME = "checkauto-pwa-v4";
+const CACHE_NAME = "checkauto-pwa-shell-v5";
 
 // Lista de arquivos essenciais para o app abrir (app shell)
 const URLS_TO_CACHE = [
+  "/pwa/offline/",
   "/static/pwa/manifest.json",
   "/static/pwa/js/app.js",
   "/static/pwa/js/api.js",
@@ -11,7 +12,7 @@ const URLS_TO_CACHE = [
   "/static/shared/api.js",
   "/static/pwa/icons/icon-192.png",
   "/static/pwa/icons/icon-512.png",
-  "/static/pwa/offline.html"
+  "/static/pwa/icons/apple-touch-icon.png"
 ];
 
 // Evento de instalação: cacheia os arquivos do app shell
@@ -46,11 +47,20 @@ self.addEventListener("fetch", event => {
   const url = new URL(request.url);
 
   if (request.method !== "GET") {
+    event.respondWith(fetch(request));
+    return;
+  }
+
+  if (url.pathname.startsWith("/api/")) {
+    event.respondWith(fetch(request));
     return;
   }
 
   // Ignora qualquer rota que não esteja dentro do escopo do PWA, evitando interferir no painel/admin
-  const isPwaRoute = url.pathname.startsWith("/pwa") || url.pathname.startsWith("/static/pwa/");
+  const isPwaRoute =
+    url.pathname.startsWith("/pwa/") ||
+    url.pathname.startsWith("/static/pwa/") ||
+    url.pathname.startsWith("/static/shared/");
   if (!isPwaRoute) {
     return;
   }
@@ -68,26 +78,33 @@ self.addEventListener("fetch", event => {
           }
           return response;
         })
-        .catch(() => caches.match(request).then(cacheResp => cacheResp || caches.match("/static/pwa/offline.html")))
+        .catch(() =>
+          caches.match(request).then(cacheResp => cacheResp || caches.match("/pwa/offline/"))
+        )
     );
     return;
   }
 
-  // Para assets estáticos (CSS, JS, ícones) do PWA: Cache First
-  event.respondWith(
-    caches.match(request).then(response => {
-      return (
-        response ||
-        fetch(request).then(networkResponse => {
-          if (networkResponse && networkResponse.ok) {
-            return caches.open(CACHE_NAME).then(cache => {
-              cache.put(request, networkResponse.clone());
-              return networkResponse;
-            });
-          }
-          return networkResponse;
-        })
-      );
-    })
-  );
+  const isStaticAsset =
+    url.pathname.startsWith("/static/") || url.pathname.startsWith("/pwa/");
+
+  if (isStaticAsset) {
+    // Para assets estáticos (CSS, JS, ícones) do PWA: Cache First
+    event.respondWith(
+      caches.match(request).then(response => {
+        return (
+          response ||
+          fetch(request).then(networkResponse => {
+            if (networkResponse && networkResponse.ok) {
+              return caches.open(CACHE_NAME).then(cache => {
+                cache.put(request, networkResponse.clone());
+                return networkResponse;
+              });
+            }
+            return networkResponse;
+          })
+        );
+      })
+    );
+  }
 });

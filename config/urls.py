@@ -43,6 +43,10 @@ def pwa_sync(request):
     return render(request, "pwa/sync.html")
 
 
+def pwa_offline(request):
+    return render(request, "pwa/offline.html")
+
+
 def pwa_veiculos_em_producao(request):
     return render(request, "pwa/veiculos_em_producao.html")
 
@@ -106,6 +110,7 @@ urlpatterns = [
     path('pwa/checkin-fotos/', pwa_checkin_fotos, name='pwa_checkin_fotos'),
     path('pwa/service-worker.js', pwa_service_worker, name='pwa_service_worker'),
     path('pwa/sync/', pwa_sync, name='pwa_sync'),
+    path('pwa/offline/', pwa_offline, name='pwa_offline'),
     path('pwa/veiculos-em-producao/', pwa_veiculos_em_producao, name='pwa_veiculos_em_producao'),
     path('pwa/os/<int:os_id>/', pwa_os_producao, name='pwa_os_producao'),
 
