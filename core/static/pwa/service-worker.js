@@ -58,7 +58,7 @@ self.addEventListener("activate", event => {
 // Listener para permitir atualização do SW sem desinstalar o app
 self.addEventListener("message", event => {
   if (event.data?.type === "SKIP_WAITING") {
-    console.log("[SW] SKIP_WAITING recebido. Ativando novo SW.");
+    console.log("[SW] SKIP_WAITING recebido.");
     self.skipWaiting();
   }
 });
