@@ -1,5 +1,7 @@
 // Nome do cache (mude a versão quando fizer mudanças grandes no front)
-const CACHE_NAME = "checkauto-pwa-v2026-01-09";
+const CACHE_VERSION = "v2026-01-09-test01";
+const CACHE_NAME = `checkauto-pwa-${CACHE_VERSION}`;
+console.log("[SW] Iniciando Service Worker - versão:", CACHE_VERSION);
 
 // Lista de arquivos essenciais para o app abrir (app shell)
 const URLS_TO_CACHE = [
