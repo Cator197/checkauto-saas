@@ -29,6 +29,7 @@ self.addEventListener("install", event => {
           }
         })
       );
+      console.log("[SW] Install concluído com cache resiliente.");
     })()
   );
 });
@@ -46,12 +47,16 @@ self.addEventListener("activate", event => {
         );
       })
       .then(() => self.clients.claim())
+      .then(() => {
+        console.log("[SW] Ativado e controlando clientes.");
+      })
   );
 });
 
 // Listener para permitir atualização do SW sem desinstalar o app
 self.addEventListener("message", event => {
   if (event.data?.type === "SKIP_WAITING") {
+    console.log("[SW] SKIP_WAITING recebido. Ativando novo SW.");
     self.skipWaiting();
   }
 });
