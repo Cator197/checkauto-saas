@@ -18,9 +18,18 @@ const URLS_TO_CACHE = [
 // Evento de instalação: cacheia os arquivos do app shell
 self.addEventListener("install", event => {
   event.waitUntil(
-    caches
-      .open(CACHE_NAME)
-      .then(cache => cache.addAll(URLS_TO_CACHE))
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      await Promise.all(
+        URLS_TO_CACHE.map(async url => {
+          try {
+            await cache.add(url);
+          } catch (error) {
+            console.warn("[SW] Falha ao cachear asset:", url, error);
+          }
+        })
+      );
+    })()
   );
 });
 
@@ -38,6 +47,13 @@ self.addEventListener("activate", event => {
       })
       .then(() => self.clients.claim())
   );
+});
+
+// Listener para permitir atualização do SW sem desinstalar o app
+self.addEventListener("message", event => {
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 // Evento de fetch: responde com cache quando possível
