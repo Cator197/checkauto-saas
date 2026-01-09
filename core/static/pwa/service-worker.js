@@ -1,5 +1,5 @@
 // Nome do cache (mude a versão quando fizer mudanças grandes no front)
-const CACHE_NAME = "checkauto-pwa-shell-v5";
+const CACHE_NAME = "checkauto-pwa-v2026-01-09";
 
 // Lista de arquivos essenciais para o app abrir (app shell)
 const URLS_TO_CACHE = [
@@ -21,7 +21,6 @@ self.addEventListener("install", event => {
     caches
       .open(CACHE_NAME)
       .then(cache => cache.addAll(URLS_TO_CACHE))
-      .then(() => self.skipWaiting())
   );
 });
 
