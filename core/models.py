@@ -335,6 +335,7 @@ class ObservacaoEtapaOS(models.Model):
     os = models.ForeignKey(OS, on_delete=models.CASCADE, related_name='observacoes_etapas')
     etapa = models.ForeignKey(Etapa, on_delete=models.CASCADE, related_name='observacoes_os')
     texto = models.TextField()
+    local_id = models.UUIDField(null=True, blank=True)
     criado_por = models.ForeignKey(
         UsuarioOficina,
         on_delete=models.SET_NULL,
@@ -349,6 +350,13 @@ class ObservacaoEtapaOS(models.Model):
     class Meta:
         verbose_name = "Observação da Etapa"
         verbose_name_plural = "Observações das Etapas"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["os", "local_id"],
+                name="uniq_observacao_os_local_id",
+                condition=models.Q(local_id__isnull=False),
+            )
+        ]
 
     def __str__(self):
         return f"OS {self.os.codigo} - {self.etapa.nome}"
