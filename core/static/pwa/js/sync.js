@@ -3,6 +3,29 @@
 
 let syncEmAndamento = false;
 let statusPendencias = {};
+const MAX_TENTATIVAS_SYNC = 5;
+const TIPOS_PRIORIDADE = ["os_upsert", "observacao_create", "foto_upload", "avanco_etapa"];
+
+function normalizarTipoFila(tipo) {
+  switch (tipo) {
+    case "PATCH_OS":
+      return "os_upsert";
+    case "POST_FOTO_OS":
+      return "foto_upload";
+    case "UPSERT_OBSERVACAO":
+      return "observacao_create";
+    case "AVANCAR_ETAPA":
+      return "avanco_etapa";
+    case "SYNC_OS":
+      return "os_upsert";
+    default:
+      return tipo || "desconhecido";
+  }
+}
+
+function obterTipoFila(item) {
+  return normalizarTipoFila(item?.tipo || item?.type);
+}
 
 function formatarTipo(tipo) {
   switch (tipo) {
@@ -17,6 +40,19 @@ function formatarTipo(tipo) {
     case "AVANCAR_ETAPA":
       return "Avançar etapa";
     default:
+      break;
+  }
+
+  switch (normalizarTipoFila(tipo)) {
+    case "os_upsert":
+      return "Check-in offline";
+    case "observacao_create":
+      return "Observação da etapa";
+    case "foto_upload":
+      return "Upload de foto";
+    case "avanco_etapa":
+      return "Avançar etapa";
+    default:
       return tipo || "Desconhecido";
   }
 }
@@ -24,6 +60,9 @@ function formatarTipo(tipo) {
 function statusInicial(item) {
   if (item.error_permanent) {
     return { texto: "erro_permanente", detalhe: item.last_error };
+  }
+  if (item.status === "sucesso") {
+    return { texto: "sincronizado", detalhe: null };
   }
   if (item.last_error) {
     return { texto: "erro", detalhe: item.last_error };
@@ -48,6 +87,18 @@ function extrairExtensaoFoto(foto) {
   return null;
 }
 
+function gerarLocalId() {
+  if (window.crypto && typeof window.crypto.randomUUID === "function") {
+    return window.crypto.randomUUID();
+  }
+
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+    const rand = Math.random() * 16;
+    const value = char === "x" ? rand : (rand & 0x3) | 0x8;
+    return Math.floor(value).toString(16);
+  });
+}
+
 function normalizarFotoOSPendente(foto) {
   if (!foto) return null;
 
@@ -55,7 +106,7 @@ function normalizarFotoOSPendente(foto) {
   if (!dataUrl) return null;
 
   const extensao = (extrairExtensaoFoto(foto) || "jpg").toLowerCase();
-  const localId = foto.local_id || foto.id;
+  const localId = foto.local_id || foto.id || gerarLocalId();
 
   const normalizada = {
     local_id: localId,
@@ -254,6 +305,7 @@ async function sincronizarItem(item) {
     let resp = null;
     let data = null;
     let dadosRemotos = null;
+    const tipo = obterTipoFila(item);
 
     if (item.type === "PATCH_OS") {
       resp = await apiFetch(`/api/os/${item.os_id}/`, {
@@ -348,7 +400,7 @@ async function sincronizarItem(item) {
     }
 
     if (!resp) {
-      throw new Error("Tipo de operação desconhecido");
+      throw new Error(`Tipo de operação desconhecido (${tipo})`);
     }
 
     if (!resp.ok) {
@@ -356,7 +408,8 @@ async function sincronizarItem(item) {
       if (item.type === "SYNC_OS") {
         await registrarErroOSPendente(item.os_local_id, texto);
       } else {
-        if (erroPermanenteParaItem(item, resp.status)) {
+        const tentativas = (item.tentativas || item.tries || 0) + 1;
+        if (tentativas >= MAX_TENTATIVAS_SYNC || erroPermanenteParaItem(item, resp.status)) {
           if (window.checkautoMarcarErroPermanenteFilaSync) {
             await window.checkautoMarcarErroPermanenteFilaSync(item.id, texto);
           } else {
@@ -444,10 +497,44 @@ async function sincronizarItem(item) {
     if (item.type === "SYNC_OS") {
       await registrarErroOSPendente(item.os_local_id, mensagem);
     } else {
+      const tentativas = (item.tentativas || item.tries || 0) + 1;
+      if (tentativas >= MAX_TENTATIVAS_SYNC && window.checkautoMarcarErroPermanenteFilaSync) {
+        await window.checkautoMarcarErroPermanenteFilaSync(item.id, mensagem);
+        return { ok: false, mensagem, error_permanent: true };
+      }
       await window.checkautoRegistrarErroFilaSync(item.id, mensagem);
     }
     return { ok: false, mensagem };
   }
+}
+
+function ordenarPendencias(lista) {
+  const prioridade = (item) => {
+    const tipo = obterTipoFila(item);
+    const idx = TIPOS_PRIORIDADE.indexOf(tipo);
+    return idx === -1 ? TIPOS_PRIORIDADE.length : idx;
+  };
+
+  return [...(lista || [])].sort((a, b) => {
+    const diff = prioridade(a) - prioridade(b);
+    if (diff !== 0) return diff;
+    return new Date(a.created_at) - new Date(b.created_at);
+  });
+}
+
+function filtrarPendenciasProcessaveis(lista) {
+  return (lista || []).filter((item) => !item.error_permanent);
+}
+
+async function resetarItemErroPermanente(item) {
+  if (!item?.id || !window.checkautoAtualizarItemFilaSync) return;
+  await window.checkautoAtualizarItemFilaSync(item.id, {
+    error_permanent: false,
+    last_error: null,
+    status: "pendente",
+    tentativas: 0,
+    tries: 0,
+  });
 }
 
 function renderPendencias(lista) {
@@ -480,7 +567,7 @@ function renderPendencias(lista) {
     div.className = "os-item";
     div.innerHTML = `
       <div class="os-header">
-        <strong>${formatarTipo(item.type)}</strong>
+        <strong>${formatarTipo(item.tipo || item.type)}</strong>
         <span class="status-badge status-${status.texto}">${
           status.texto === "pendente"
             ? "Pendente"
@@ -497,12 +584,23 @@ function renderPendencias(lista) {
       <div class="os-meta">Criado em: ${
         item.created_at ? new Date(item.created_at).toLocaleString() : "—"
       }</div>
-      <div class="os-meta">Tentativas: ${item.tries || 0}</div>
+      <div class="os-meta">Tentativas: ${item.tentativas || item.tries || 0}</div>
     `;
 
     if (item.error_permanent) {
       const actions = document.createElement("div");
       actions.className = "os-actions";
+
+      const retryButton = document.createElement("button");
+      retryButton.type = "button";
+      retryButton.className = "btn-retry";
+      retryButton.textContent = "Tentar novamente";
+      retryButton.addEventListener("click", async () => {
+        retryButton.disabled = true;
+        await resetarItemErroPermanente(item);
+        delete statusPendencias[item.id];
+        await carregarPendencias();
+      });
 
       const button = document.createElement("button");
       button.type = "button";
@@ -515,6 +613,7 @@ function renderPendencias(lista) {
         await carregarPendencias();
       });
 
+      actions.appendChild(retryButton);
       actions.appendChild(button);
       div.appendChild(actions);
     }
@@ -534,15 +633,19 @@ async function carregarPendencias() {
   const itensOsPendentes = osPendentes.map((os) => ({
     id: `osp-${os.id}`,
     type: "SYNC_OS",
+    tipo: "os_upsert",
     os_local_id: os.id,
+    os_ref: os.id,
     os_payload: os,
     created_at: os.criadoEm || os.created_at,
+    tentativas: os.tries || 0,
     tries: os.tries || 0,
     last_error: os.last_error || null,
     error_permanent: false,
+    status: os.last_error ? "erro" : "pendente",
   }));
 
-  const itens = [...itensOsPendentes, ...fila];
+  const itens = ordenarPendencias([...itensOsPendentes, ...fila]);
   renderPendencias(itens);
   return itens;
 }
@@ -571,7 +674,8 @@ async function processarFilaSync() {
 
   try {
     const pendencias = await carregarPendencias();
-    if (!pendencias.length) {
+    const itensProcessaveis = filtrarPendenciasProcessaveis(pendencias);
+    if (!itensProcessaveis.length) {
       if (statusBox) {
         statusBox.textContent = "Nenhuma pendência para sincronizar.";
       }
@@ -579,32 +683,49 @@ async function processarFilaSync() {
       return;
     }
 
-    for (const item of pendencias) {
-      if (item.type === "AVANCAR_ETAPA" && (!item.payload || item.payload.etapa_origem == null)) {
-        console.warn(
-          `OS ${item.os_id} será enviada sem etapa_origem local. Tentando recuperar antes do envio.`
-        );
-        if (statusBox) {
-          statusBox.textContent =
-            "⚠️ Etapa local desconhecida; tentando recuperar estado antes de avançar.";
+    let okCount = 0;
+    let erroCount = 0;
+
+    for (const item of itensProcessaveis) {
+      try {
+        if (
+          item.type === "AVANCAR_ETAPA" &&
+          (!item.payload || item.payload.etapa_origem == null)
+        ) {
+          console.warn(
+            `OS ${item.os_id} será enviada sem etapa_origem local. Tentando recuperar antes do envio.`
+          );
+          if (statusBox) {
+            statusBox.textContent =
+              "⚠️ Etapa local desconhecida; tentando recuperar estado antes de avançar.";
+          }
         }
+
+        statusPendencias[item.id] = { texto: "processando" };
+        renderPendencias(pendencias);
+
+        const resultado = await sincronizarItem(item);
+        if (resultado.ok) {
+          okCount += 1;
+        } else {
+          erroCount += 1;
+        }
+
+        statusPendencias[item.id] = resultado.ok
+          ? { texto: "sincronizado" }
+          : resultado.error_permanent
+            ? { texto: "erro_permanente", detalhe: resultado.mensagem }
+            : { texto: "erro", detalhe: resultado.mensagem };
+
+        renderPendencias(await carregarPendencias());
+      } catch (err) {
+        erroCount += 1;
+        console.error("Erro ao sincronizar item", err);
       }
-
-      statusPendencias[item.id] = { texto: "processando" };
-      renderPendencias(pendencias);
-
-      const resultado = await sincronizarItem(item);
-      statusPendencias[item.id] = resultado.ok
-        ? { texto: "sincronizado" }
-        : resultado.error_permanent
-          ? { texto: "erro_permanente", detalhe: resultado.mensagem }
-          : { texto: "erro", detalhe: resultado.mensagem };
-
-      renderPendencias(await carregarPendencias());
     }
 
     if (statusBox) {
-      statusBox.textContent = "✅ Fila de sincronização processada.";
+      statusBox.textContent = `✅ Sincronização concluída. OK: ${okCount} · Erros: ${erroCount}`;
     }
   } catch (err) {
     console.error("Erro ao processar fila de sync:", err);
@@ -629,12 +750,17 @@ async function processarFilaSyncBackground(onItemSuccess) {
 
   try {
     const pendencias = await carregarPendencias();
+    const itensProcessaveis = filtrarPendenciasProcessaveis(pendencias);
 
-    for (const item of pendencias) {
-      const resultado = await sincronizarItem(item);
+    for (const item of itensProcessaveis) {
+      try {
+        const resultado = await sincronizarItem(item);
 
-      if (resultado.ok && typeof onItemSuccess === "function") {
-        await onItemSuccess(item, resultado.data);
+        if (resultado.ok && typeof onItemSuccess === "function") {
+          await onItemSuccess(item, resultado.data);
+        }
+      } catch (err) {
+        console.error("Erro ao sincronizar item em segundo plano", err);
       }
     }
   } catch (err) {
@@ -656,10 +782,14 @@ window.addEventListener("online", () => {
 
 document.addEventListener("DOMContentLoaded", async () => {
   const btnSync = document.getElementById("btnSync");
+  const btnRetry = document.getElementById("btnRetry");
   await carregarPendencias();
 
   if (btnSync) {
     btnSync.addEventListener("click", () => processarFilaSync());
+  }
+  if (btnRetry) {
+    btnRetry.addEventListener("click", () => processarFilaSync());
   }
 });
 
