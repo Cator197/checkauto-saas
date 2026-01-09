@@ -246,9 +246,22 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function mostrarMensagem(msg, tipo = "info") {
+  function mostrarMensagem(msg, tipo = "info", { retry = false } = {}) {
     if (statusEl) {
-      statusEl.textContent = msg;
+      if (retry) {
+        statusEl.innerHTML = `
+          <span>${msg}</span>
+          <button type="button" class="pwa-btn pwa-btn-secondary pwa-btn-retry">Tentar novamente</button>
+        `;
+        const btnRetry = statusEl.querySelector(".pwa-btn-retry");
+        if (btnRetry) {
+          btnRetry.addEventListener("click", () => {
+            buscarOnline();
+          });
+        }
+      } else {
+        statusEl.textContent = msg;
+      }
       statusEl.classList.remove("state-loading", "state-empty", "state-error", "state-offline", "state-info");
       statusEl.classList.add(`state-${tipo}`);
     }
@@ -269,66 +282,39 @@ document.addEventListener("DOMContentLoaded", () => {
         item.hasOwnProperty("proxima_etapa")
           ? item.proxima_etapa
           : calcularProximaEtapa(item.etapa_atual?.id);
-      const podeAvancar = Boolean(proximaEtapa);
       const proximaNome =
         proximaEtapa === null
           ? "Última etapa"
           : proximaEtapa?.nome || "—";
-      const textoBotaoProxima = proximaEtapa === null
-        ? "Última etapa"
-        : podeAvancar
-          ? "Enviar para próxima etapa"
-          : "Próxima etapa indisponível";
       const pendenteSync = item.pendente_sync || (item.fila_sync || []).length > 0;
 
       const card = document.createElement("div");
-      card.className = "pwa-card card-veiculo";
+      card.className = "pwa-card card-veiculo vehicle-card";
+      card.setAttribute("role", "button");
+      card.setAttribute("tabindex", "0");
       card.innerHTML = `
-        <div class="card-header">
-          <span class="codigo">OS ${item.codigo || "-"}</span>
-          <span class="badge badge-etapa">${etapaNome}</span>
+        <div class="vehicle-card__top">
+          <span class="vehicle-plate">${item.placa || "Sem placa"}</span>
+          <span class="badge badge-stage">${etapaNome}</span>
         </div>
-        <div class="card-body">
-          <div class="modelo">${item.modelo_veiculo || "Modelo não informado"}</div>
-          <div class="placa">${item.placa || "Sem placa"}</div>
-          <div class="proxima">Próxima etapa: ${proximaNome}</div>
+        <div class="vehicle-meta">
+          <div class="vehicle-model">${item.modelo_veiculo || "Modelo não informado"}</div>
+          <div class="vehicle-os">OS ${item.codigo || "-"}</div>
+          <div class="vehicle-next-stage">Próxima etapa: ${proximaNome}</div>
         </div>
-        <div class="card-footer">
-          ${pendenteSync ? '<span class="badge badge-pendente">Pendente de sync</span>' : ""}
-          <div class="actions">
-            <button class="btn-secundario" data-action="checkin">Check-in</button>
-            <button class="btn-primario" ${podeAvancar ? "" : "disabled"}>${textoBotaoProxima}</button>
-          </div>
-        </div>
+        ${pendenteSync ? '<div class="vehicle-footer"><span class="badge badge-pendente">Pendente de sync</span></div>' : ""}
       `;
 
-      const btnAvancar = card.querySelector(".btn-primario");
-      const btnCheckin = card.querySelector('[data-action="checkin"]');
-
-      if (btnAvancar && podeAvancar) {
-        btnAvancar.addEventListener("click", (ev) => {
-          ev.stopPropagation();
-          enviarParaProximaEtapa(item, proximaEtapa);
-        });
-      }
-
-      if (btnCheckin) {
-        btnCheckin.addEventListener("click", (ev) => {
-          ev.stopPropagation();
-          const escolherCompleto = window.confirm(
-            "Deseja iniciar um check-in completo? Escolha 'Cancelar' para somente fotos."
-          );
-
-          if (escolherCompleto) {
-            window.location.href = "/pwa/checkin-completo/";
-          } else {
-            window.location.href = "/pwa/checkin-fotos/";
-          }
-        });
-      }
-
-      card.addEventListener("click", () => {
+      const abrirOS = () => {
         window.location.href = `/pwa/os/${item.os_id}/`;
+      };
+
+      card.addEventListener("click", abrirOS);
+      card.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          abrirOS();
+        }
       });
 
       listaEl.appendChild(card);
@@ -379,12 +365,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (!response.ok) {
         if (response.status === 401) {
-          mostrarMensagem("Sessão expirada. Faça login novamente.", "error");
+          mostrarMensagem("Sessão expirada. Faça login novamente.", "error", { retry: true });
           logDev("Resposta 401 ao buscar veículos (token expirado ou inválido)");
           return;
         }
 
-        mostrarMensagem("Falha ao buscar lista no servidor.", "error");
+        mostrarMensagem("Falha ao buscar lista no servidor.", "error", { retry: true });
         return;
       }
 
@@ -398,7 +384,7 @@ document.addEventListener("DOMContentLoaded", () => {
       mostrarMensagem("Lista atualizada do servidor.", "info");
     } catch (err) {
       console.error("Erro ao buscar veículos em produção:", err);
-      mostrarMensagem("Erro ao atualizar. Mostrando cache.", "error");
+      mostrarMensagem("Erro ao atualizar. Mostrando cache.", "error", { retry: true });
       await carregarDoCache();
     }
   }
