@@ -49,9 +49,20 @@
   </section>
 
   <section class="pwa-card" style="margin-top: 16px;">
-    <label for="observacaoEtapa"><strong>Observações da etapa</strong></label>
-    <textarea id="observacaoEtapa" class="pwa-textarea" placeholder="Digite observações sobre a etapa atual..."></textarea>
-    <div id="observacaoStatus" class="pwa-muted"></div>
+    <div class="pwa-row pwa-row--between">
+      <h2 class="pwa-title" style="font-size: 18px;">Observações da etapa</h2>
+      <button id="btnNovaObservacao" class="pwa-btn pwa-btn-secondary" type="button">+ nova observação</button>
+    </div>
+    <div id="blocoNovaObservacao" class="pwa-observacao-form" style="display:none; margin-top: 12px;">
+      <textarea id="novaObservacaoTexto" class="pwa-textarea" placeholder="Adicionar nova observação..."></textarea>
+      <div class="pwa-actions-row" style="margin-top: 8px;">
+        <button id="btnAdicionarObservacao" class="pwa-btn pwa-btn-primary" type="button">Adicionar</button>
+        <button id="btnCancelarObservacao" class="pwa-btn pwa-btn-secondary" type="button">Cancelar</button>
+      </div>
+      <div id="observacaoFeedback" class="pwa-muted" style="margin-top: 6px;"></div>
+    </div>
+    <div id="listaObservacoesEtapa" class="pwa-observacoes-lista" style="margin-top: 12px;"></div>
+    <div id="observacaoStatus" class="pwa-muted" style="margin-top: 8px;"></div>
   </section>
 
   <div class="pwa-actions" style="margin-top: 16px;">

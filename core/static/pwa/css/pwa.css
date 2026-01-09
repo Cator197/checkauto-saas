@@ -286,6 +286,57 @@ a {
   flex-wrap: wrap;
 }
 
+.pwa-observacoes-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pwa-observacao-card {
+  border: 1px solid var(--pwa-border);
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px 12px;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
+}
+
+.pwa-observacao-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--pwa-muted);
+}
+
+.pwa-observacao-nome {
+  font-weight: 700;
+  color: var(--pwa-text);
+}
+
+.pwa-observacao-texto {
+  font-size: 13px;
+  color: var(--pwa-text);
+  margin: 6px 0 0;
+  white-space: pre-line;
+}
+
+.pwa-observacao-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #f59e0b;
+}
+
+.pwa-observacao-card--error .pwa-observacao-badge {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+
 .pwa-summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
