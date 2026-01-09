@@ -589,7 +589,6 @@ class OSViewSet(viewsets.ModelViewSet):
             return Response(serializer.data, status=status.HTTP_200_OK)
 
         etapa_id = request.data.get("etapa")
-        local_id = request.data.get("local_id")
         if etapa_id:
             try:
                 etapa = Etapa.objects.get(id=etapa_id, oficina=os_obj.oficina)
@@ -607,22 +606,9 @@ class OSViewSet(viewsets.ModelViewSet):
 
             etapa = os_obj.etapa_atual
 
-        if local_id:
-            existente = ObservacaoEtapaOS.objects.filter(
-                os=os_obj, local_id=local_id
-            ).select_related("etapa", "criado_por__user").first()
-            if existente:
-                return Response(
-                    ObservacaoEtapaOSSerializer(
-                        existente, context={"request": request, "os": os_obj}
-                    ).data,
-                    status=status.HTTP_200_OK,
-                )
-
         payload = {
             "etapa": etapa.id,
             "texto": request.data.get("texto", ""),
-            "local_id": local_id,
         }
 
         observacao = self._salvar_observacao_etapa(

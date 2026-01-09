@@ -16,7 +16,7 @@ document.addEventListener("DOMContentLoaded", () => {
     status: document.getElementById("osStatus"),
     gridFotos: document.getElementById("gridFotosLivres"),
     infoOffline: document.getElementById("infoOffline"),
-    observacao: document.getElementById("observacaoTexto"),
+    observacao: document.getElementById("observacaoEtapa"),
     observacaoStatus: document.getElementById("observacaoStatus"),
     observacaoForm: document.getElementById("observacaoForm"),
     observacoesLista: document.getElementById("observacoesLista"),
@@ -77,8 +77,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const cameraSession = {
     ativo: false,
   };
-
-  let isSavingObservacao = false;
 
   function normalizarEtapaLocal(etapa) {
     if (!etapa) return { id: null, nome: "-" };
@@ -916,11 +914,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const observacaoEtapa = state.observacaoEtapa || "";
 
+      const observacoesServidor = await fetchObservacoes(osId, etapaId);
+
       const filaAtual = window.checkautoListarFilaSync
         ? await window.checkautoListarFilaSync()
         : [];
       const pendenteSync = (filaAtual || []).some((item) => item.os_id === osId);
-      const observacoesMescladas = await carregarObservacoes(etapaId);
+      const observacoesPendentes = extrairObservacoesPendentes(filaAtual, etapaId);
+      const observacoesMescladas = mergeObservacoes(
+        observacoesServidor,
+        observacoesPendentes
+      );
 
       salvarCache({
         codigo: `OS ${osData.codigo || osId}`,
@@ -985,14 +989,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function adicionarListenerUnico(elemento, evento, handler) {
-    if (!elemento) return;
-    const chave = `listener${evento}`;
-    if (elemento.dataset[chave]) return;
-    elemento.dataset[chave] = "true";
-    elemento.addEventListener(evento, handler);
-  }
-
   async function adicionarObservacaoNaLista(observacao) {
     if (!observacao) return;
     const atuais = Array.isArray(state.observacoes) ? state.observacoes : [];
@@ -1013,27 +1009,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function salvarObservacao() {
     if (!refs.observacao) return;
-    if (isSavingObservacao) return;
     const texto = (refs.observacao.value || "").trim();
     if (!texto) {
       refs.observacaoStatus.textContent = "Digite uma observação antes de salvar.";
       return;
     }
 
-    const localId = gerarLocalId();
     refs.observacaoStatus.textContent = "Salvando observação...";
     const etapaId = state.etapaAtualId;
-    isSavingObservacao = true;
-    if (refs.btnSalvarObservacao) {
-      refs.btnSalvarObservacao.disabled = true;
-    }
 
     if (!navigator.onLine) {
       if (window.checkautoEnfileirarObservacaoOS) {
         await window.checkautoEnfileirarObservacaoOS(osId, {
           texto,
           etapa: etapaId,
-          local_id: localId,
         });
       } else {
         refs.observacaoStatus.textContent =
@@ -1041,7 +1030,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       const pendente = normalizarObservacaoItem({
-        local_id: localId,
+        local_id: `local-${Date.now()}`,
         texto,
         criado_em: new Date().toISOString(),
         etapa_id: etapaId,
@@ -1059,10 +1048,6 @@ document.addEventListener("DOMContentLoaded", () => {
         refs.infoOffline.style.display = "inline-flex";
         refs.infoOffline.textContent = "Pendente sync";
       }
-      isSavingObservacao = false;
-      if (refs.btnSalvarObservacao) {
-        refs.btnSalvarObservacao.disabled = false;
-      }
       return;
     }
 
@@ -1072,7 +1057,6 @@ document.addEventListener("DOMContentLoaded", () => {
         body: {
           texto,
           etapa: etapaId,
-          local_id: localId,
         },
       });
 
@@ -1094,47 +1078,28 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error("Erro ao salvar observação:", err);
       refs.observacaoStatus.textContent =
         "Erro ao salvar observação. Tente novamente.";
-    } finally {
-      isSavingObservacao = false;
-      if (refs.btnSalvarObservacao) {
-        refs.btnSalvarObservacao.disabled = false;
+    }
+  }
+
+  if (refs.btnAdicionarObservacao) {
+    refs.btnAdicionarObservacao.addEventListener("click", () => {
+      toggleFormularioObservacao(true);
+    });
+  }
+
+  if (refs.btnCancelarObservacao) {
+    refs.btnCancelarObservacao.addEventListener("click", () => {
+      if (refs.observacao) {
+        refs.observacao.value = "";
       }
-    }
+      refs.observacaoStatus.textContent = "";
+      toggleFormularioObservacao(false);
+    });
   }
 
-  async function carregarObservacoes(etapaId) {
-    const observacoesServidor = await fetchObservacoes(osId, etapaId);
-    const filaAtual = window.checkautoListarFilaSync
-      ? await window.checkautoListarFilaSync()
-      : [];
-    const observacoesPendentes = extrairObservacoesPendentes(filaAtual, etapaId);
-    const observacoesMescladas = mergeObservacoes(
-      observacoesServidor,
-      observacoesPendentes
-    );
-
-    state = {
-      ...state,
-      observacoes: observacoesMescladas,
-    };
-    salvarCache({ observacoes: observacoesMescladas });
-    renderObservacoesLista();
-    return observacoesMescladas;
+  if (refs.btnSalvarObservacao) {
+    refs.btnSalvarObservacao.addEventListener("click", salvarObservacao);
   }
-
-  adicionarListenerUnico(refs.btnAdicionarObservacao, "click", () => {
-    toggleFormularioObservacao(true);
-  });
-
-  adicionarListenerUnico(refs.btnCancelarObservacao, "click", () => {
-    if (refs.observacao) {
-      refs.observacao.value = "";
-    }
-    refs.observacaoStatus.textContent = "";
-    toggleFormularioObservacao(false);
-  });
-
-  adicionarListenerUnico(refs.btnSalvarObservacao, "click", salvarObservacao);
 
   refs.btnCamera.addEventListener("click", () => {
     abrirOverlayCamera();
