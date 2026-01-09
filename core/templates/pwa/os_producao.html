@@ -3,274 +3,75 @@
 
 {% block title %}CheckAuto - OS em Produção{% endblock %}
 
-{% block head_extra %}
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 16px;
-      max-width: 800px;
-      margin: 0 auto;
-    }
-    h1 {
-      margin-top: 0;
-      margin-bottom: 12px;
-    }
-    h2 {
-      margin-bottom: 8px;
-    }
-    .muted {
-      color: #64748b;
-      font-size: 14px;
-    }
-    .back {
-      display: inline-block;
-      margin-bottom: 16px;
-      text-decoration: none;
-      color: #0f172a;
-    }
-    .info {
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 12px;
-    }
-    .etapa {
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 12px;
-      background: #fff;
-    }
-    .etapa-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-    }
-    .etapa-title {
-      font-weight: 700;
-      font-size: 16px;
-    }
-    .etapa-alert {
-      margin-top: 6px;
-      font-size: 13px;
-      color: #92400e;
-      background: #fef3c7;
-      display: inline-block;
-      padding: 4px 8px;
-      border-radius: 999px;
-    }
-    .etapa-alert.etapa-ok {
-      color: #166534;
-      background: #dcfce7;
-    }
-    .etapa-status {
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-    }
-    .status-em-andamento {
-      background: #e0f2fe;
-      color: #0c4a6e;
-    }
-    .status-finalizada {
-      background: #dcfce7;
-      color: #166534;
-    }
-    .status-pendente {
-      background: #fef9c3;
-      color: #854d0e;
-    }
-    .etapa-info {
-      margin-top: 8px;
-      font-size: 14px;
-      color: #475569;
-    }
-    .etapa-actions {
-      margin-top: 12px;
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-    .etapa-actions button {
-      border: none;
-      padding: 8px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      background: #0f172a;
-      color: #fff;
-      font-size: 14px;
-    }
-    .etapa-actions button.secondary {
-      background: #e2e8f0;
-      color: #0f172a;
-    }
-    .observacao {
-      margin-top: 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .observacao textarea {
-      width: 100%;
-      min-height: 80px;
-      border-radius: 6px;
-      border: 1px solid #cbd5f5;
-      padding: 8px;
-      font-size: 14px;
-    }
-    .fotos-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-      gap: 12px;
-    }
-    .foto-card {
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      overflow: hidden;
-      background: #fff;
-      position: relative;
-    }
-    .foto-card img {
-      width: 100%;
-      height: 100px;
-      object-fit: cover;
-      display: block;
-    }
-    .foto-badge {
-      position: absolute;
-      top: 6px;
-      left: 6px;
-      background: rgba(15, 23, 42, 0.85);
-      color: #fff;
-      padding: 2px 6px;
-      font-size: 11px;
-      border-radius: 999px;
-    }
-    .foto-badge--pending {
-      background: rgba(217, 119, 6, 0.9);
-    }
-    .foto-badge--error {
-      background: rgba(220, 38, 38, 0.9);
-    }
-    .foto-error {
-      padding: 6px;
-      font-size: 12px;
-      color: #b91c1c;
-      background: #fee2e2;
-    }
-    .camera-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(15, 23, 42, 0.72);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-      z-index: 50;
-    }
-    .camera-overlay.show {
-      display: flex;
-    }
-    .camera-modal {
-      background: #fff;
-      border-radius: 12px;
-      padding: 16px;
-      max-width: 420px;
-      width: 100%;
-      text-align: center;
-      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.2);
-    }
-    .camera-modal h3 {
-      margin: 4px 0;
-    }
-    .camera-modal-actions {
-      margin-top: 16px;
-      display: flex;
-      gap: 8px;
-      justify-content: center;
-      flex-wrap: wrap;
-    }
-    .loading {
-      text-align: center;
-      color: #475569;
-      margin-top: 24px;
-    }
-    .erro {
-      color: #991b1b;
-      background: #fee2e2;
-      border: 1px solid #fecaca;
-      padding: 10px;
-      border-radius: 6px;
-      margin-top: 12px;
-    }
-  </style>
-{% endblock %}
-
 {% block content %}
-  <a href="/pwa/veiculos-em-producao/" class="back">← Voltar</a>
+  <a href="/pwa/veiculos-em-producao/" class="pwa-back">← Voltar</a>
 
-  <h1>OS em Produção</h1>
-  <p>Gerencie as etapas do veículo selecionado.</p>
+  <section class="pwa-page-header">
+    <h1 class="pwa-title">OS em Produção</h1>
+    <p class="pwa-subtitle">Gerencie as etapas do veículo selecionado.</p>
+  </section>
 
-  <div class="info">
-    <div id="osCodigo" class="etapa-title">OS —</div>
-    <div id="osModelo" class="muted">Modelo —</div>
-    <div id="osPlaca" class="muted">Placa —</div>
-    <div id="osEtapa" class="muted">Etapa atual —</div>
-    <div id="osStatus" class="muted"></div>
-    <div id="infoOffline" class="muted"></div>
+  <div class="pwa-card">
+    <div class="pwa-row pwa-row--between">
+      <div class="pwa-col">
+        <strong id="osCodigo">OS —</strong>
+        <span id="osModelo" class="pwa-muted">Modelo —</span>
+        <span id="osPlaca" class="pwa-muted">Placa —</span>
+      </div>
+      <div class="pwa-col" style="text-align:right;">
+        <span id="osEtapa" class="pwa-badge pwa-badge-success">Etapa atual —</span>
+        <span id="osStatus" class="pwa-muted"></span>
+        <span id="infoOffline" class="pwa-badge pwa-badge-warning" style="display:none;">Pendente sync</span>
+      </div>
+    </div>
   </div>
 
-  <section id="etapaHeader" class="etapa">
-    <div class="etapa-header">
-      <div>
-        <h2 id="etapaAtualNome">Etapa —</h2>
-        <div id="etapaObrigatoriasStatus" class="etapa-alert"></div>
+  <section id="etapaHeader" class="pwa-card" style="margin-top: 16px;">
+    <div class="pwa-row pwa-row--between">
+      <div class="pwa-col">
+        <h2 id="etapaAtualNome" class="pwa-title" style="font-size: 18px;">Etapa —</h2>
+        <div id="etapaObrigatoriasStatus" class="pwa-badge pwa-badge-warning"></div>
       </div>
-      <div id="etapaProximaNome" class="muted"></div>
+      <div id="etapaProximaNome" class="pwa-muted"></div>
     </div>
   </section>
 
-  <section class="etapa">
-    <div class="etapa-header">
-      <h2>Fotos da etapa</h2>
-      <div class="muted">Fotos livres e sincronização</div>
+  <section class="pwa-card" style="margin-top: 16px;">
+    <div class="pwa-row pwa-row--between">
+      <h2 class="pwa-title" style="font-size: 18px;">Fotos da etapa</h2>
+      <div class="pwa-muted">Fotos livres e sincronização</div>
     </div>
-    <div class="etapa-actions">
-      <button id="btnTirarFotos" type="button">Adicionar fotos</button>
+    <div class="pwa-actions-row" style="margin-top: 12px;">
+      <button id="btnTirarFotos" class="pwa-btn pwa-btn-primary" type="button">Adicionar fotos</button>
     </div>
     <input id="inputFotosEtapa" type="file" accept="image/*" capture="environment" multiple hidden>
-    <div id="gridFotosLivres" class="fotos-grid"></div>
+    <div id="gridFotosLivres" class="fotos-grid" style="margin-top: 12px;"></div>
   </section>
 
-  <section class="etapa observacao">
+  <section class="pwa-card" style="margin-top: 16px;">
     <label for="observacaoEtapa"><strong>Observações da etapa</strong></label>
-    <textarea id="observacaoEtapa" placeholder="Digite observações sobre a etapa atual..."></textarea>
-    <div id="observacaoStatus" class="muted"></div>
+    <textarea id="observacaoEtapa" class="pwa-textarea" placeholder="Digite observações sobre a etapa atual..."></textarea>
+    <div id="observacaoStatus" class="pwa-muted"></div>
   </section>
 
-  <div class="etapa-actions">
-    <button id="btnAvancarEtapa" type="button">Enviar para próxima etapa</button>
+  <div class="pwa-actions" style="margin-top: 16px;">
+    <button id="btnAvancarEtapa" class="pwa-btn pwa-btn-primary pwa-btn-block" type="button">Enviar para próxima etapa</button>
   </div>
 
   <div id="cameraOverlay" class="camera-overlay">
     <div class="camera-modal">
-      <div id="cameraOverlayMode" class="muted"></div>
+      <div id="cameraOverlayMode" class="pwa-muted"></div>
       <h3 id="cameraOverlayTitle">Foto da etapa</h3>
-      <p id="cameraOverlaySubtitle" class="muted"></p>
+      <p id="cameraOverlaySubtitle" class="pwa-muted"></p>
       <div class="camera-modal-actions">
-        <button id="btnCapturarFoto" type="button">Capturar foto</button>
-        <button id="btnFecharOverlay" type="button" class="secondary">Fechar</button>
+        <button id="btnCapturarFoto" class="pwa-btn pwa-btn-primary" type="button">Capturar foto</button>
+        <button id="btnFecharOverlay" type="button" class="pwa-btn pwa-btn-secondary secondary">Fechar</button>
       </div>
     </div>
   </div>
 
-  <div id="loading" class="loading">Carregando dados...</div>
-  <div id="erro" class="erro" style="display:none;"></div>
+  <div id="loading" class="state-loading">Carregando dados...</div>
+  <div id="erro" class="state-error" style="display:none;"></div>
 {% endblock %}
 
 {% block scripts %}
