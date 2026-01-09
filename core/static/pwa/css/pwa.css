@@ -100,25 +100,6 @@ a {
   box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
 }
 
-.pwa-card--section {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.pwa-card__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.pwa-card__title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-}
-
 .pwa-btn {
   display: inline-flex;
   align-items: center;
@@ -164,12 +145,6 @@ a {
   width: 100%;
 }
 
-.pwa-btn-small {
-  padding: 8px 12px;
-  font-size: 13px;
-  border-radius: 999px;
-}
-
 .pwa-badge {
   display: inline-flex;
   align-items: center;
@@ -207,10 +182,6 @@ a {
   justify-content: space-between;
 }
 
-.pwa-row--align-start {
-  align-items: flex-start;
-}
-
 .pwa-col {
   display: flex;
   flex-direction: column;
@@ -242,111 +213,6 @@ a {
 .pwa-muted {
   color: var(--pwa-muted);
   font-size: 14px;
-}
-
-.pwa-section-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.pwa-summary {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 140px);
-  gap: 12px;
-  align-items: center;
-}
-
-.pwa-summary__info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.pwa-summary__codigo {
-  font-size: 18px;
-}
-
-.pwa-summary__plate {
-  padding: 12px;
-  border-radius: var(--pwa-radius-sm);
-  background: #f8fafc;
-  border: 1px solid var(--pwa-border);
-  text-align: center;
-}
-
-.pwa-summary__label {
-  display: block;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  color: var(--pwa-muted);
-  margin-bottom: 2px;
-}
-
-.pwa-summary__value {
-  font-size: 16px;
-}
-
-.pwa-summary__status {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.pwa-form {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.pwa-observacoes-lista {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.pwa-observacao-item {
-  padding: 12px;
-  border: 1px solid var(--pwa-border);
-  border-radius: var(--pwa-radius-sm);
-  background: #f8fafc;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.pwa-observacao-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--pwa-muted);
-}
-
-.pwa-observacao-pendente {
-  background: #fff7ed;
-  border-color: #fed7aa;
-}
-
-.pwa-observacao-badge {
-  font-size: 11px;
-  font-weight: 700;
-  color: #c2410c;
-  background: #ffedd5;
-  padding: 2px 8px;
-  border-radius: 999px;
-}
-
-@media (max-width: 700px) {
-  .pwa-card__header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .pwa-summary {
-    grid-template-columns: 1fr;
-  }
 }
 
 .state-loading,
