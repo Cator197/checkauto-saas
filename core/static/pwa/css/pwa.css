@@ -326,16 +326,33 @@ a {
 
 .card-veiculo {
   padding: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+
+.card-veiculo:hover {
+  border-color: rgba(15, 23, 42, 0.24);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+  transform: translateY(-2px);
+}
+
+.card-veiculo:active {
+  transform: translateY(0);
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
 }
 
 .card-veiculo .placa {
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pwa-muted);
 }
 
 .card-veiculo .modelo {
-  font-size: 14px;
-  color: var(--pwa-muted);
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
 }
 
 .card-veiculo .card-header {
@@ -356,6 +373,11 @@ a {
   font-size: 13px;
   display: grid;
   gap: 6px;
+}
+
+.card-veiculo .meta {
+  font-size: 13px;
+  color: var(--pwa-muted);
 }
 
 .card-veiculo .proxima {
