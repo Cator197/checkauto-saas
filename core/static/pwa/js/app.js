@@ -7,6 +7,12 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker
       .register("/pwa/service-worker.js", { scope: "/pwa/" })
       .then((registration) => {
+        console.log(
+          "[PWA] SW registrado. waiting:",
+          !!registration.waiting,
+          "active:",
+          !!registration.active
+        );
         console.log("Service Worker registrado com sucesso:", registration.scope);
         checkautoSetupServiceWorkerUpdates(registration);
       })
@@ -26,7 +32,8 @@ function checkautoShowUpdateBanner(registration) {
     return;
   }
 
-  if (!registration?.waiting) {
+  const target = registration?.waiting || registration?.installing;
+  if (!target || (target.state && target.state !== "installed")) {
     return;
   }
 
@@ -36,21 +43,19 @@ function checkautoShowUpdateBanner(registration) {
   }
   banner.hidden = false;
   button.onclick = () => {
-    if (!registration.waiting) {
-      console.warn("[PWA] Nenhum service worker em espera ao solicitar atualização.");
+    if (!target) {
+      console.warn("[PWA] Nenhum service worker pronto para atualização.");
       return;
     }
-    console.log("[PWA] Enviando SKIP_WAITING para service worker.");
+    console.log("[PWA] Enviando SKIP_WAITING para:", target.state, target.scriptURL);
     button.disabled = true;
     button.textContent = "Atualizando...";
-    registration.waiting?.postMessage({ type: "SKIP_WAITING" });
+    target.postMessage({ type: "SKIP_WAITING" });
   };
 }
 
 function checkautoSetupServiceWorkerUpdates(registration) {
-  if (registration.waiting) {
-    checkautoShowUpdateBanner(registration);
-  }
+  checkautoShowUpdateBanner(registration);
 
   registration.addEventListener("updatefound", () => {
     const newWorker = registration.installing;
