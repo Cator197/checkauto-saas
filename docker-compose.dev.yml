@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: checkauto
+      POSTGRES_USER: checkauto
+      POSTGRES_PASSWORD: checkauto
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    env_file:
+      - .env.dev
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - media:/app/media
+      # - ./google_client_secret.json:/app/google_client_secret.json:ro  # descomentar quando o arquivo existir
+
+volumes:
+  pgdata:
+  media:
