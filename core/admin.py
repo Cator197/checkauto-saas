@@ -1,5 +1,15 @@
 from django.contrib import admin
-from .models import Oficina, UsuarioOficina, Etapa, ConfigFoto, OS, FotoOS, OficinaDriveConfig
+from .models import (
+    CheckinPergunta,
+    CheckinPerguntaOpcao,
+    ConfigFoto,
+    Etapa,
+    FotoOS,
+    Oficina,
+    OficinaDriveConfig,
+    OS,
+    UsuarioOficina,
+)
 
 
 
@@ -32,6 +42,21 @@ class ConfigFotoAdmin(admin.ModelAdmin):
     list_filter = ('oficina', 'etapa', 'obrigatoria', 'ativa')
     ordering = ('oficina', 'etapa', 'ordem')
     search_fields = ('nome', 'oficina__nome', 'etapa__nome')
+
+
+class CheckinPerguntaOpcaoInline(admin.TabularInline):
+    model = CheckinPerguntaOpcao
+    extra = 1
+    fields = ("texto", "ordem", "ativa")
+
+
+@admin.register(CheckinPergunta)
+class CheckinPerguntaAdmin(admin.ModelAdmin):
+    list_display = ("id", "oficina", "etapa", "texto", "tipo_resposta", "obrigatoria", "ativa", "ordem")
+    list_filter = ("oficina", "etapa", "tipo_resposta", "obrigatoria", "ativa")
+    search_fields = ("texto", "oficina__nome", "etapa__nome")
+    ordering = ("oficina", "etapa", "ordem")
+    inlines = [CheckinPerguntaOpcaoInline]
 
 @admin.register(OS)
 class OSAdmin(admin.ModelAdmin):

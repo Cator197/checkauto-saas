@@ -134,6 +134,60 @@ class ConfigFoto(models.Model):
         return f"{self.nome} ({self.oficina.nome})"
 
 
+class CheckinPergunta(models.Model):
+    TIPO_RESPOSTA_CHOICES = (
+        ("TEXTO", "Texto"),
+        ("ESCOLHA", "Escolha"),
+    )
+
+    oficina = models.ForeignKey(Oficina, on_delete=models.CASCADE, related_name="checkin_perguntas")
+    etapa = models.ForeignKey(Etapa, on_delete=models.CASCADE, related_name="checkin_perguntas")
+    texto = models.CharField(max_length=255)
+    tipo_resposta = models.CharField(max_length=10, choices=TIPO_RESPOSTA_CHOICES)
+    obrigatoria = models.BooleanField(default=True)
+    ativa = models.BooleanField(default=True)
+    ordem = models.PositiveIntegerField(default=1)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Pergunta de check-in"
+        verbose_name_plural = "Perguntas de check-in"
+        ordering = ("oficina", "etapa", "ordem")
+
+    def clean(self):
+        if self.etapa and not self.etapa.is_checkin:
+            raise ValidationError("CheckinPergunta só pode ser usada em etapas marcadas como CHECK-IN.")
+
+    def __str__(self):
+        return f"{self.texto} ({self.oficina.nome})"
+
+
+class CheckinPerguntaOpcao(models.Model):
+    pergunta = models.ForeignKey(
+        CheckinPergunta,
+        on_delete=models.CASCADE,
+        related_name="opcoes",
+    )
+    texto = models.CharField(max_length=255)
+    ordem = models.PositiveIntegerField(default=1)
+    ativa = models.BooleanField(default=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Opção de pergunta de check-in"
+        verbose_name_plural = "Opções de perguntas de check-in"
+        ordering = ("pergunta", "ordem")
+
+    def clean(self):
+        if self.pergunta and self.pergunta.tipo_resposta != "ESCOLHA":
+            raise ValidationError("Opções só podem ser usadas em perguntas do tipo ESCOLHA.")
+
+    def __str__(self):
+        return f"{self.texto} ({self.pergunta.texto})"
+
+
 class OS(models.Model):
     """
     Ordem de Serviço da oficina.
