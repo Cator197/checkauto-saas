@@ -1,0 +1,44 @@
+version: "3.9"
+
+# OBS: no futuro podemos adicionar um serviço nginx para fazer proxy reverso / HTTPS.
+# Neste PR, estamos focados apenas em web + db.
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-checkauto}
+      POSTGRES_USER: ${POSTGRES_USER:-checkauto}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-checkauto}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - db
+    env_file:
+      - .env.prod
+    ports:
+      - "8000:8000"
+    volumes:
+      - media:/app/media
+      # - ./google_client_secret.json:/app/google_client_secret.json:ro  # Use quando o arquivo existir no servidor.
+    restart: unless-stopped
+
+  # nginx:
+  #   image: nginx:alpine
+  #   depends_on:
+  #     - web
+  #   ports:
+  #     - "80:80"
+  #   volumes:
+  #     - ./nginx/conf.d:/etc/nginx/conf.d:ro
+  #   restart: unless-stopped
+
+volumes:
+  pgdata:
+  media:
