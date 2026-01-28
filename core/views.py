@@ -19,6 +19,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from .drive_service import criar_pasta_os, upload_foto_os_drive, upload_foto_para_drive
 from .models import (
+    CheckinPergunta,
     ConfigFoto,
     Etapa,
     FotoOS,
@@ -30,6 +31,7 @@ from .models import (
     UsuarioOficina,
 )
 from .serializers import (
+    CheckinPerguntaSerializer,
     ConfigFotoSerializer,
     EtapaSerializer,
     FotoOSSerializer,
@@ -179,6 +181,49 @@ class ConfigFotoViewSet(viewsets.ModelViewSet):
         return qs.order_by("etapa__ordem", "ordem", "id")
 
     def perform_create(self, serializer):
+        user = self.request.user
+        oficina = get_oficina_do_usuario(user)
+
+        if oficina is None and not user.is_superuser:
+            raise serializers.ValidationError({"oficina": "Nenhuma oficina associada ao usuário."})
+
+        serializer.save(oficina=oficina)
+
+
+class CheckinPerguntaViewSet(viewsets.ModelViewSet):
+    queryset = CheckinPergunta.objects.select_related("oficina", "etapa").prefetch_related("opcoes").all()
+    serializer_class = CheckinPerguntaSerializer
+    permission_classes = [IsAuthenticated, IsOficinaAdminOrReadOnly]
+
+    def get_queryset(self):
+        user = self.request.user
+
+        base_qs = CheckinPergunta.objects.select_related("oficina", "etapa").prefetch_related("opcoes")
+
+        if user.is_superuser:
+            qs = base_qs.all()
+        else:
+            oficina = get_oficina_do_usuario(user)
+            if oficina is None:
+                return CheckinPergunta.objects.none()
+            qs = base_qs.filter(oficina=oficina)
+
+        etapa_id = self.request.query_params.get("etapa")
+        if etapa_id:
+            qs = qs.filter(etapa_id=etapa_id)
+
+        return qs.order_by("etapa__ordem", "ordem", "id")
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        oficina = get_oficina_do_usuario(user)
+
+        if oficina is None and not user.is_superuser:
+            raise serializers.ValidationError({"oficina": "Nenhuma oficina associada ao usuário."})
+
+        serializer.save(oficina=oficina)
+
+    def perform_update(self, serializer):
         user = self.request.user
         oficina = get_oficina_do_usuario(user)
 

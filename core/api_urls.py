@@ -6,6 +6,7 @@ from core.views import DashboardResumoView
 
 from .views import (
     AuthMeView,
+    CheckinPerguntaViewSet,
     ConfigFotoViewSet,
     EtapaViewSet,
     FotoOSViewSet,
@@ -32,6 +33,7 @@ router.register(r"usuarios-oficina", UsuarioOficinaViewSet)
 # Produção e fotos
 router.register(r"etapas", EtapaViewSet)
 router.register(r"config-fotos", ConfigFotoViewSet)
+router.register(r"checkin-perguntas", CheckinPerguntaViewSet, basename="checkin-perguntas")
 router.register(r"os", OSViewSet)
 router.register(r"fotos-os", FotoOSViewSet)
 #router.register(r"mensagens-etapa", MensagemPadraoEtapaViewSet, basename="mensagens-etapa")

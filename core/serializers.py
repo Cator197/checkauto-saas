@@ -16,6 +16,8 @@ from .models import (
     Oficina,
     UsuarioOficina,
     Etapa,
+    CheckinPergunta,
+    CheckinPerguntaOpcao,
     ConfigFoto,
     OS,
     FotoOS,
@@ -209,6 +211,72 @@ class ConfigFotoSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'oficina': {'read_only': True},
         }
+
+
+class CheckinPerguntaOpcaoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CheckinPerguntaOpcao
+        fields = ["id", "texto", "ordem", "ativa"]
+
+
+class CheckinPerguntaSerializer(serializers.ModelSerializer):
+    opcoes = CheckinPerguntaOpcaoSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = CheckinPergunta
+        fields = [
+            "id",
+            "oficina",
+            "etapa",
+            "texto",
+            "tipo_resposta",
+            "obrigatoria",
+            "ativa",
+            "ordem",
+            "opcoes",
+        ]
+        extra_kwargs = {
+            "oficina": {"read_only": True},
+        }
+
+    def _get_oficina_from_request(self):
+        request = self.context.get("request") if self.context else None
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return None
+        return get_oficina_do_usuario(user)
+
+    def validate_etapa(self, value):
+        oficina = None
+        if self.instance:
+            oficina = getattr(self.instance, "oficina", None)
+
+        if oficina is None:
+            request = self.context.get("request") if self.context else None
+            user = getattr(request, "user", None)
+            if user and user.is_authenticated and not user.is_superuser:
+                oficina = get_oficina_do_usuario(user)
+
+        if oficina and value.oficina_id != oficina.id:
+            raise serializers.ValidationError("Etapa não encontrada para esta oficina.")
+
+        return value
+
+    def create(self, validated_data):
+        validated_data.pop("oficina", None)
+        oficina = self._get_oficina_from_request()
+        if oficina is None:
+            raise serializers.ValidationError({"oficina": "Oficina não encontrada para o usuário."})
+        validated_data["oficina"] = oficina
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        validated_data.pop("oficina", None)
+        oficina = self._get_oficina_from_request()
+        if oficina is None:
+            raise serializers.ValidationError({"oficina": "Oficina não encontrada para o usuário."})
+        validated_data["oficina"] = oficina
+        return super().update(instance, validated_data)
 
 
 class ObservacaoEtapaOSSerializer(serializers.ModelSerializer):
