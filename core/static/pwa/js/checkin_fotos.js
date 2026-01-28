@@ -12,6 +12,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const osRapida = {
       tipo: "so_fotos",
+      tipo_checkin: "BASICO",
       criadoEm: new Date().toISOString(),
       pendenteSync: true,
       veiculo: {

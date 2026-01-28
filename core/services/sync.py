@@ -51,6 +51,13 @@ class SyncService:
 
     def _processar_item(self, item: dict) -> dict:
         local_id = item.get("local_id") or item.get("id")
+        respostas = item.get("checkin_respostas")
+        if respostas:
+            logger.info(
+                "[SYNC] checkin_respostas recebidas (total=%s) para local_id=%s",
+                len(respostas),
+                local_id,
+            )
         try:
             os_payload = self._converter_payload_pwa(item)
         except serializers.ValidationError as exc:

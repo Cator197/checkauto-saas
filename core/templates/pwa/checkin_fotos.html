@@ -1,14 +1,14 @@
 {% extends "pwa/base_pwa.html" %}
 {% load static %}
 
-{% block title %}CheckAuto - Check-in (Somente Fotos){% endblock %}
+{% block title %}CheckAuto - Check-in Básico{% endblock %}
 
 {% block content %}
   <a href="/pwa/" class="pwa-back">← Voltar para Home</a>
 
   <section class="pwa-page-header">
-    <h1 class="pwa-title">Check-in (Somente Fotos)</h1>
-    <p class="pwa-subtitle">Use esta opção quando quiser fazer um registro rápido focado nas fotos do veículo.</p>
+    <h1 class="pwa-title">Check-in Básico</h1>
+    <p class="pwa-subtitle">Use esta opção para um registro rápido focado na identificação e fotos do veículo.</p>
   </section>
 
   <form id="formCheckinFotos" class="pwa-form">
@@ -60,7 +60,7 @@
       </div>
     </div>
 
-    <button type="submit" class="pwa-btn pwa-btn-primary pwa-btn-block">Salvar Check-in Rápido (Pendência offline)</button>
+    <button type="submit" class="pwa-btn pwa-btn-primary pwa-btn-block">Salvar Check-in Básico (Pendência offline)</button>
 
     <div id="msgRetorno" class="pwa-muted" style="display:none;"></div>
   </form>

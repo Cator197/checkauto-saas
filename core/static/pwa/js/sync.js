@@ -130,9 +130,13 @@ function normalizarOSPendente(os) {
 
   return {
     local_id: os?.id || os?.local_id,
+    tipo_checkin: os?.tipo_checkin,
     os: os?.os || {},
     veiculo: os?.veiculo || {},
     cliente: os?.cliente || {},
+    checkin_respostas: Array.isArray(os?.checkin_respostas)
+      ? os.checkin_respostas
+      : [],
     fotos: {
       padrao: fotosPadrao.map(normalizarFotoOSPendente).filter(Boolean),
       livres: fotosLivres.map(normalizarFotoOSPendente).filter(Boolean),
