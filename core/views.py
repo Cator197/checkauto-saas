@@ -1,14 +1,11 @@
 import json
 import logging
-import hmac
-from datetime import date, timedelta
+from datetime import date
 
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
-from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import redirect
-from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from google_auth_oauthlib.flow import Flow
@@ -20,22 +17,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from .drive_service import (
-    DriveNaoConfigurado,
-    baixar_arquivo_drive,
-    baixar_thumbnail_drive,
-    criar_pasta_os,
-    deletar_arquivo_drive,
-    gerar_assinatura_thumb,
-    get_drive_service,
-    upload_foto_os_drive,
-    upload_foto_para_drive,
-)
+from .drive_service import criar_pasta_os, upload_foto_os_drive, upload_foto_para_drive
 from .models import (
     ConfigFoto,
     Etapa,
     FotoOS,
-    MensagemPadraoEtapa,
     OS,
     OSEtapaStatus,
     ObservacaoEtapaOS,
@@ -47,14 +33,11 @@ from .serializers import (
     ConfigFotoSerializer,
     EtapaSerializer,
     FotoOSSerializer,
-    MensagemPadraoEtapaSerializer,
     ObservacaoEtapaOSSerializer,
     OSSerializer,
     OficinaSerializer,
     PwaVeiculoEmProducaoSerializer,
-    UsuarioOficinaCreateSerializer,
     UsuarioOficinaSerializer,
-    UsuarioOficinaStatusSerializer,
 )
 from .permissions import (
     IsFotoOSPermission,
@@ -63,7 +46,7 @@ from .permissions import (
     IsOficinaUser,
     IsOSPermission,
 )
-from .utils import get_oficina_do_usuario, get_papel_do_usuario, resolve_oficina_atual
+from .utils import get_oficina_do_usuario, get_papel_do_usuario
 
 logger = logging.getLogger(__name__)
 
@@ -73,28 +56,18 @@ class AuthMeView(APIView):
 
     def get(self, request):
         user = request.user
-        full_name = user.get_full_name().strip()
-
-        oficina, needs_selection = resolve_oficina_atual(user, marcar_se_unica=True)
 
         payload = {
-            "user": {
-                "id": user.id,
-                "full_name": full_name or "",
-                "email": user.email or "",
-            },
-            "oficina": {
-                "id": oficina.id,
-                "nome": oficina.nome,
-            }
-            if oficina
-            else None,
+            "id": user.id,
+            "username": user.username,
+            "full_name": user.get_full_name() or user.username,
         }
 
-        if needs_selection:
-            payload["needs_oficina_selection"] = True
+        oficina = get_oficina_do_usuario(user)
+        if oficina is not None:
+            payload["oficina_id"] = oficina.id
 
-        papel = get_papel_do_usuario(user, getattr(request, "auth", None), oficina=oficina)
+        papel = get_papel_do_usuario(user, getattr(request, "auth", None))
         if papel:
             payload["papel"] = papel
 
@@ -124,117 +97,17 @@ class UsuarioOficinaViewSet(viewsets.ModelViewSet):
     serializer_class = UsuarioOficinaSerializer
     permission_classes = [IsAuthenticated, IsOficinaAdminOrReadOnly]
 
-    def get_permissions(self):
-        if self.action in {"list", "retrieve"}:
-            return [IsAuthenticated(), IsOficinaUser()]
-        return [IsAuthenticated()]
-
     def get_queryset(self):
         user = self.request.user
 
         if user.is_superuser:
             return UsuarioOficina.objects.select_related('user', 'oficina').all()
 
-        oficina_ids = (
-            UsuarioOficina.objects.filter(user=user, ativo=True)
-            .values_list("oficina_id", flat=True)
-        )
-        if not oficina_ids:
+        oficina = get_oficina_do_usuario(user)
+        if oficina is None:
             return UsuarioOficina.objects.none()
 
-        return UsuarioOficina.objects.select_related('user', 'oficina').filter(
-            oficina_id__in=list(oficina_ids)
-        )
-
-    def get_serializer_class(self):
-        if self.action == "create":
-            return UsuarioOficinaCreateSerializer
-        if self.action == "partial_update":
-            return UsuarioOficinaStatusSerializer
-        return UsuarioOficinaSerializer
-
-    def _get_admin_oficinas(self, user):
-        if user.is_superuser:
-            return Oficina.objects.all()
-
-        return Oficina.objects.filter(
-            usuarios__user=user,
-            usuarios__ativo=True,
-            usuarios__papel__in=IsOficinaAdmin.allowed_roles,
-        ).distinct()
-
-    def create(self, request, *args, **kwargs):
-        user = request.user
-
-        admin_oficinas = self._get_admin_oficinas(user)
-        if not admin_oficinas.exists():
-            return Response(
-                {"detail": "Apenas administradores podem criar usuários."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        oficina_id = request.data.get("oficina")
-
-        if oficina_id:
-            try:
-                oficina = admin_oficinas.get(id=oficina_id)
-            except Oficina.DoesNotExist:
-                return Response(
-                    {"oficina": "Oficina inválida ou sem permissão para esta ação."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-        else:
-            if admin_oficinas.count() == 1:
-                oficina = admin_oficinas.first()
-            else:
-                return Response(
-                    {"oficina": "Selecione uma oficina para o novo usuário."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-        usuario_oficina = serializer.save(oficina=oficina)
-        data = UsuarioOficinaSerializer(usuario_oficina).data
-        return Response(data, status=status.HTTP_201_CREATED)
-
-    def partial_update(self, request, *args, **kwargs):
-        usuario_oficina = self.get_object()
-        admin_oficinas = self._get_admin_oficinas(request.user)
-
-        if not request.user.is_superuser and not admin_oficinas.filter(
-            id=usuario_oficina.oficina_id
-        ).exists():
-            return Response(
-                {"detail": "Sem permissão para alterar usuários desta oficina."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        status_serializer = self.get_serializer(data=request.data)
-        status_serializer.is_valid(raise_exception=True)
-        novo_status = status_serializer.validated_data["ativo"]
-
-        if usuario_oficina.user_id == request.user.id and not novo_status:
-            return Response(
-                {"detail": "Você não pode desativar o próprio usuário."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        usuario_oficina.ativo = novo_status
-        usuario_oficina.save(update_fields=["ativo"])
-
-        usuario_oficina.user.is_active = novo_status
-        usuario_oficina.user.save(update_fields=["is_active"])
-
-        data = UsuarioOficinaSerializer(usuario_oficina).data
-        return Response(data)
-
-    @action(detail=False, methods=["get"], url_path="oficinas-disponiveis")
-    def oficinas_disponiveis(self, request):
-        oficinas = self._get_admin_oficinas(request.user)
-        serializer = OficinaSerializer(oficinas, many=True)
-        return Response(serializer.data)
+        return UsuarioOficina.objects.select_related('user', 'oficina').filter(oficina=oficina)
 
 
 class EtapaViewSet(viewsets.ModelViewSet):
@@ -281,83 +154,7 @@ class EtapaViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated(), IsOficinaAdminOrReadOnly()]
 
 
-class MensagemPadraoEtapaViewSet(viewsets.ModelViewSet):
-    queryset = MensagemPadraoEtapa.objects.select_related(
-        "oficina",
-        "etapa",
-        "updated_by",
-        "updated_by__user",
-    ).all()
-    serializer_class = MensagemPadraoEtapaSerializer
-    permission_classes = [IsAuthenticated, IsOficinaAdminOrReadOnly]
-
-    def get_queryset(self):
-        user = self.request.user
-
-        if user.is_superuser:
-            qs = MensagemPadraoEtapa.objects.select_related(
-                "oficina",
-                "etapa",
-                "updated_by",
-                "updated_by__user",
-            ).all()
-        else:
-            oficina = get_oficina_do_usuario(user)
-            if oficina is None:
-                return MensagemPadraoEtapa.objects.none()
-            qs = MensagemPadraoEtapa.objects.select_related(
-                "oficina",
-                "etapa",
-                "updated_by",
-                "updated_by__user",
-            ).filter(oficina=oficina)
-
-        etapa_id = self.request.query_params.get("etapa")
-        if etapa_id:
-            qs = qs.filter(etapa_id=etapa_id)
-
-        return qs.order_by("etapa__ordem", "id")
-
-    def create(self, request, *args, **kwargs):
-        user = request.user
-        etapa_id = request.data.get("etapa")
-
-        if not etapa_id:
-            return Response({"etapa": "Etapa é obrigatória."}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            etapa = Etapa.objects.select_related("oficina").get(id=etapa_id)
-        except Etapa.DoesNotExist:
-            return Response({"etapa": "Etapa não encontrada."}, status=status.HTTP_400_BAD_REQUEST)
-
-        oficina = get_oficina_do_usuario(user)
-        if not user.is_superuser:
-            if oficina is None or etapa.oficina_id != oficina.id:
-                return Response({"etapa": "Etapa não encontrada para esta oficina."}, status=status.HTTP_400_BAD_REQUEST)
-        else:
-            if oficina is None:
-                oficina = etapa.oficina
-        if oficina is None:
-            return Response({"oficina": "Oficina não encontrada para o usuário."}, status=status.HTTP_400_BAD_REQUEST)
-
-        usuario_oficina = None
-        if oficina is not None:
-            usuario_oficina = UsuarioOficina.objects.filter(user=user, oficina=oficina).first()
-
-        texto = request.data.get("texto", "")
-
-        mensagem, created = MensagemPadraoEtapa.objects.update_or_create(
-            oficina=oficina,
-            etapa=etapa,
-            defaults={
-                "texto": texto,
-                "updated_by": usuario_oficina,
-            },
-        )
-
-        serializer = self.get_serializer(mensagem)
-        return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
-
+from rest_framework import serializers  # garantir que está importado
 
 class ConfigFotoViewSet(viewsets.ModelViewSet):
     queryset = ConfigFoto.objects.select_related('oficina', 'etapa').all()
@@ -567,26 +364,25 @@ class OSViewSet(viewsets.ModelViewSet):
             criado_por=criado_por,
         )
 
-    @action(detail=True, methods=["get", "post"], url_path="observacoes")
-    def observacoes(self, request, pk=None):
+    @action(detail=True, methods=["get"], url_path="observacoes")
+    def listar_observacoes(self, request, pk=None):
         os_obj = self.get_object()
 
-        if request.method == "GET":
-            etapa_id = request.query_params.get("etapa")
-            observacoes = ObservacaoEtapaOS.objects.filter(os=os_obj)
-            if etapa_id:
-                observacoes = observacoes.filter(
-                    etapa_id=etapa_id, etapa__oficina=os_obj.oficina
-                )
-            observacoes = observacoes.select_related("etapa", "criado_por__user").order_by(
-                "-criado_em", "-id"
-            )
+        observacoes = (
+            ObservacaoEtapaOS.objects.filter(os=os_obj)
+            .select_related("etapa")
+            .order_by("etapa__ordem", "etapa_id")
+        )
 
-            serializer = ObservacaoEtapaOSSerializer(
-                observacoes, many=True, context={"request": request, "os": os_obj}
-            )
+        serializer = ObservacaoEtapaOSSerializer(
+            observacoes, many=True, context={"request": request, "os": os_obj}
+        )
 
-            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["post"], url_path="observacoes")
+    def criar_ou_atualizar_observacao(self, request, pk=None):
+        os_obj = self.get_object()
 
         etapa_id = request.data.get("etapa")
         if etapa_id:
@@ -611,31 +407,32 @@ class OSViewSet(viewsets.ModelViewSet):
             "texto": request.data.get("texto", ""),
         }
 
+        instance = ObservacaoEtapaOS.objects.filter(os=os_obj, etapa=etapa).first()
+
         observacao = self._salvar_observacao_etapa(
             os_obj=os_obj,
             etapa=etapa,
+            instance=instance,
             payload=payload,
-            partial=False,
+            partial=instance is not None,
         )
 
         return Response(
             ObservacaoEtapaOSSerializer(
                 observacao, context={"request": request, "os": os_obj}
             ).data,
-            status=status.HTTP_201_CREATED,
+            status=status.HTTP_200_OK,
         )
 
     @action(detail=True, methods=["patch"], url_path=r"observacoes/(?P<etapa_id>[^/.]+)")
     def atualizar_observacao(self, request, pk=None, etapa_id=None):
         os_obj = self.get_object()
 
-        instance = (
-            ObservacaoEtapaOS.objects.select_related("etapa")
-            .filter(os=os_obj, etapa_id=etapa_id, etapa__oficina=os_obj.oficina)
-            .order_by("-criado_em", "-id")
-            .first()
-        )
-        if not instance:
+        try:
+            instance = ObservacaoEtapaOS.objects.select_related("etapa").get(
+                os=os_obj, etapa_id=etapa_id, etapa__oficina=os_obj.oficina
+            )
+        except ObservacaoEtapaOS.DoesNotExist:
             return Response(
                 {"detail": "Observação não encontrada para esta OS/etapa."},
                 status=status.HTTP_404_NOT_FOUND,
@@ -668,13 +465,28 @@ class OSViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        payload = {"texto": request.data.get("texto", ""), "etapa": etapa.id}
+        payload = {"texto": request.data.get("texto", "")}
 
-        observacao = self._salvar_observacao_etapa(
-            os_obj=os_obj,
+        observacao = ObservacaoEtapaOS.objects.filter(os=os_obj, etapa=etapa).first()
+
+        serializer = ObservacaoEtapaOSSerializer(
+            instance=observacao,
+            data=payload,
+            partial=True,
+            context={"request": request, "os": os_obj},
+        )
+        serializer.is_valid(raise_exception=True)
+
+        usuario_oficina = UsuarioOficina.objects.filter(
+            user=request.user, oficina=os_obj.oficina, ativo=True
+        ).first()
+
+        criado_por = serializer.instance.criado_por if serializer.instance else None
+
+        observacao = serializer.save(
+            os=os_obj,
             etapa=etapa,
-            payload=payload,
-            partial=False,
+            criado_por=criado_por or usuario_oficina,
         )
 
         return Response(
@@ -834,11 +646,7 @@ class OSViewSet(viewsets.ModelViewSet):
             cfg
             for cfg in configs_obrigatorias
             if not FotoOS.objects.filter(
-                os=os_obj,
-                config_foto=cfg,
-                tipo="PADRAO",
-                is_deleted=False,
-                is_indisponivel=False,
+                os=os_obj, config_foto=cfg, tipo="PADRAO"
             ).exists()
         ]
 
@@ -872,79 +680,32 @@ class OSViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 class FotoOSViewSet(viewsets.ModelViewSet):
-    queryset = FotoOS.objects.select_related('os', 'etapa', 'config_foto', 'tirada_por').filter(
-        is_deleted=False,
-        is_indisponivel=False,
-    )
+    queryset = FotoOS.objects.select_related('os', 'etapa', 'config_foto', 'tirada_por').all()
     serializer_class = FotoOSSerializer
     permission_classes = [IsAuthenticated, IsFotoOSPermission]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
-    def create(self, request, *args, **kwargs):
-        local_id = request.data.get("local_id")
-        if local_id:
-            user = request.user
-            oficina = get_oficina_do_usuario(user)
-            qs = FotoOS.objects.select_related("os", "etapa", "config_foto", "tirada_por").filter(
-                local_id=local_id
-            )
-            if oficina and not user.is_superuser:
-                qs = qs.filter(os__oficina=oficina)
-            existente = qs.first()
-            if existente:
-                serializer = self.get_serializer(existente)
-                logger.info(
-                    "FotoOS reutilizada por local_id",
-                    extra={
-                        "foto_id": existente.id,
-                        "local_id": local_id,
-                        "os_id": existente.os_id,
-                        "oficina_id": existente.os.oficina_id,
-                    },
-                )
-                return Response(serializer.data, status=status.HTTP_200_OK)
-
-        return super().create(request, *args, **kwargs)
-
     def get_queryset(self):
         user = self.request.user
+
+        qs = FotoOS.objects.select_related('os', 'etapa', 'config_foto', 'tirada_por').all()
+
+        # Filtra por oficina do usuário (exceto superuser)
+        if not user.is_superuser:
+            oficina = get_oficina_do_usuario(user)
+            if oficina is None:
+                return FotoOS.objects.none()
+            qs = qs.filter(os__oficina=oficina)
+
+        # 🔹 Filtro por OS específica (?os=ID)
         os_id = self.request.query_params.get("os")
-        etapa_id = self.request.query_params.get("etapa")
-        try:
-            qs = FotoOS.objects.select_related('os', 'etapa', 'config_foto', 'tirada_por').filter(
-                is_deleted=False,
-                is_indisponivel=False,
-            )
+        if os_id:
+            qs = qs.filter(os_id=os_id)
 
-            # Filtra por oficina do usuário (exceto superuser)
-            if not user.is_superuser:
-                oficina = get_oficina_do_usuario(user)
-                if oficina is None:
-                    return FotoOS.objects.none()
-                qs = qs.filter(os__oficina=oficina)
+        # 🔹 Ordenação padrão: etapa, data da foto
+        qs = qs.order_by("etapa__ordem", "tirada_em", "id")
 
-            # 🔹 Filtro por OS específica (?os=ID)
-            if os_id:
-                qs = qs.filter(os_id=os_id)
-
-            # 🔹 Filtro por etapa (?etapa=ID)
-            if etapa_id:
-                try:
-                    etapa_id_int = int(etapa_id)
-                except (TypeError, ValueError):
-                    return FotoOS.objects.none()
-                qs = qs.filter(etapa_id=etapa_id_int)
-
-            # 🔹 Ordenação padrão: fotos mais recentes primeiro
-            qs = qs.order_by("-tirada_em", "-id")
-
-            return qs
-        except Exception:
-            logger.exception(
-                "Erro ao obter fotos da OS",
-                extra={"user_id": getattr(user, "id", None), "os_id": os_id},
-            )
-            return FotoOS.objects.none()
+        return qs
 
     def perform_create(self, serializer):
         from .models import UsuarioOficina
@@ -959,17 +720,6 @@ class FotoOSViewSet(viewsets.ModelViewSet):
 
         # salva a foto corretamente
         foto = serializer.save(tirada_por=usuario_oficina)
-
-        if foto.local_id:
-            logger.info(
-                "FotoOS criada",
-                extra={
-                    "foto_id": foto.id,
-                    "local_id": foto.local_id,
-                    "os_id": foto.os_id,
-                    "oficina_id": foto.os.oficina_id,
-                },
-            )
 
         # tenta subir pro drive
         try:
@@ -1003,194 +753,8 @@ class FotoOSViewSet(viewsets.ModelViewSet):
             )
 
     def destroy(self, request, *args, **kwargs):
-        foto = self.get_object()
-
-        if foto.is_deleted:
-            return Response(status=status.HTTP_204_NO_CONTENT)
-
-        if foto.drive_file_id:
-            try:
-                deletar_arquivo_drive(foto.drive_file_id, foto.os.oficina)
-            except DriveNaoConfigurado:
-                return Response(
-                    {"detail": "Integração com Drive não configurada."},
-                    status=status.HTTP_502_BAD_GATEWAY,
-                )
-            except Exception as exc:
-                logger.exception(
-                    "Erro ao deletar arquivo no Drive",
-                    extra={
-                        "oficina_id": foto.os.oficina_id,
-                        "os_id": foto.os_id,
-                        "foto_id": foto.id,
-                    },
-                )
-                return Response(
-                    {"detail": f"Erro ao deletar arquivo no Drive: {exc}"},
-                    status=status.HTTP_502_BAD_GATEWAY,
-                )
-
-        usuario_oficina = None
-        if not request.user.is_superuser:
-            oficina = get_oficina_do_usuario(request.user)
-            if oficina:
-                usuario_oficina = UsuarioOficina.objects.filter(
-                    user=request.user,
-                    oficina=oficina,
-                    ativo=True,
-                ).first()
-
-        foto.is_deleted = True
-        foto.deleted_at = timezone.now()
-        foto.deleted_by = usuario_oficina
-        foto.save(update_fields=["is_deleted", "deleted_at", "deleted_by"])
-
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-    @action(detail=True, methods=["GET"], url_path="arquivo")
-    def arquivo(self, request, pk=None):
-        foto = self.get_object()
-
-        if foto.drive_file_id:
-            service = get_drive_service(foto.os.oficina)
-            meta = (
-                service.files()
-                .get(fileId=foto.drive_file_id, fields="mimeType,name,size")
-                .execute()
-            )
-            request_drive = service.files().get_media(fileId=foto.drive_file_id)
-            bytes_data = request_drive.execute()
-
-            response = HttpResponse(
-                bytes_data,
-                content_type=meta.get("mimeType", "application/octet-stream"),
-            )
-            response["Content-Disposition"] = f'inline; filename="{meta.get("name", "")}"'
-            response["Cache-Control"] = "private, max-age=3600"
-            return response
-
-        if foto.arquivo:
-            return FileResponse(
-                foto.arquivo.open("rb"),
-                content_type="application/octet-stream",
-            )
-
-        raise Http404("Arquivo não encontrado.")
-
-
-class DriveProxyBase(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get_foto(self, request, drive_file_id):
-        qs = FotoOS.objects.select_related("os__oficina").filter(
-            drive_file_id=drive_file_id,
-            is_deleted=False,
-            is_indisponivel=False,
-        )
-
-        if not request.user.is_superuser:
-            oficina = get_oficina_do_usuario(request.user)
-            if oficina is None:
-                return None
-            qs = qs.filter(os__oficina=oficina)
-
-        return qs.first()
-
-
-class DriveThumbProxyView(DriveProxyBase):
-    permission_classes = []
-    authentication_classes = []
-
-    def get_foto(self, request, drive_file_id):
-        return (
-            FotoOS.objects.select_related("os__oficina")
-            .filter(
-                drive_file_id=drive_file_id,
-                is_deleted=False,
-                is_indisponivel=False,
-            )
-            .first()
-        )
-
-    def get(self, request, drive_file_id):
-        sig = request.query_params.get("sig")
-        exp = request.query_params.get("exp")
-        if not sig or not exp:
-            return HttpResponse("Assinatura inválida.", status=403)
-        try:
-            exp_int = int(exp)
-        except (TypeError, ValueError):
-            return HttpResponse("Assinatura inválida.", status=403)
-
-        if exp_int < int(timezone.now().timestamp()):
-            return HttpResponse("Assinatura expirada.", status=403)
-
-        expected_sig = gerar_assinatura_thumb(drive_file_id, exp_int)
-        if not hmac.compare_digest(expected_sig, sig):
-            return HttpResponse("Assinatura inválida.", status=403)
-
-        foto = self.get_foto(request, drive_file_id)
-        if not foto:
-            raise Http404("Arquivo não encontrado.")
-
-        try:
-            conteudo, meta = baixar_thumbnail_drive(foto.os.oficina, drive_file_id)
-            if not conteudo:
-                conteudo, meta = baixar_arquivo_drive(foto.os.oficina, drive_file_id)
-        except DriveNaoConfigurado:
-            raise Http404("Integração com Drive não configurada.")
-        except Exception:
-            logger.exception(
-                "Erro ao buscar thumbnail do Drive",
-                extra={
-                    "oficina_id": foto.os.oficina_id,
-                    "drive_file_id": drive_file_id,
-                    "foto_id": foto.id,
-                },
-            )
-            raise Http404("Arquivo não encontrado.")
-
-        if not conteudo or not meta:
-            raise Http404("Arquivo não encontrado.")
-
-        content_type = meta.get("content_type") or meta.get("mimeType") or "image/jpeg"
-        response = HttpResponse(conteudo, content_type=content_type)
-        response["Content-Disposition"] = f'inline; filename="{meta.get("name", "")}"'
-        response["Cache-Control"] = "private, max-age=300"
-        return response
-
-
-class DriveFileProxyView(DriveProxyBase):
-    def get(self, request, drive_file_id):
-        foto = self.get_foto(request, drive_file_id)
-        if not foto:
-            raise Http404("Arquivo não encontrado.")
-
-        try:
-            conteudo, meta = baixar_arquivo_drive(foto.os.oficina, drive_file_id)
-        except DriveNaoConfigurado:
-            raise Http404("Integração com Drive não configurada.")
-        except Exception:
-            logger.exception(
-                "Erro ao buscar arquivo do Drive",
-                extra={
-                    "oficina_id": foto.os.oficina_id,
-                    "drive_file_id": drive_file_id,
-                    "foto_id": foto.id,
-                },
-            )
-            raise Http404("Arquivo não encontrado.")
-
-        if not conteudo or not meta:
-            raise Http404("Arquivo não encontrado.")
-
-        response = HttpResponse(
-            conteudo,
-            content_type=meta.get("mimeType", "application/octet-stream"),
-        )
-        response["Content-Disposition"] = f'inline; filename="{meta.get("name", "")}"'
-        response["Cache-Control"] = "private, max-age=3600"
-        return response
+        # Futuro: remover também do Drive quando integrado (S7-6 / melhorias futuras)
+        return super().destroy(request, *args, **kwargs)
 
 
 from django.utils import timezone
@@ -1253,13 +817,7 @@ class PwaVeiculosEmProducaoView(APIView):
         os_ids = [os_obj.id for os_obj in ordens]
         fotos_por_os = {}
 
-        for foto in (
-            FotoOS.objects.filter(
-                os_id__in=os_ids,
-                is_deleted=False,
-                is_indisponivel=False,
-            ).select_related("etapa")
-        ):
+        for foto in FotoOS.objects.filter(os_id__in=os_ids).select_related("etapa"):
             fotos_por_os.setdefault(foto.os_id, []).append(foto)
 
         primeira_etapa_cache = {}
@@ -1297,14 +855,7 @@ class PwaVeiculosEmProducaoView(APIView):
         def build_drive_thumb(drive_file_id):
             if not drive_file_id:
                 return None
-            exp = int((timezone.now() + timedelta(minutes=10)).timestamp())
-            sig = gerar_assinatura_thumb(drive_file_id, exp)
-            path = reverse("drive-thumb", kwargs={"drive_file_id": drive_file_id})
-            url = f"{path}?sig={sig}&exp={exp}"
-            try:
-                return request.build_absolute_uri(url)
-            except Exception:
-                return url
+            return f"https://drive.google.com/thumbnail?id={drive_file_id}&sz=w800"
 
         resposta = []
 
