@@ -23,6 +23,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 GOOGLE_DRIVE_CLIENT_SECRETS_FILE = BASE_DIR / "google_client_secret.json"
 GOOGLE_DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+
+# Canonical Google OAuth callback URL. Register this path in Google Cloud Console.
+# DEV:  http://localhost:8000/api/drive/oauth2/callback/
+# PROD: https://checkauto-backend.onrender.com/api/drive/oauth2/callback/
+
 GOOGLE_DRIVE_REDIRECT_URI = os.getenv(
     "GOOGLE_DRIVE_REDIRECT_URI",
     "http://localhost:8000/api/drive/oauth2/callback/"
