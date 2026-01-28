@@ -204,6 +204,44 @@ class CheckinPerguntaViewSet(viewsets.ModelViewSet):
         if oficina and etapa and etapa.oficina_id != oficina.id:
             raise serializers.ValidationError({"etapa": "Etapa não encontrada para esta oficina."})
 
+    @action(detail=False, methods=["get"], url_path="pwa")
+    def pwa_list(self, request):
+        """
+        Retorna as perguntas de check-in para a etapa de check-in da oficina,
+        já filtradas e prontas para o PWA.
+        """
+        oficina = self._get_oficina_do_usuario(request.user)
+        if oficina is None:
+            return Response({"results": [], "etapa": None})
+
+        etapas_checkin = (
+            Etapa.objects.filter(oficina=oficina, is_checkin=True, ativa=True)
+            .order_by("ordem")
+        )
+
+        etapa_id = request.query_params.get("etapa")
+        if etapa_id:
+            etapa = etapas_checkin.filter(id=etapa_id).first()
+        else:
+            etapa = etapas_checkin.first()
+
+        if etapa is None:
+            return Response({"results": [], "etapa": None})
+
+        qs = (
+            CheckinPergunta.objects.filter(oficina=oficina, etapa=etapa, ativa=True)
+            .select_related("etapa", "oficina")
+            .prefetch_related("opcoes")
+            .order_by("ordem")
+        )
+        serializer = self.get_serializer(qs, many=True)
+        return Response(
+            {
+                "etapa": {"id": etapa.id, "nome": etapa.nome},
+                "results": serializer.data,
+            }
+        )
+
     def get_queryset(self):
         user = self.request.user
 

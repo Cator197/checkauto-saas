@@ -2,11 +2,12 @@
 // Módulo central de IndexedDB para o PWA CheckAuto
 
 const CHECKAUTO_DB_NAME = "checkauto_pwa";
-const CHECKAUTO_DB_VERSION = 4;
+const CHECKAUTO_DB_VERSION = 5;
 const OS_STORE_NAME = "osPendentes";
 const VEICULOS_PRODUCAO_STORE = "veiculosEmProducao";
 const OS_PRODUCAO_STORE = "osProducao";
 const SYNC_QUEUE_STORE = "filaSync";
+const CHECKIN_PERGUNTAS_STORE = "checkinPerguntas";
 const ACAO_AVANCAR_ETAPA = "AVANCAR_ETAPA";
 const TIPO_OS_UPSERT = "os_upsert";
 const TIPO_OBSERVACAO = "observacao_create";
@@ -56,6 +57,12 @@ function checkautoOpenDB() {
       if (!db.objectStoreNames.contains(SYNC_QUEUE_STORE)) {
         db.createObjectStore(SYNC_QUEUE_STORE, {
           keyPath: "id",
+        });
+      }
+
+      if (!db.objectStoreNames.contains(CHECKIN_PERGUNTAS_STORE)) {
+        db.createObjectStore(CHECKIN_PERGUNTAS_STORE, {
+          keyPath: "cache_key",
         });
       }
     };
@@ -182,6 +189,72 @@ window.checkautoLimparOSPendentes = async function () {
   } catch (e) {
     console.error("Falha em checkautoLimparOSPendentes:", e);
     return false;
+  }
+};
+
+function montarChavePerguntasCheckin(etapaId) {
+  return etapaId ? `etapa-${etapaId}` : "default";
+}
+
+window.checkautoSalvarPerguntasCheckin = async function (payload) {
+  if (!payload) {
+    return false;
+  }
+
+  try {
+    const db = await checkautoOpenDB();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(CHECKIN_PERGUNTAS_STORE, "readwrite");
+      const store = tx.objectStore(CHECKIN_PERGUNTAS_STORE);
+      const etapaId = payload?.etapa?.id || null;
+      const registro = {
+        cache_key: montarChavePerguntasCheckin(etapaId),
+        etapa: payload?.etapa || null,
+        results: Array.isArray(payload?.results) ? payload.results : [],
+        atualizado_em: new Date().toISOString(),
+      };
+
+      store.put(registro);
+
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    console.error("Falha em checkautoSalvarPerguntasCheckin:", e);
+    return false;
+  }
+};
+
+window.checkautoBuscarPerguntasCheckin = async function (etapaId = null) {
+  try {
+    const db = await checkautoOpenDB();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(CHECKIN_PERGUNTAS_STORE, "readonly");
+      const store = tx.objectStore(CHECKIN_PERGUNTAS_STORE);
+      const key = montarChavePerguntasCheckin(etapaId);
+      const request = store.get(key);
+
+      request.onsuccess = async () => {
+        if (request.result) {
+          resolve(request.result);
+          return;
+        }
+
+        const fallbackRequest = store.getAll();
+        fallbackRequest.onsuccess = () => {
+          const todos = fallbackRequest.result || [];
+          resolve(todos[0] || null);
+        };
+        fallbackRequest.onerror = () => {
+          reject(fallbackRequest.error);
+        };
+      };
+
+      request.onerror = () => reject(request.error);
+    });
+  } catch (e) {
+    console.error("Falha em checkautoBuscarPerguntasCheckin:", e);
+    return null;
   }
 };
 

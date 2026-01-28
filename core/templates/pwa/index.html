@@ -10,10 +10,21 @@
   </section>
 
   <div class="pwa-actions">
-    <a class="pwa-btn pwa-btn-primary pwa-btn-block" href="/pwa/checkin-completo/">Novo Check-in Completo</a>
-    <a class="pwa-btn pwa-btn-secondary pwa-btn-block" href="/pwa/checkin-fotos/">Check-in (Somente Fotos)</a>
+    <button id="btnNovoCheckin" class="pwa-btn pwa-btn-primary pwa-btn-block" type="button">Check-in</button>
     <a class="pwa-btn pwa-btn-secondary pwa-btn-block" href="/pwa/veiculos-em-producao/">Veículos em Produção</a>
     <a class="pwa-btn pwa-btn-secondary pwa-btn-block" href="/pwa/sync/">Sincronizar Dados</a>
+  </div>
+
+  <div id="checkinTipoModal" class="camera-overlay" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="checkinTipoTitulo">
+    <div class="camera-modal">
+      <h2 id="checkinTipoTitulo" class="pwa-title" style="font-size: 18px;">Selecione o tipo de check-in</h2>
+      <p class="pwa-muted">Escolha o fluxo ideal para este atendimento.</p>
+      <div class="camera-modal-actions">
+        <a class="pwa-btn pwa-btn-secondary" href="/pwa/checkin-fotos/">Básico</a>
+        <a class="pwa-btn pwa-btn-primary" href="/pwa/checkin-completo/">Completo</a>
+        <button id="checkinModalCancelar" type="button" class="pwa-btn pwa-btn-secondary">Cancelar</button>
+      </div>
+    </div>
   </div>
 
   <div class="pwa-card pwa-card--compact" style="margin-top: 16px;">
@@ -36,4 +47,8 @@
       </div>
     </div>
   </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'pwa/js/home.js' %}"></script>
 {% endblock %}

@@ -520,10 +520,14 @@ class SyncFotoSerializer(serializers.Serializer):
 
 class SyncOSPayloadSerializer(serializers.Serializer):
     local_id = serializers.CharField(required=False, allow_blank=True)
+    tipo_checkin = serializers.CharField(required=False, allow_blank=True)
     os = serializers.DictField(required=False, allow_null=True)
     veiculo = serializers.DictField(required=False, allow_null=True)
     cliente = serializers.DictField(required=False, allow_null=True)
     fotos = serializers.DictField(required=False, allow_null=True)
+    checkin_respostas = serializers.ListField(
+        child=serializers.DictField(), required=False, allow_empty=True
+    )
 
 
 class SyncRequestSerializer(serializers.Serializer):

@@ -1,5 +1,5 @@
 // Nome do cache (mude a versão quando fizer mudanças grandes no front)
-const CACHE_VERSION = "v2026-01-09-test01";
+const CACHE_VERSION = "v2026-01-09-test02";
 const CACHE_NAME = `checkauto-pwa-${CACHE_VERSION}`;
 console.log("[SW] Iniciando Service Worker - versão:", CACHE_VERSION);
 
@@ -10,6 +10,7 @@ const URLS_TO_CACHE = [
   "/static/pwa/js/app.js",
   "/static/pwa/js/api.js",
   "/static/pwa/js/db.js",
+  "/static/pwa/js/home.js",
   "/static/pwa/js/sync.js",
   "/static/shared/api.js",
   "/static/pwa/icons/icon-192.png",

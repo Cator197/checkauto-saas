@@ -8,7 +8,7 @@
 
   <section class="pwa-page-header">
     <h1 class="pwa-title">Check-in Completo</h1>
-    <p class="pwa-subtitle">Faça o check-in completo com identificação do veículo e fotos.</p>
+    <p class="pwa-subtitle">Faça o check-in completo com identificação do veículo, fotos e perguntas configuradas.</p>
   </section>
 
   <form id="formCheckinCompleto" class="pwa-form">
@@ -22,7 +22,7 @@
 
       <div class="pwa-field">
         <label for="veiculoModelo">Modelo</label>
-        <input id="veiculoModelo" name="veiculoModelo" type="text" class="pwa-input" required>
+        <input id="veiculoModelo" name="veiculoModelo" type="text" class="pwa-input">
       </div>
 
       <div class="pwa-field">
@@ -38,6 +38,13 @@
         <label for="observacoes">Observações rápidas</label>
         <textarea id="observacoes" name="observacoes" class="pwa-textarea"></textarea>
       </div>
+    </div>
+
+    <div class="pwa-card">
+      <h2 class="pwa-title" style="font-size: 18px;">Perguntas do Check-in</h2>
+      <div id="checkinPerguntasStatus" class="state-loading">Carregando perguntas configuradas…</div>
+      <div id="checkinPerguntasAviso" class="state-offline" style="display:none;"></div>
+      <div id="checkinPerguntasLista" style="margin-top: 12px;"></div>
     </div>
 
     <div class="pwa-card">

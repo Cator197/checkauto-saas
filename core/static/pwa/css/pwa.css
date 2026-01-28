@@ -288,6 +288,16 @@ a {
   font-size: 14px;
 }
 
+.pwa-input-error {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.2);
+}
+
+.pwa-required {
+  color: #dc2626;
+  font-weight: 700;
+}
+
 .pwa-textarea {
   min-height: 80px;
   resize: vertical;
