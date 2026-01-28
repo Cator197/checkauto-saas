@@ -195,6 +195,15 @@ class CheckinPerguntaViewSet(viewsets.ModelViewSet):
     serializer_class = CheckinPerguntaSerializer
     permission_classes = [IsAuthenticated, IsOficinaAdminOrReadOnly]
 
+    def _get_oficina_do_usuario(self, user):
+        if user.is_superuser:
+            return None
+        return get_oficina_do_usuario(user)
+
+    def _validar_etapa_da_oficina(self, etapa, oficina):
+        if oficina and etapa and etapa.oficina_id != oficina.id:
+            raise serializers.ValidationError({"etapa": "Etapa não encontrada para esta oficina."})
+
     def get_queryset(self):
         user = self.request.user
 
@@ -203,7 +212,7 @@ class CheckinPerguntaViewSet(viewsets.ModelViewSet):
         if user.is_superuser:
             qs = base_qs.all()
         else:
-            oficina = get_oficina_do_usuario(user)
+            oficina = self._get_oficina_do_usuario(user)
             if oficina is None:
                 return CheckinPergunta.objects.none()
             qs = base_qs.filter(oficina=oficina)
@@ -212,24 +221,36 @@ class CheckinPerguntaViewSet(viewsets.ModelViewSet):
         if etapa_id:
             qs = qs.filter(etapa_id=etapa_id)
 
+        ativa = self.request.query_params.get("ativa")
+        if ativa is not None:
+            ativa_valor = ativa.lower()
+            if ativa_valor in ["true", "1", "t"]:
+                qs = qs.filter(ativa=True)
+            elif ativa_valor in ["false", "0", "f"]:
+                qs = qs.filter(ativa=False)
+
         return qs.order_by("etapa__ordem", "ordem", "id")
 
     def perform_create(self, serializer):
         user = self.request.user
-        oficina = get_oficina_do_usuario(user)
+        oficina = self._get_oficina_do_usuario(user)
 
         if oficina is None and not user.is_superuser:
             raise serializers.ValidationError({"oficina": "Nenhuma oficina associada ao usuário."})
 
+        etapa = serializer.validated_data.get("etapa")
+        self._validar_etapa_da_oficina(etapa, oficina)
         serializer.save(oficina=oficina)
 
     def perform_update(self, serializer):
         user = self.request.user
-        oficina = get_oficina_do_usuario(user)
+        oficina = self._get_oficina_do_usuario(user)
 
         if oficina is None and not user.is_superuser:
             raise serializers.ValidationError({"oficina": "Nenhuma oficina associada ao usuário."})
 
+        etapa = serializer.validated_data.get("etapa", serializer.instance.etapa)
+        self._validar_etapa_da_oficina(etapa, oficina)
         serializer.save(oficina=oficina)
 
 

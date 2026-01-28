@@ -21,8 +21,11 @@ from django.conf.urls.static import static
 from django.contrib.staticfiles import finders
 from django.http import Http404, HttpResponse
 from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
 from django.views.generic import RedirectView, TemplateView
 from core.authentication import CustomTokenObtainPairView
+from core.models import Etapa
+from core.utils import get_oficina_do_usuario
 
 from rest_framework_simplejwt.views import TokenRefreshView
 
@@ -100,6 +103,24 @@ def painel_usuarios(request):
 def painel_integracao_drive(request):
     return render(request, "painel/integracao_drive.html")
 
+@login_required
+def painel_checkin_config(request):
+    oficina = get_oficina_do_usuario(request.user)
+    if oficina is None:
+        etapas_checkin = Etapa.objects.none()
+    else:
+        etapas_checkin = Etapa.objects.filter(
+            oficina=oficina,
+            is_checkin=True,
+            ativa=True,
+        ).order_by("ordem")
+
+    return render(
+        request,
+        "painel/checkin_config.html",
+        {"etapas_checkin": etapas_checkin},
+    )
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -128,6 +149,7 @@ urlpatterns = [
     path("painel/os/<int:os_id>/", painel_os_detalhe, name="painel_os_detalhe"),
     path("painel/etapas/", painel_etapas, name="painel_etapas"),
     path("painel/fotos/", painel_config_fotos, name="painel_config_fotos"),
+    path("painel/checkin-config/", painel_checkin_config, name="painel_checkin_config"),
     path("painel/config-mensagens/", painel_config_mensagens, name="painel_config_mensagens"),
     path("painel/usuarios/", painel_usuarios, name="painel_usuarios"),
     path("painel/integracoes/drive/", painel_integracao_drive, name="painel_integracao_drive"),
