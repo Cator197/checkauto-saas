@@ -1,0 +1,184 @@
+{% extends "painel/base.html" %}
+{% load static %}
+
+{% block title %}CheckAuto - Configurar Check-in{% endblock %}
+
+{% block page_title %}
+Configurar Check-in
+{% endblock %}
+
+{% block page_subtitle %}
+Defina as perguntas do check-in completo por etapa.
+{% endblock %}
+
+{% block content %}
+
+<script src="{% static 'painel/js/auth.js' %}"></script>
+<script src="{% static 'painel/js/api.js' %}"></script>
+
+<div id="checkin-erro" class="hidden mb-4 bg-rose-900/40 border border-rose-700/70 text-rose-100 text-xs rounded-xl px-3 py-2">
+    Ocorreu um erro ao carregar ou salvar as perguntas de check-in. Veja o console para detalhes.
+</div>
+
+<!-- Filtro + botão -->
+<div class="mb-4 bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+    <div class="flex flex-col gap-1 text-xs">
+        <label for="checkin-etapa-select" class="text-[11px] text-slate-400 uppercase tracking-wide">
+            Etapa de check-in
+        </label>
+        <select
+            id="checkin-etapa-select"
+            class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100
+                   focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        >
+            <option value="">Selecione a etapa...</option>
+            {% for etapa in etapas_checkin %}
+            <option value="{{ etapa.id }}">{{ etapa.ordem }} - {{ etapa.nome }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <button
+        type="button"
+        id="btn-nova-pergunta"
+        class="inline-flex items-center justify-center px-4 py-2 rounded-xl text-xs font-medium
+               bg-indigo-600 hover:bg-indigo-500 text-white transition"
+    >
+        Nova pergunta
+    </button>
+</div>
+
+<!-- Tabela de perguntas -->
+<div class="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden">
+    <div class="border-b border-slate-800 px-4 py-2 flex items-center justify-between">
+        <p class="text-xs text-slate-400">
+            Perguntas configuradas para a etapa selecionada.
+        </p>
+        <p id="checkin-count" class="text-[11px] text-slate-500">
+            —
+        </p>
+    </div>
+
+    <div class="overflow-x-auto">
+        <table class="min-w-full text-xs">
+            <thead class="bg-slate-900/90 border-b border-slate-800 text-slate-400 uppercase tracking-wide">
+                <tr>
+                    <th class="px-3 py-2 text-left">Ordem</th>
+                    <th class="px-3 py-2 text-left">Pergunta</th>
+                    <th class="px-3 py-2 text-left">Tipo</th>
+                    <th class="px-3 py-2 text-left">Obrigatória</th>
+                    <th class="px-3 py-2 text-left">Ativa</th>
+                    <th class="px-3 py-2 text-right">Ações</th>
+                </tr>
+            </thead>
+            <tbody id="checkin-tbody" class="divide-y divide-slate-800/80">
+                <!-- linhas via JS -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal -->
+<div id="checkin-modal" class="fixed inset-0 hidden items-center justify-center bg-slate-950/80 z-40 px-3">
+    <div class="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-3">
+            <h2 id="checkin-modal-title" class="text-xs font-semibold text-slate-200 uppercase tracking-wide">
+                Nova pergunta
+            </h2>
+            <button
+                type="button"
+                id="btn-fechar-modal"
+                class="text-slate-400 hover:text-slate-200 text-sm"
+            >
+                ✕
+            </button>
+        </div>
+
+        <form id="form-checkin-pergunta" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            <input type="hidden" id="checkin-id">
+
+            <div class="md:col-span-2 flex flex-col gap-1">
+                <label for="checkin-texto" class="text-[11px] text-slate-400 uppercase tracking-wide">
+                    Texto da pergunta
+                </label>
+                <input
+                    id="checkin-texto"
+                    type="text"
+                    required
+                    placeholder="Ex: O cliente autorizou lavagem?"
+                    class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100
+                           placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                >
+            </div>
+
+            <div class="flex flex-col gap-1">
+                <label for="checkin-tipo" class="text-[11px] text-slate-400 uppercase tracking-wide">
+                    Tipo de resposta
+                </label>
+                <select
+                    id="checkin-tipo"
+                    class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100
+                           focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                >
+                    <option value="TEXTO">Texto</option>
+                    <option value="ESCOLHA">Escolha</option>
+                </select>
+            </div>
+
+            <div class="flex flex-col gap-1">
+                <label for="checkin-ordem" class="text-[11px] text-slate-400 uppercase tracking-wide">
+                    Ordem
+                </label>
+                <input
+                    id="checkin-ordem"
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="0, 1, 2..."
+                    class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100
+                           placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                >
+            </div>
+
+            <div class="md:col-span-2 flex flex-col gap-1">
+                <label class="text-[11px] text-slate-400 uppercase tracking-wide">
+                    Opções
+                </label>
+                <div class="flex flex-col gap-1 mt-1">
+                    <label class="inline-flex items-center gap-2">
+                        <input id="checkin-obrigatoria" type="checkbox" class="rounded border-slate-600 bg-slate-900" checked>
+                        <span class="text-[11px] text-slate-300">Obrigatória</span>
+                    </label>
+                    <label class="inline-flex items-center gap-2">
+                        <input id="checkin-ativa" type="checkbox" class="rounded border-slate-600 bg-slate-900" checked>
+                        <span class="text-[11px] text-slate-300">Pergunta ativa</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="md:col-span-2 flex flex-col md:flex-row gap-2 md:justify-end mt-2">
+                <button
+                    type="submit"
+                    class="inline-flex items-center justify-center px-4 py-2 rounded-xl text-xs font-medium
+                           bg-indigo-600 hover:bg-indigo-500 text-white transition"
+                >
+                    Salvar pergunta
+                </button>
+                <button
+                    type="button"
+                    id="btn-cancelar-modal"
+                    class="inline-flex items-center justify-center px-4 py-2 rounded-xl text-xs
+                           border border-slate-700 text-slate-300 hover:bg-slate-800/70 transition"
+                >
+                    Cancelar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'painel/js/checkin_config.js' %}"></script>
+{% endblock %}

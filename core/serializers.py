@@ -220,6 +220,7 @@ class CheckinPerguntaOpcaoSerializer(serializers.ModelSerializer):
 
 
 class CheckinPerguntaSerializer(serializers.ModelSerializer):
+    etapa_nome = serializers.CharField(source="etapa.nome", read_only=True)
     opcoes = CheckinPerguntaOpcaoSerializer(many=True, read_only=True)
 
     class Meta:
@@ -228,6 +229,7 @@ class CheckinPerguntaSerializer(serializers.ModelSerializer):
             "id",
             "oficina",
             "etapa",
+            "etapa_nome",
             "texto",
             "tipo_resposta",
             "obrigatoria",

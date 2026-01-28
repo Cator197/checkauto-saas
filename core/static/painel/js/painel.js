@@ -101,6 +101,10 @@ document.addEventListener("DOMContentLoaded", async () => {
             link.classList.add("bg-slate-800/90", "text-white");
         }
 
+        if (menu === "checkin-config" && path.startsWith("/painel/checkin-config")) {
+            link.classList.add("bg-slate-800/90", "text-white");
+        }
+
         // Usuários
         if (menu === "usuarios" && path.startsWith("/painel/usuarios")) {
             link.classList.add("bg-slate-800/90", "text-white");

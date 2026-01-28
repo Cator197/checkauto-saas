@@ -112,6 +112,14 @@
                     </a>
                 </li>
                 <li>
+                    <a href="{% url 'painel_checkin_config' %}"
+                       data-menu="checkin-config"
+                       class="menu-link flex items-center gap-3 px-3 py-2 rounded-lg transition hover:bg-slate-800/80 hover:text-white">
+                        <span class="text-lg">✅</span>
+                        <span>Configurar Check-in</span>
+                    </a>
+                </li>
+                <li>
                     <a href="{% url 'painel_config_mensagens' %}"
                        data-menu="mensagens"
                        class="menu-link flex items-center gap-3 px-3 py-2 rounded-lg transition hover:bg-slate-800/80 hover:text-white">
@@ -212,6 +220,7 @@
 <script src="{% static 'painel/js/auth.js' %}"></script>
 <script src="{% static 'painel/js/header.js' %}"></script>
 <script src="{% static 'painel/js/painel.js' %}"></script>
+{% block extra_js %}{% endblock %}
 
 </body>
 </html>
