@@ -1,14 +1,14 @@
 {% extends "painel/base.html" %}
 {% load static %}
 
-{% block title %}CheckAuto - Configurar Check-in{% endblock %}
+{% block title %}CheckAuto - Configurar Nova Entrada{% endblock %}
 
 {% block page_title %}
-Configurar Check-in
+Configurar Nova Entrada
 {% endblock %}
 
 {% block page_subtitle %}
-Defina as perguntas do check-in completo por etapa.
+Defina as perguntas adicionais do check-in completo para a oficina.
 {% endblock %}
 
 {% block content %}
@@ -20,22 +20,10 @@ Defina as perguntas do check-in completo por etapa.
     Ocorreu um erro ao carregar ou salvar as perguntas de check-in. Veja o console para detalhes.
 </div>
 
-<!-- Filtro + botão -->
-<div class="mb-4 bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-    <div class="flex flex-col gap-1 text-xs">
-        <label for="checkin-etapa-select" class="text-[11px] text-slate-400 uppercase tracking-wide">
-            Etapa de check-in
-        </label>
-        <select
-            id="checkin-etapa-select"
-            class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100
-                   focus:outline-none focus:ring-1 focus:ring-indigo-500"
-        >
-            <option value="">Selecione a etapa...</option>
-            {% for etapa in etapas_checkin %}
-            <option value="{{ etapa.id }}">{{ etapa.ordem }} - {{ etapa.nome }}</option>
-            {% endfor %}
-        </select>
+<!-- Botão -->
+<div class="mb-4 bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex items-center justify-between gap-3">
+    <div class="text-xs text-slate-400">
+        Perguntas de nova entrada configuradas para esta oficina.
     </div>
 
     <button
@@ -52,7 +40,7 @@ Defina as perguntas do check-in completo por etapa.
 <div class="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden">
     <div class="border-b border-slate-800 px-4 py-2 flex items-center justify-between">
         <p class="text-xs text-slate-400">
-            Perguntas configuradas para a etapa selecionada.
+            Perguntas configuradas para a nova entrada da oficina.
         </p>
         <p id="checkin-count" class="text-[11px] text-slate-500">
             —

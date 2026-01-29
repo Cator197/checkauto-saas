@@ -203,9 +203,13 @@ document.addEventListener("DOMContentLoaded", () => {
       submitButton.disabled = false;
     }
 
-    const perguntasFiltradas = Array.isArray(data.results)
-      ? data.results.filter((item) => item.ativa !== false)
-      : [];
+    const listaPerguntas = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.results)
+        ? data.results
+        : [];
+
+    const perguntasFiltradas = listaPerguntas.filter((item) => item.ativa !== false);
 
     perguntasAtuais = perguntasFiltradas;
     perguntasDisponiveis = true;

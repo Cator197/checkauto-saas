@@ -52,10 +52,10 @@ class CheckinPerguntaOpcaoInline(admin.TabularInline):
 
 @admin.register(CheckinPergunta)
 class CheckinPerguntaAdmin(admin.ModelAdmin):
-    list_display = ("id", "oficina", "etapa", "texto", "tipo_resposta", "obrigatoria", "ativa", "ordem")
-    list_filter = ("oficina", "etapa", "tipo_resposta", "obrigatoria", "ativa")
-    search_fields = ("texto", "oficina__nome", "etapa__nome")
-    ordering = ("oficina", "etapa", "ordem")
+    list_display = ("id", "oficina", "texto", "tipo_resposta", "obrigatoria", "ativa", "ordem")
+    list_filter = ("oficina", "tipo_resposta", "obrigatoria", "ativa")
+    search_fields = ("texto", "oficina__nome")
+    ordering = ("oficina", "ordem")
     inlines = [CheckinPerguntaOpcaoInline]
 
 @admin.register(OS)

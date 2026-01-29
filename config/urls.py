@@ -24,7 +24,6 @@ from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.views.generic import RedirectView, TemplateView
 from core.authentication import CustomTokenObtainPairView
-from core.models import Etapa
 from core.utils import get_oficina_do_usuario
 
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -106,19 +105,10 @@ def painel_integracao_drive(request):
 @login_required
 def painel_checkin_config(request):
     oficina = get_oficina_do_usuario(request.user)
-    if oficina is None:
-        etapas_checkin = Etapa.objects.none()
-    else:
-        etapas_checkin = Etapa.objects.filter(
-            oficina=oficina,
-            is_checkin=True,
-            ativa=True,
-        ).order_by("ordem")
-
     return render(
         request,
         "painel/checkin_config.html",
-        {"etapas_checkin": etapas_checkin},
+        {"oficina": oficina},
     )
 
 

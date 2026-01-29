@@ -191,7 +191,7 @@ class ConfigFotoViewSet(viewsets.ModelViewSet):
 
 
 class CheckinPerguntaViewSet(viewsets.ModelViewSet):
-    queryset = CheckinPergunta.objects.select_related("oficina", "etapa").prefetch_related("opcoes").all()
+    queryset = CheckinPergunta.objects.select_related("oficina").prefetch_related("opcoes").all()
     serializer_class = CheckinPerguntaSerializer
     permission_classes = [IsAuthenticated, IsOficinaAdminOrReadOnly]
 
@@ -200,52 +200,28 @@ class CheckinPerguntaViewSet(viewsets.ModelViewSet):
             return None
         return get_oficina_do_usuario(user)
 
-    def _validar_etapa_da_oficina(self, etapa, oficina):
-        if oficina and etapa and etapa.oficina_id != oficina.id:
-            raise serializers.ValidationError({"etapa": "Etapa não encontrada para esta oficina."})
-
     @action(detail=False, methods=["get"], url_path="pwa")
     def pwa_list(self, request):
         """
-        Retorna as perguntas de check-in para a etapa de check-in da oficina,
-        já filtradas e prontas para o PWA.
+        Retorna as perguntas de check-in da oficina já filtradas e prontas para o PWA.
         """
         oficina = self._get_oficina_do_usuario(request.user)
         if oficina is None:
-            return Response({"results": [], "etapa": None})
-
-        etapas_checkin = (
-            Etapa.objects.filter(oficina=oficina, is_checkin=True, ativa=True)
-            .order_by("ordem")
-        )
-
-        etapa_id = request.query_params.get("etapa")
-        if etapa_id:
-            etapa = etapas_checkin.filter(id=etapa_id).first()
-        else:
-            etapa = etapas_checkin.first()
-
-        if etapa is None:
-            return Response({"results": [], "etapa": None})
+            return Response({"results": []})
 
         qs = (
-            CheckinPergunta.objects.filter(oficina=oficina, etapa=etapa, ativa=True)
-            .select_related("etapa", "oficina")
+            CheckinPergunta.objects.filter(oficina=oficina, ativa=True)
+            .select_related("oficina")
             .prefetch_related("opcoes")
             .order_by("ordem")
         )
         serializer = self.get_serializer(qs, many=True)
-        return Response(
-            {
-                "etapa": {"id": etapa.id, "nome": etapa.nome},
-                "results": serializer.data,
-            }
-        )
+        return Response({"results": serializer.data})
 
     def get_queryset(self):
         user = self.request.user
 
-        base_qs = CheckinPergunta.objects.select_related("oficina", "etapa").prefetch_related("opcoes")
+        base_qs = CheckinPergunta.objects.select_related("oficina").prefetch_related("opcoes")
 
         if user.is_superuser:
             qs = base_qs.all()
@@ -255,10 +231,6 @@ class CheckinPerguntaViewSet(viewsets.ModelViewSet):
                 return CheckinPergunta.objects.none()
             qs = base_qs.filter(oficina=oficina)
 
-        etapa_id = self.request.query_params.get("etapa")
-        if etapa_id:
-            qs = qs.filter(etapa_id=etapa_id)
-
         ativa = self.request.query_params.get("ativa")
         if ativa is not None:
             ativa_valor = ativa.lower()
@@ -267,7 +239,7 @@ class CheckinPerguntaViewSet(viewsets.ModelViewSet):
             elif ativa_valor in ["false", "0", "f"]:
                 qs = qs.filter(ativa=False)
 
-        return qs.order_by("etapa__ordem", "ordem", "id")
+        return qs.order_by("ordem", "id")
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -276,8 +248,6 @@ class CheckinPerguntaViewSet(viewsets.ModelViewSet):
         if oficina is None and not user.is_superuser:
             raise serializers.ValidationError({"oficina": "Nenhuma oficina associada ao usuário."})
 
-        etapa = serializer.validated_data.get("etapa")
-        self._validar_etapa_da_oficina(etapa, oficina)
         serializer.save(oficina=oficina)
 
     def perform_update(self, serializer):
@@ -287,8 +257,6 @@ class CheckinPerguntaViewSet(viewsets.ModelViewSet):
         if oficina is None and not user.is_superuser:
             raise serializers.ValidationError({"oficina": "Nenhuma oficina associada ao usuário."})
 
-        etapa = serializer.validated_data.get("etapa", serializer.instance.etapa)
-        self._validar_etapa_da_oficina(etapa, oficina)
         serializer.save(oficina=oficina)
 
 
