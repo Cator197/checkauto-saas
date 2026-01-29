@@ -192,8 +192,8 @@ window.checkautoLimparOSPendentes = async function () {
   }
 };
 
-function montarChavePerguntasCheckin(etapaId) {
-  return etapaId ? `etapa-${etapaId}` : "default";
+function montarChavePerguntasCheckin() {
+  return "default";
 }
 
 window.checkautoSalvarPerguntasCheckin = async function (payload) {
@@ -206,11 +206,14 @@ window.checkautoSalvarPerguntasCheckin = async function (payload) {
     return await new Promise((resolve, reject) => {
       const tx = db.transaction(CHECKIN_PERGUNTAS_STORE, "readwrite");
       const store = tx.objectStore(CHECKIN_PERGUNTAS_STORE);
-      const etapaId = payload?.etapa?.id || null;
+      const results = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.results)
+          ? payload.results
+          : [];
       const registro = {
-        cache_key: montarChavePerguntasCheckin(etapaId),
-        etapa: payload?.etapa || null,
-        results: Array.isArray(payload?.results) ? payload.results : [],
+        cache_key: montarChavePerguntasCheckin(),
+        results,
         atualizado_em: new Date().toISOString(),
       };
 
@@ -225,13 +228,13 @@ window.checkautoSalvarPerguntasCheckin = async function (payload) {
   }
 };
 
-window.checkautoBuscarPerguntasCheckin = async function (etapaId = null) {
+window.checkautoBuscarPerguntasCheckin = async function () {
   try {
     const db = await checkautoOpenDB();
     return await new Promise((resolve, reject) => {
       const tx = db.transaction(CHECKIN_PERGUNTAS_STORE, "readonly");
       const store = tx.objectStore(CHECKIN_PERGUNTAS_STORE);
-      const key = montarChavePerguntasCheckin(etapaId);
+      const key = montarChavePerguntasCheckin();
       const request = store.get(key);
 
       request.onsuccess = async () => {

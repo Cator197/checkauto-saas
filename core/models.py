@@ -141,7 +141,6 @@ class CheckinPergunta(models.Model):
     )
 
     oficina = models.ForeignKey(Oficina, on_delete=models.CASCADE, related_name="checkin_perguntas")
-    etapa = models.ForeignKey(Etapa, on_delete=models.CASCADE, related_name="checkin_perguntas")
     texto = models.CharField(max_length=255)
     tipo_resposta = models.CharField(max_length=10, choices=TIPO_RESPOSTA_CHOICES)
     obrigatoria = models.BooleanField(default=True)
@@ -153,11 +152,7 @@ class CheckinPergunta(models.Model):
     class Meta:
         verbose_name = "Pergunta de check-in"
         verbose_name_plural = "Perguntas de check-in"
-        ordering = ("oficina", "etapa", "ordem")
-
-    def clean(self):
-        if self.etapa and not self.etapa.is_checkin:
-            raise ValidationError("CheckinPergunta só pode ser usada em etapas marcadas como CHECK-IN.")
+        ordering = ("oficina", "ordem")
 
     def __str__(self):
         return f"{self.texto} ({self.oficina.nome})"

@@ -4,7 +4,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     const ok = await verificarAutenticacao();
     if (!ok) return;
 
-    const selectEtapa = document.getElementById("checkin-etapa-select");
     const tbody = document.getElementById("checkin-tbody");
     const countLabel = document.getElementById("checkin-count");
 
@@ -41,24 +40,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         inputAtiva.checked = true;
     }
 
-    function montarUrlPerguntas() {
-        const etapaId = selectEtapa.value;
-        if (!etapaId) {
-            return null;
-        }
-        return `/api/checkin-perguntas/?etapa=${etapaId}`;
-    }
-
     function carregarPerguntas() {
-        const url = montarUrlPerguntas();
         tbody.innerHTML = "";
 
-        if (!url) {
-            countLabel.textContent = "Selecione uma etapa para visualizar.";
-            return;
-        }
-
-        apiFetch(url, {
+        apiFetch("/api/checkin-perguntas/", {
             method: "GET",
             headers: {
                 "Content-Type": "application/json",
@@ -207,10 +192,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     btnNovaPergunta.addEventListener("click", () => {
-        if (!selectEtapa.value) {
-            alert("Selecione uma etapa de check-in primeiro.");
-            return;
-        }
         limparFormulario();
         modalTitle.textContent = "Nova pergunta";
         abrirModal();
@@ -225,21 +206,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
 
-    selectEtapa.addEventListener("change", () => {
-        carregarPerguntas();
-    });
-
     form.addEventListener("submit", (e) => {
         e.preventDefault();
 
-        const etapaId = selectEtapa.value;
-        if (!etapaId) {
-            alert("Selecione uma etapa.");
-            return;
-        }
-
         const payload = {
-            etapa: parseInt(etapaId, 10),
             texto: inputTexto.value.trim(),
             tipo_resposta: inputTipo.value,
             obrigatoria: inputObrigatoria.checked,

@@ -220,16 +220,12 @@ class CheckinPerguntaOpcaoSerializer(serializers.ModelSerializer):
 
 
 class CheckinPerguntaSerializer(serializers.ModelSerializer):
-    etapa_nome = serializers.CharField(source="etapa.nome", read_only=True)
     opcoes = CheckinPerguntaOpcaoSerializer(many=True, read_only=True)
 
     class Meta:
         model = CheckinPergunta
         fields = [
             "id",
-            "oficina",
-            "etapa",
-            "etapa_nome",
             "texto",
             "tipo_resposta",
             "obrigatoria",
@@ -237,9 +233,6 @@ class CheckinPerguntaSerializer(serializers.ModelSerializer):
             "ordem",
             "opcoes",
         ]
-        extra_kwargs = {
-            "oficina": {"read_only": True},
-        }
 
     def _get_oficina_from_request(self):
         request = self.context.get("request") if self.context else None
@@ -247,22 +240,6 @@ class CheckinPerguntaSerializer(serializers.ModelSerializer):
         if not user or not user.is_authenticated:
             return None
         return get_oficina_do_usuario(user)
-
-    def validate_etapa(self, value):
-        oficina = None
-        if self.instance:
-            oficina = getattr(self.instance, "oficina", None)
-
-        if oficina is None:
-            request = self.context.get("request") if self.context else None
-            user = getattr(request, "user", None)
-            if user and user.is_authenticated and not user.is_superuser:
-                oficina = get_oficina_do_usuario(user)
-
-        if oficina and value.oficina_id != oficina.id:
-            raise serializers.ValidationError("Etapa não encontrada para esta oficina.")
-
-        return value
 
     def create(self, validated_data):
         validated_data.pop("oficina", None)
