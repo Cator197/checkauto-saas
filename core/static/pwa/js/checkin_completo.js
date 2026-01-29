@@ -153,6 +153,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const carregarPerguntas = async () => {
     let data = null;
     let origem = "offline";
+    let erroCarregamento = null;
 
     if (navigator.onLine) {
       try {
@@ -160,8 +161,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (resp.ok) {
           data = await resp.json();
           origem = "online";
+        } else {
+          erroCarregamento = `Falha ao buscar perguntas (${resp.status}).`;
         }
       } catch (err) {
+        erroCarregamento = "Não foi possível conectar para carregar as perguntas.";
         console.warn("Falha ao buscar perguntas online:", err);
       }
     }
@@ -180,10 +184,14 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!data) {
       perguntasAtuais = [];
       perguntasDisponiveis = false;
-      atualizarStatusPerguntas(
-        "Perguntas de check-in não disponíveis offline.",
-        "state-offline"
-      );
+      if (erroCarregamento) {
+        atualizarStatusPerguntas(erroCarregamento, "state-error");
+      } else {
+        atualizarStatusPerguntas(
+          "Perguntas de check-in não disponíveis offline.",
+          "state-offline"
+        );
+      }
       if (perguntasAviso) {
         perguntasAviso.style.display = "block";
         perguntasAviso.innerHTML =
@@ -216,7 +224,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!perguntasFiltradas.length) {
       atualizarStatusPerguntas(
-        "Nenhuma pergunta configurada para este check-in.",
+        "Nenhuma pergunta configurada para a entrada. Você pode continuar o check-in normalmente.",
         "state-info"
       );
     } else {
