@@ -4,7 +4,7 @@
 console.log("[checkin_completo] script carregado");
 
 document.addEventListener("DOMContentLoaded", () => {
-  console.log("[checkin_completo] DOMContentLoaded");
+  console.log("[checkin_completo] DOMContentLoaded iniciado");
   const form = document.getElementById("formCheckinCompleto");
   const msgRetorno = document.getElementById("msgRetorno");
   const perguntasStatus = document.getElementById("checkinPerguntasStatus");
@@ -12,7 +12,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const perguntasLista = document.getElementById("checkinPerguntasLista");
   const submitButton = form?.querySelector("button[type='submit']");
 
-  if (!form) return;
+  if (!form) {
+    console.warn("[checkin_completo] formCheckinCompleto não encontrado.");
+    return;
+  }
 
   let perguntasAtuais = [];
   let perguntasDisponiveis = false;
@@ -178,29 +181,46 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const carregarPerguntas = async () => {
-    console.log("[checkin_completo] carregarPerguntas() iniciado");
+    console.log("[checkin_completo] carregarPerguntas() entrou");
+    const estaOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
+    console.log("[checkin_completo] status de conexão:", {
+      online: estaOnline,
+      temCacheLoader:
+        typeof window.checkautoCarregarPerguntasCheckin === "function" ||
+        typeof window.checkautoBuscarPerguntasCheckin === "function",
+    });
     let data = null;
     let origem = "offline";
     let erroCarregamento = null;
 
     try {
       try {
-        const response = await apiFetch("/api/checkin-perguntas/pwa/");
-        if (!response.ok) {
-          throw new Error(`Falha ao buscar perguntas (${response.status}).`);
+        if (estaOnline) {
+          console.log(
+            "[checkin_completo] fazendo fetch /api/checkin-perguntas/pwa/"
+          );
+          const response = await apiFetch("/api/checkin-perguntas/pwa/");
+          if (!response.ok) {
+            throw new Error(`Falha ao buscar perguntas (${response.status}).`);
+          }
+          data = await response.json();
+          console.log("[checkin_completo] resposta perguntas:", data);
+          origem = "online";
         }
-        data = await response.json();
-        console.log(
-          "[checkin_completo] resposta da API /api/checkin-perguntas/pwa/:",
-          data
-        );
-        origem = "online";
       } catch (erroOnline) {
         console.error(
           "[checkin_completo] erro ao buscar perguntas online:",
           erroOnline
         );
         erroCarregamento = erroOnline;
+      }
+
+      if (!data) {
+        if (!estaOnline) {
+          console.log(
+            "[checkin_completo] offline: buscando perguntas no cache local"
+          );
+        }
         if (window.checkautoCarregarPerguntasCheckin) {
           data = await window.checkautoCarregarPerguntasCheckin();
         } else if (window.checkautoBuscarPerguntasCheckin) {
@@ -304,6 +324,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  console.log("[checkin_completo] chamando carregarPerguntas()");
   carregarPerguntas();
 
   form.addEventListener("submit", async (event) => {
