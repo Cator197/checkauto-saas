@@ -214,6 +214,13 @@ class CheckinPerguntaViewSet(viewsets.ModelViewSet):
             .select_related("oficina")
             .order_by("ordem")
         )
+        logger.info(
+            "pwa_list checkin-perguntas: user=%s oficina=%s qtd=%s at=%s",
+            request.user,
+            oficina,
+            qs.count(),
+            timezone.now(),
+        )
         serializer = self.get_serializer(qs, many=True)
         return Response({"results": serializer.data})
 
