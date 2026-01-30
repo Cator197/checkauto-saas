@@ -1,5 +1,6 @@
 document.addEventListener("DOMContentLoaded", async () => {
     const erroBox = document.getElementById("checkin-erro");
+    const defaultErroMensagem = erroBox?.textContent?.trim() || "";
 
     const ok = await verificarAutenticacao();
     if (!ok) return;
@@ -40,6 +41,18 @@ document.addEventListener("DOMContentLoaded", async () => {
         inputAtiva.checked = true;
     }
 
+    function mostrarErro(mensagem) {
+        if (!erroBox) return;
+        erroBox.textContent = mensagem || defaultErroMensagem;
+        erroBox.classList.remove("hidden");
+    }
+
+    function esconderErro() {
+        if (!erroBox) return;
+        erroBox.textContent = defaultErroMensagem;
+        erroBox.classList.add("hidden");
+    }
+
     function carregarPerguntas() {
         tbody.innerHTML = "";
 
@@ -53,7 +66,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (!resp.ok) {
                 const t = await resp.text();
                 console.error("Erro ao listar perguntas:", resp.status, t);
-                erroBox.classList.remove("hidden");
+                mostrarErro("Erro ao carregar as perguntas de check-in. Tente novamente em instantes.");
                 return null;
             }
             return resp.json();
@@ -70,17 +83,17 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             if (!lista || !lista.length) {
                 countLabel.textContent = "Nenhuma pergunta configurada.";
-                erroBox.classList.add("hidden");
+                esconderErro();
                 return;
             }
 
             countLabel.textContent = `${lista.length} pergunta${lista.length > 1 ? "s" : ""}`;
             lista.forEach(pergunta => adicionarLinha(pergunta));
-            erroBox.classList.add("hidden");
+            esconderErro();
         })
         .catch((err) => {
             console.error("Erro inesperado ao listar perguntas:", err);
-            erroBox.classList.remove("hidden");
+            mostrarErro("Erro inesperado ao carregar perguntas. Verifique sua conexão e tente novamente.");
         });
     }
 
@@ -175,7 +188,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (!resp.ok) {
                 const t = await resp.text();
                 console.error("Erro ao alterar status da pergunta:", resp.status, t);
-                erroBox.classList.remove("hidden");
+                mostrarErro("Erro ao atualizar o status da pergunta. Tente novamente.");
                 return null;
             }
             return resp.json();
@@ -183,11 +196,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         .then((data) => {
             if (!data) return;
             carregarPerguntas();
-            erroBox.classList.add("hidden");
+            esconderErro();
         })
         .catch((err) => {
             console.error("Erro inesperado ao alterar status:", err);
-            erroBox.classList.remove("hidden");
+            mostrarErro("Erro inesperado ao atualizar a pergunta. Tente novamente.");
         });
     }
 
@@ -244,7 +257,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (!resp.ok) {
                 const t = await resp.text();
                 console.error("Erro ao salvar pergunta:", resp.status, t);
-                erroBox.classList.remove("hidden");
+                mostrarErro("Erro ao salvar pergunta. Verifique os campos e tente novamente.");
                 return null;
             }
             return resp.json();
@@ -254,11 +267,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             fecharModal();
             limparFormulario();
             carregarPerguntas();
-            erroBox.classList.add("hidden");
+            esconderErro();
         })
         .catch((err) => {
             console.error("Erro inesperado ao salvar pergunta:", err);
-            erroBox.classList.remove("hidden");
+            mostrarErro("Erro inesperado ao salvar pergunta. Tente novamente.");
         });
     });
 

@@ -141,6 +141,13 @@ class CheckinPergunta(models.Model):
     )
 
     oficina = models.ForeignKey(Oficina, on_delete=models.CASCADE, related_name="checkin_perguntas")
+    etapa = models.ForeignKey(
+        Etapa,
+        on_delete=models.CASCADE,
+        related_name="checkin_perguntas",
+        null=True,
+        blank=True,
+    )
     texto = models.CharField(max_length=255)
     tipo_resposta = models.CharField(max_length=10, choices=TIPO_RESPOSTA_CHOICES)
     obrigatoria = models.BooleanField(default=True)
