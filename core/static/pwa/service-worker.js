@@ -1,5 +1,5 @@
 // Nome do cache (mude a versão quando fizer mudanças grandes no front)
-const CACHE_VERSION = "v2026-01-09-test02";
+const CACHE_VERSION = "v2026-01-30-checkin";
 const CACHE_NAME = `checkauto-pwa-${CACHE_VERSION}`;
 console.log("[SW] Iniciando Service Worker - versão:", CACHE_VERSION);
 
@@ -33,6 +33,7 @@ self.addEventListener("install", event => {
         })
       );
       console.log("[SW] Install concluído com cache resiliente.");
+      self.skipWaiting();
     })()
   );
 });
@@ -88,23 +89,38 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  // Para chamadas de navegação (HTML), tenta rede primeiro, fallback para cache
-  if (request.mode === "navigate") {
+  const isPwaPage =
+    url.pathname.startsWith("/pwa/") &&
+    (request.mode === "navigate" || request.destination === "document");
+  const isPwaScript =
+    url.pathname.startsWith("/static/pwa/js/") && request.destination === "script";
+
+  const respondWithNetworkFirst = () =>
+    fetch(request)
+      .then(response => {
+        if (response && response.ok) {
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put(request, responseClone);
+          });
+        }
+        return response;
+      })
+      .catch(() =>
+        caches.match(request).then(cacheResp => cacheResp || caches.match("/pwa/offline/"))
+      );
+
+  // Para HTML das páginas PWA, tenta rede primeiro, fallback para cache
+  if (isPwaPage) {
     event.respondWith(
-      fetch(request)
-        .then(response => {
-          if (response && response.ok) {
-            const responseClone = response.clone();
-            caches.open(CACHE_NAME).then(cache => {
-              cache.put(request, responseClone);
-            });
-          }
-          return response;
-        })
-        .catch(() =>
-          caches.match(request).then(cacheResp => cacheResp || caches.match("/pwa/offline/"))
-        )
+      respondWithNetworkFirst()
     );
+    return;
+  }
+
+  // Para JS crítico do PWA, tenta rede primeiro, fallback para cache
+  if (isPwaScript) {
+    event.respondWith(respondWithNetworkFirst());
     return;
   }
 
