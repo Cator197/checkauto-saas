@@ -13,10 +13,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let perguntasAtuais = [];
   let perguntasDisponiveis = false;
+  const STATUS_BOM = "BOM";
+  const STATUS_RUIM = "RUIM";
+  const STATUS_AUSENTE = "AUSENTE";
 
   const limparErroCampo = (campo) => {
     campo?.classList.remove("pwa-input-error");
     campo?.removeAttribute("aria-invalid");
+  };
+
+  const limparErroGrupoRadio = (nome) => {
+    const inputs = form.querySelectorAll(`input[name="${nome}"]`);
+    inputs.forEach((input) => limparErroCampo(input));
   };
 
   const marcarErroCampo = (campo) => {
@@ -38,7 +46,6 @@ document.addEventListener("DOMContentLoaded", () => {
       field.className = "pwa-field";
 
       const label = document.createElement("label");
-      label.setAttribute("for", `checkinPergunta${pergunta.id}`);
       label.textContent = pergunta.texto || "Pergunta";
       if (pergunta.obrigatoria) {
         const required = document.createElement("span");
@@ -47,37 +54,51 @@ document.addEventListener("DOMContentLoaded", () => {
         label.appendChild(required);
       }
 
-      let input;
-      if (pergunta.tipo_resposta === "ESCOLHA") {
-        input = document.createElement("select");
-        input.className = "pwa-select";
-        input.innerHTML = `<option value="">Selecione uma opção</option>`;
-        const opcoes = Array.isArray(pergunta.opcoes) ? pergunta.opcoes : [];
-        opcoes
-          .filter((op) => op.ativa !== false)
-          .sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
-          .forEach((op) => {
-            const option = document.createElement("option");
-            option.value = op.id;
-            option.textContent = op.texto;
-            input.appendChild(option);
-          });
-      } else {
-        input = document.createElement("textarea");
-        input.className = "pwa-textarea";
-        input.rows = 3;
+      field.appendChild(label);
+
+      const opcoesWrapper = document.createElement("div");
+      opcoesWrapper.className = "pwa-options";
+
+      const opcoes = [
+        { valor: STATUS_BOM, texto: "Bom" },
+        { valor: STATUS_RUIM, texto: "Ruim" },
+        { valor: STATUS_AUSENTE, texto: "Ausente" },
+      ];
+
+      opcoes.forEach((opcao) => {
+        const opcaoLabel = document.createElement("label");
+        opcaoLabel.className = "pwa-option";
+
+        const opcaoInput = document.createElement("input");
+        opcaoInput.type = "radio";
+        opcaoInput.name = `pergunta-${pergunta.id}`;
+        opcaoInput.value = opcao.valor;
+        opcaoInput.dataset.perguntaId = pergunta.id;
+        opcaoInput.addEventListener("change", () =>
+          limparErroGrupoRadio(`pergunta-${pergunta.id}`)
+        );
+
+        const opcaoTexto = document.createElement("span");
+        opcaoTexto.textContent = opcao.texto;
+
+        opcaoLabel.appendChild(opcaoInput);
+        opcaoLabel.appendChild(opcaoTexto);
+        opcoesWrapper.appendChild(opcaoLabel);
+      });
+
+      field.appendChild(opcoesWrapper);
+
+      if (pergunta.permite_texto) {
+        const comentario = document.createElement("textarea");
+        comentario.className = "pwa-textarea";
+        comentario.rows = 3;
+        comentario.id = `checkinPergunta${pergunta.id}Texto`;
+        comentario.dataset.perguntaTexto = pergunta.texto || "";
+        comentario.placeholder = "Comentário / observações";
+        comentario.addEventListener("input", () => limparErroCampo(comentario));
+        field.appendChild(comentario);
       }
 
-      input.id = `checkinPergunta${pergunta.id}`;
-      input.dataset.perguntaId = pergunta.id;
-      input.dataset.perguntaTexto = pergunta.texto || "";
-      input.dataset.tipoResposta = pergunta.tipo_resposta || "TEXTO";
-      input.dataset.obrigatoria = pergunta.obrigatoria ? "true" : "false";
-      input.addEventListener("input", () => limparErroCampo(input));
-      input.addEventListener("change", () => limparErroCampo(input));
-
-      field.appendChild(label);
-      field.appendChild(input);
       perguntasLista.appendChild(field);
     });
   };
@@ -85,30 +106,24 @@ document.addEventListener("DOMContentLoaded", () => {
   const montarRespostas = () => {
     return perguntasAtuais
       .map((pergunta) => {
-        const campo = form.querySelector(`[data-pergunta-id="${pergunta.id}"]`);
-        if (!campo) return null;
-        const valor = campo.value?.trim();
-        if (!valor) return null;
+        const selecionada = form.querySelector(
+          `input[name="pergunta-${pergunta.id}"]:checked`
+        );
+        const status = selecionada?.value || "";
+        const comentarioField = pergunta.permite_texto
+          ? document.getElementById(`checkinPergunta${pergunta.id}Texto`)
+          : null;
+        const comentario = comentarioField?.value?.trim() || "";
 
-        if (pergunta.tipo_resposta === "ESCOLHA") {
-          const opcoes = Array.isArray(pergunta.opcoes) ? pergunta.opcoes : [];
-          const opcaoSelecionada = opcoes.find(
-            (op) => String(op.id) === String(valor)
-          );
-          return {
-            pergunta_id: pergunta.id,
-            texto_pergunta: pergunta.texto,
-            tipo_resposta: pergunta.tipo_resposta,
-            resposta: opcaoSelecionada?.texto || valor,
-            opcao_id: opcaoSelecionada?.id || null,
-          };
+        if (!status && !comentario) {
+          return null;
         }
 
         return {
           pergunta_id: pergunta.id,
           texto_pergunta: pergunta.texto,
-          tipo_resposta: pergunta.tipo_resposta,
-          resposta: valor,
+          status: status || null,
+          comentario: comentario || null,
         };
       })
       .filter(Boolean);
@@ -134,9 +149,14 @@ document.addEventListener("DOMContentLoaded", () => {
     perguntasAtuais
       .filter((pergunta) => pergunta.obrigatoria)
       .forEach((pergunta) => {
-        const campo = form.querySelector(`[data-pergunta-id="${pergunta.id}"]`);
-        if (!campo || !campo.value.trim()) {
-          marcarErroCampo(campo);
+        const selecionada = form.querySelector(
+          `input[name="pergunta-${pergunta.id}"]:checked`
+        );
+        if (!selecionada) {
+          const opcoes = form.querySelectorAll(
+            `input[name="pergunta-${pergunta.id}"]`
+          );
+          opcoes.forEach((opcao) => marcarErroCampo(opcao));
           valido = false;
         }
       });

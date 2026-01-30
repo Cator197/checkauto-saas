@@ -17,7 +17,6 @@ from .models import (
     UsuarioOficina,
     Etapa,
     CheckinPergunta,
-    CheckinPerguntaOpcao,
     ConfigFoto,
     OS,
     FotoOS,
@@ -213,25 +212,16 @@ class ConfigFotoSerializer(serializers.ModelSerializer):
         }
 
 
-class CheckinPerguntaOpcaoSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CheckinPerguntaOpcao
-        fields = ["id", "texto", "ordem", "ativa"]
-
-
 class CheckinPerguntaSerializer(serializers.ModelSerializer):
-    opcoes = CheckinPerguntaOpcaoSerializer(many=True, read_only=True)
-
     class Meta:
         model = CheckinPergunta
         fields = [
             "id",
             "texto",
-            "tipo_resposta",
             "obrigatoria",
             "ativa",
             "ordem",
-            "opcoes",
+            "permite_texto",
         ]
 
     def _get_oficina_from_request(self):

@@ -17,10 +17,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     const form = document.getElementById("form-checkin-pergunta");
     const inputId = document.getElementById("checkin-id");
     const inputTexto = document.getElementById("checkin-texto");
-    const inputTipo = document.getElementById("checkin-tipo");
     const inputOrdem = document.getElementById("checkin-ordem");
     const inputObrigatoria = document.getElementById("checkin-obrigatoria");
     const inputAtiva = document.getElementById("checkin-ativa");
+    const inputPermiteTexto = document.getElementById("checkin-permite-texto");
 
     function abrirModal() {
         modal.classList.remove("hidden");
@@ -35,10 +35,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     function limparFormulario() {
         inputId.value = "";
         inputTexto.value = "";
-        inputTipo.value = "TEXTO";
         inputOrdem.value = "";
         inputObrigatoria.checked = true;
         inputAtiva.checked = true;
+        inputPermiteTexto.checked = false;
     }
 
     function mostrarErro(mensagem) {
@@ -97,22 +97,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
 
-    function formatarTipoResposta(pergunta) {
-        const tipoBase = pergunta.tipo_resposta === "ESCOLHA" ? "Escolha" : "Texto";
-        if (pergunta.tipo_resposta !== "ESCOLHA") {
-            return tipoBase;
-        }
-        const totalOpcoes = Array.isArray(pergunta.opcoes) ? pergunta.opcoes.length : 0;
-        return `${tipoBase} (${totalOpcoes} opção${totalOpcoes === 1 ? "" : "s"})`;
-    }
-
     function adicionarLinha(pergunta) {
         const tr = document.createElement("tr");
         tr.dataset.id = pergunta.id;
         tr.className = "hover:bg-slate-900";
 
         const marcarSimNao = (valor) => (valor ? "Sim" : "Não");
-        const tipoResposta = formatarTipoResposta(pergunta);
 
         tr.innerHTML = `
             <td class="px-3 py-2 align-middle whitespace-nowrap">
@@ -120,9 +110,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             </td>
             <td class="px-3 py-2 align-middle whitespace-nowrap">
                 ${pergunta.texto ?? ""}
-            </td>
-            <td class="px-3 py-2 align-middle whitespace-nowrap">
-                ${tipoResposta}
             </td>
             <td class="px-3 py-2 align-middle whitespace-nowrap">
                 <span class="inline-flex items-center gap-1 text-[11px]">
@@ -134,6 +121,12 @@ document.addEventListener("DOMContentLoaded", async () => {
                 <span class="inline-flex items-center gap-1 text-[11px]">
                     <span class="w-2 h-2 rounded-full ${pergunta.ativa ? "bg-emerald-400" : "bg-rose-400"}"></span>
                     ${marcarSimNao(pergunta.ativa)}
+                </span>
+            </td>
+            <td class="px-3 py-2 align-middle whitespace-nowrap">
+                <span class="inline-flex items-center gap-1 text-[11px]">
+                    <span class="w-2 h-2 rounded-full ${pergunta.permite_texto ? "bg-indigo-400" : "bg-slate-600"}"></span>
+                    ${marcarSimNao(pergunta.permite_texto)}
                 </span>
             </td>
             <td class="px-3 py-2 align-middle whitespace-nowrap text-right">
@@ -167,10 +160,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     function preencherFormulario(pergunta) {
         inputId.value = pergunta.id;
         inputTexto.value = pergunta.texto ?? "";
-        inputTipo.value = pergunta.tipo_resposta ?? "TEXTO";
         inputOrdem.value = pergunta.ordem ?? "";
         inputObrigatoria.checked = !!pergunta.obrigatoria;
         inputAtiva.checked = !!pergunta.ativa;
+        inputPermiteTexto.checked = !!pergunta.permite_texto;
         modalTitle.textContent = "Editar pergunta";
     }
 
@@ -224,10 +217,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const payload = {
             texto: inputTexto.value.trim(),
-            tipo_resposta: inputTipo.value,
             obrigatoria: inputObrigatoria.checked,
             ativa: inputAtiva.checked,
             ordem: inputOrdem.value ? parseInt(inputOrdem.value, 10) : null,
+            permite_texto: inputPermiteTexto.checked,
         };
 
         if (!payload.texto) {

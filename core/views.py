@@ -191,7 +191,7 @@ class ConfigFotoViewSet(viewsets.ModelViewSet):
 
 
 class CheckinPerguntaViewSet(viewsets.ModelViewSet):
-    queryset = CheckinPergunta.objects.select_related("oficina").prefetch_related("opcoes").all()
+    queryset = CheckinPergunta.objects.select_related("oficina").all()
     serializer_class = CheckinPerguntaSerializer
     permission_classes = [IsAuthenticated, IsOficinaAdminOrReadOnly]
 
@@ -212,7 +212,6 @@ class CheckinPerguntaViewSet(viewsets.ModelViewSet):
         qs = (
             CheckinPergunta.objects.filter(oficina=oficina, ativa=True)
             .select_related("oficina")
-            .prefetch_related("opcoes")
             .order_by("ordem")
         )
         serializer = self.get_serializer(qs, many=True)
@@ -221,7 +220,7 @@ class CheckinPerguntaViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
 
-        base_qs = CheckinPergunta.objects.select_related("oficina").prefetch_related("opcoes")
+        base_qs = CheckinPergunta.objects.select_related("oficina")
 
         if user.is_superuser:
             qs = base_qs.all()
