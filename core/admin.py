@@ -1,7 +1,6 @@
 from django.contrib import admin
 from .models import (
     CheckinPergunta,
-    CheckinPerguntaOpcao,
     ConfigFoto,
     Etapa,
     FotoOS,
@@ -44,19 +43,12 @@ class ConfigFotoAdmin(admin.ModelAdmin):
     search_fields = ('nome', 'oficina__nome', 'etapa__nome')
 
 
-class CheckinPerguntaOpcaoInline(admin.TabularInline):
-    model = CheckinPerguntaOpcao
-    extra = 1
-    fields = ("texto", "ordem", "ativa")
-
-
 @admin.register(CheckinPergunta)
 class CheckinPerguntaAdmin(admin.ModelAdmin):
-    list_display = ("id", "oficina", "texto", "tipo_resposta", "obrigatoria", "ativa", "ordem")
-    list_filter = ("oficina", "tipo_resposta", "obrigatoria", "ativa")
+    list_display = ("id", "oficina", "texto", "obrigatoria", "ativa", "ordem", "permite_texto")
+    list_filter = ("oficina", "obrigatoria", "ativa", "permite_texto")
     search_fields = ("texto", "oficina__nome")
     ordering = ("oficina", "ordem")
-    inlines = [CheckinPerguntaOpcaoInline]
 
 @admin.register(OS)
 class OSAdmin(admin.ModelAdmin):

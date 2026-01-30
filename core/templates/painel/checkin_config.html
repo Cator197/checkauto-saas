@@ -53,9 +53,9 @@ Defina as perguntas adicionais do check-in completo para a oficina.
                 <tr>
                     <th class="px-3 py-2 text-left">Ordem</th>
                     <th class="px-3 py-2 text-left">Pergunta</th>
-                    <th class="px-3 py-2 text-left">Tipo</th>
                     <th class="px-3 py-2 text-left">Obrigatória</th>
                     <th class="px-3 py-2 text-left">Ativa</th>
+                    <th class="px-3 py-2 text-left">Permite texto</th>
                     <th class="px-3 py-2 text-right">Ações</th>
                 </tr>
             </thead>
@@ -100,20 +100,6 @@ Defina as perguntas adicionais do check-in completo para a oficina.
             </div>
 
             <div class="flex flex-col gap-1">
-                <label for="checkin-tipo" class="text-[11px] text-slate-400 uppercase tracking-wide">
-                    Tipo de resposta
-                </label>
-                <select
-                    id="checkin-tipo"
-                    class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100
-                           focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                >
-                    <option value="TEXTO">Texto</option>
-                    <option value="ESCOLHA">Escolha</option>
-                </select>
-            </div>
-
-            <div class="flex flex-col gap-1">
                 <label for="checkin-ordem" class="text-[11px] text-slate-400 uppercase tracking-wide">
                     Ordem
                 </label>
@@ -130,7 +116,7 @@ Defina as perguntas adicionais do check-in completo para a oficina.
 
             <div class="md:col-span-2 flex flex-col gap-1">
                 <label class="text-[11px] text-slate-400 uppercase tracking-wide">
-                    Opções
+                    Configurações
                 </label>
                 <div class="flex flex-col gap-1 mt-1">
                     <label class="inline-flex items-center gap-2">
@@ -140,6 +126,10 @@ Defina as perguntas adicionais do check-in completo para a oficina.
                     <label class="inline-flex items-center gap-2">
                         <input id="checkin-ativa" type="checkbox" class="rounded border-slate-600 bg-slate-900" checked>
                         <span class="text-[11px] text-slate-300">Pergunta ativa</span>
+                    </label>
+                    <label class="inline-flex items-center gap-2">
+                        <input id="checkin-permite-texto" type="checkbox" class="rounded border-slate-600 bg-slate-900">
+                        <span class="text-[11px] text-slate-300">Permitir comentário em texto para esta pergunta</span>
                     </label>
                 </div>
             </div>
