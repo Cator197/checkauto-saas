@@ -1,7 +1,10 @@
 // static/pwa/js/checkin_completo.js
 // Tela de Check-in Completo: salva OS + fotos + respostas no IndexedDB
 
+console.log("[checkin_completo] script carregado");
+
 document.addEventListener("DOMContentLoaded", () => {
+  console.log("[checkin_completo] DOMContentLoaded");
   const form = document.getElementById("formCheckinCompleto");
   const msgRetorno = document.getElementById("msgRetorno");
   const perguntasStatus = document.getElementById("checkinPerguntasStatus");
@@ -38,7 +41,10 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   const renderPerguntas = (perguntas) => {
-    if (!perguntasLista) return;
+    if (!perguntasLista) {
+      console.warn("[checkin_completo] container de perguntas não encontrado");
+      return;
+    }
     perguntasLista.innerHTML = "";
 
     perguntas.forEach((pergunta) => {
@@ -165,53 +171,119 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const atualizarStatusPerguntas = (texto, classe = "state-info") => {
+    console.log("[checkin_completo] atualizarStatusPerguntas:", texto, classe);
     if (!perguntasStatus) return;
     perguntasStatus.className = classe;
     perguntasStatus.textContent = texto;
   };
 
   const carregarPerguntas = async () => {
+    console.log("[checkin_completo] carregarPerguntas() iniciado");
     let data = null;
     let origem = "offline";
     let erroCarregamento = null;
 
-    if (navigator.onLine) {
+    try {
       try {
-        const resp = await apiFetch("/api/checkin-perguntas/pwa/");
-        if (resp.ok) {
-          data = await resp.json();
-          origem = "online";
-        } else {
-          erroCarregamento = `Falha ao buscar perguntas (${resp.status}).`;
+        const response = await apiFetch("/api/checkin-perguntas/pwa/");
+        if (!response.ok) {
+          throw new Error(`Falha ao buscar perguntas (${response.status}).`);
         }
-      } catch (err) {
-        erroCarregamento = "Não foi possível conectar para carregar as perguntas.";
-        console.warn("Falha ao buscar perguntas online:", err);
+        data = await response.json();
+        console.log(
+          "[checkin_completo] resposta da API /api/checkin-perguntas/pwa/:",
+          data
+        );
+        origem = "online";
+      } catch (erroOnline) {
+        console.error(
+          "[checkin_completo] erro ao buscar perguntas online:",
+          erroOnline
+        );
+        erroCarregamento = erroOnline;
+        if (window.checkautoCarregarPerguntasCheckin) {
+          data = await window.checkautoCarregarPerguntasCheckin();
+        } else if (window.checkautoBuscarPerguntasCheckin) {
+          data = await window.checkautoBuscarPerguntasCheckin();
+        }
+        if (data) {
+          origem = "cache";
+        }
       }
-    }
 
-    if (!data && window.checkautoBuscarPerguntasCheckin) {
-      data = await window.checkautoBuscarPerguntasCheckin();
-      if (data) {
-        origem = "cache";
+      if (data && origem === "online" && window.checkautoSalvarPerguntasCheckin) {
+        await window.checkautoSalvarPerguntasCheckin(data);
       }
-    }
 
-    if (data && origem === "online" && window.checkautoSalvarPerguntasCheckin) {
-      await window.checkautoSalvarPerguntasCheckin(data);
-    }
+      if (!data) {
+        perguntasAtuais = [];
+        perguntasDisponiveis = false;
+        atualizarStatusPerguntas(
+          "Erro ao carregar perguntas. Tente novamente ou fale com o suporte.",
+          "state-error"
+        );
+        if (perguntasAviso) {
+          perguntasAviso.style.display = "block";
+          perguntasAviso.innerHTML =
+            'Use o check-in básico enquanto não há conexão ou cache disponível. <a href="/pwa/checkin-fotos/">Abrir check-in básico</a>.';
+        }
+        if (submitButton) {
+          submitButton.disabled = true;
+        }
+        if (erroCarregamento) {
+          console.warn(
+            "[checkin_completo] perguntas não disponíveis:",
+            erroCarregamento
+          );
+        }
+        return;
+      }
 
-    if (!data) {
+      const listaPerguntas = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.results)
+          ? data.results
+          : [];
+
+      console.log("[checkin_completo] listaPerguntas normalizada:", listaPerguntas);
+
+      const perguntasFiltradas = listaPerguntas.filter(
+        (item) => item.ativa !== false
+      );
+
+      perguntasAtuais = perguntasFiltradas;
+      perguntasDisponiveis = true;
+
+      if (!perguntasFiltradas.length) {
+        atualizarStatusPerguntas(
+          "Nenhuma pergunta configurada para esta oficina.",
+          "state-info"
+        );
+        if (perguntasAviso) {
+          perguntasAviso.style.display = "none";
+          perguntasAviso.textContent = "";
+        }
+        if (submitButton) {
+          submitButton.disabled = false;
+        }
+        return;
+      }
+
+      renderPerguntas(perguntasFiltradas);
+      atualizarStatusPerguntas(
+        origem === "cache"
+          ? "Perguntas carregadas do cache offline."
+          : "Perguntas carregadas.",
+        "state-info"
+      );
+    } catch (erro) {
+      console.error("[checkin_completo] erro inesperado em carregarPerguntas:", erro);
       perguntasAtuais = [];
       perguntasDisponiveis = false;
-      if (erroCarregamento) {
-        atualizarStatusPerguntas(erroCarregamento, "state-error");
-      } else {
-        atualizarStatusPerguntas(
-          "Perguntas de check-in não disponíveis offline.",
-          "state-offline"
-        );
-      }
+      atualizarStatusPerguntas(
+        "Erro ao carregar perguntas. Tente novamente ou fale com o suporte.",
+        "state-error"
+      );
       if (perguntasAviso) {
         perguntasAviso.style.display = "block";
         perguntasAviso.innerHTML =
@@ -229,32 +301,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (submitButton) {
       submitButton.disabled = false;
-    }
-
-    const listaPerguntas = Array.isArray(data)
-      ? data
-      : Array.isArray(data?.results)
-        ? data.results
-        : [];
-
-    const perguntasFiltradas = listaPerguntas.filter((item) => item.ativa !== false);
-
-    perguntasAtuais = perguntasFiltradas;
-    perguntasDisponiveis = true;
-
-    if (!perguntasFiltradas.length) {
-      atualizarStatusPerguntas(
-        "Nenhuma pergunta configurada para a entrada. Você pode continuar o check-in normalmente.",
-        "state-info"
-      );
-    } else {
-      atualizarStatusPerguntas(
-        origem === "cache"
-          ? "Perguntas carregadas do cache offline."
-          : "Perguntas carregadas com sucesso.",
-        "state-info"
-      );
-      renderPerguntas(perguntasFiltradas);
     }
   };
 
